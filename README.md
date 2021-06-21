@@ -1,2 +1,2 @@
 # comercialNico
- sistema contable y de gestion de ventas
+ sistema modular de gestion para punto de venta

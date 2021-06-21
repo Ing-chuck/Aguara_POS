@@ -59,10 +59,6 @@
 /*
     This file defines a helper function to open a connection to an
     in-memory SQLITE database and to create a test table.
-
-    If you want to use another database, simply modify the code
-    below. All the examples in this directory use this function to
-    connect to a database.
 */
 
 static bool createConnection()
@@ -80,46 +76,13 @@ static bool createConnection()
     }
 
     QSqlQuery query;
-    query.exec("create table person (id int primary key, "
-               "firstname varchar(20), lastname varchar(20))");
-    query.exec("insert into person values(101, 'Danny', 'Young')");
-    query.exec("insert into person values(102, 'Christine', 'Holand')");
-    query.exec("insert into person values(103, 'Lars', 'Gordon')");
-    query.exec("insert into person values(104, 'Roberto', 'Robitaille')");
-    query.exec("insert into person values(105, 'Maria', 'Papadopoulos')");
-
-    query.exec("create table items (id int primary key,"
-                                             "imagefile int,"
-                                             "itemtype varchar(20),"
-                                             "description varchar(100))");
-    query.exec("insert into items "
-               "values(0, 0, 'Qt',"
-               "'Qt is a full development framework with tools designed to "
-               "streamline the creation of stunning applications and  "
-               "amazing user interfaces for desktop, embedded and mobile "
-               "platforms.')");
-    query.exec("insert into items "
-               "values(1, 1, 'Qt Quick',"
-               "'Qt Quick is a collection of techniques designed to help "
-               "developers create intuitive, modern-looking, and fluid "
-               "user interfaces using a CSS & JavaScript like language.')");
-    query.exec("insert into items "
-               "values(2, 2, 'Qt Creator',"
-               "'Qt Creator is a powerful cross-platform integrated "
-               "development environment (IDE), including UI design tools "
-               "and on-device debugging.')");
-    query.exec("insert into items "
-               "values(3, 3, 'Qt Project',"
-               "'The Qt Project governs the open source development of Qt, "
-               "allowing anyone wanting to contribute to join the effort "
-               "through a meritocratic structure of approvers and "
-               "maintainers.')");
-
-    query.exec("create table images (itemid int, file varchar(20))");
-    query.exec("insert into images values(0, 'images/qt-logo.png')");
-    query.exec("insert into images values(1, 'images/qt-quick.png')");
-    query.exec("insert into images values(2, 'images/qt-creator.png')");
-    query.exec("insert into images values(3, 'images/qt-project.png')");
+    query.exec("create table stock (code int primary key, "
+               "name varchar(50), stock_level int, reorder_level int, order_quantity int, price double,"
+               "category varchar(2), suplier_code varchar(2) )");
+    query.exec("insert into stock values(100200019292, 'Spicy Pizza 12\"', 123, 100, 200, 2.49, 'FR', 'PC')");
+    query.exec("insert into stock values(100212422323, 'Canned Tomatoes 400g', 742, 500, 1000, 0.24, 'TV', 'BW')");
+    query.exec("insert into stock values(102313538763, 'Frozen Peas 1lb', 41, 30, 50, 0.89, 'FR', 'FV')");
+    query.exec("insert into stock values(403244976252, 'Freshly Squeezed Orange 1L', 32, 10, 25, 2.59, 'JU', 'JL')");
 
     return true;
 }

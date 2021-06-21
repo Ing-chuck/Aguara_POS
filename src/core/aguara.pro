@@ -1,4 +1,4 @@
-QT       += sql core gui
+QT       += sql core gui charts
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -20,7 +20,7 @@ FORMS += \
     mainwindow.ui
 
 TRANSLATIONS += \
-    comercialNico_es_PY.ts
+    aguara_es_PY.ts
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
