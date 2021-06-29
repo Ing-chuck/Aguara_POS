@@ -55,6 +55,8 @@
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QDir>
+#include <QApplication>
 
 /*
     This file defines a helper function to open a connection to an
@@ -63,8 +65,22 @@
 
 static bool createConnection()
 {
+
+    QDir dbDir = QDir(QCoreApplication::applicationDirPath());
+
+#if 0// defined(Q_OS_WIN)
+    if (dbDir.dirName().toLower() == "debug" || dbDir.dirName().toLower() == "release") {
+        dbDir.cdUp();
+        dbDir.cdUp();
+        dbDir.cdUp();
+    }
+#endif
+    //dbDir.cd("priv");
+
+    QString dbPath = dbDir.toNativeSeparators(dbDir.absoluteFilePath("test.db"));
+
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
-    db.setDatabaseName(":memory:");
+    db.setDatabaseName("test.db");
     if (!db.open()) {
         QMessageBox::critical(nullptr, QObject::tr("Cannot open database"),
             QObject::tr("Unable to establish a database connection.\n"
@@ -75,7 +91,21 @@ static bool createConnection()
         return false;
     }
 
+/*
+    qDebug(db.databaseName().toStdString().c_str());
+    auto list = db.tables();
+    char temp[2];
+    _itoa_s(int(list.count()), temp, 2);
+    qDebug(temp);
+    for(QString& table : list){
+        qDebug(table.toStdString().c_str());
+    }
+
     QSqlQuery query;
+    query.exec("select * from stock");
+    qDebug(query.lastError().text().toStdString().c_str());
+*/
+/*
     query.exec("create table stock (code int primary key, "
                "name varchar(50), stock_level int, reorder_level int, order_quantity int, price double,"
                "category varchar(2), suplier_code varchar(2) )");
@@ -83,7 +113,7 @@ static bool createConnection()
     query.exec("insert into stock values(100212422323, 'Canned Tomatoes 400g', 742, 500, 1000, 0.24, 'TV', 'BW')");
     query.exec("insert into stock values(102313538763, 'Frozen Peas 1lb', 41, 30, 50, 0.89, 'FR', 'FV')");
     query.exec("insert into stock values(403244976252, 'Freshly Squeezed Orange 1L', 32, 10, 25, 2.59, 'JU', 'JL')");
-
+*/
     return true;
 }
 
