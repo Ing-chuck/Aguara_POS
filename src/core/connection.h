@@ -77,7 +77,7 @@ static bool createConnection()
 #endif
     //dbDir.cd("priv");
 
-    QString dbPath = dbDir.toNativeSeparators(dbDir.absoluteFilePath("test.db"));
+    //QString dbPath = dbDir.toNativeSeparators(dbDir.absoluteFilePath("test.db"));
 
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
     db.setDatabaseName("test.db");
@@ -101,15 +101,17 @@ static bool createConnection()
         qDebug(table.toStdString().c_str());
     }
 
-    QSqlQuery query;
     query.exec("select * from stock");
     qDebug(query.lastError().text().toStdString().c_str());
 */
 /*
-    query.exec("create table stock (code int primary key, "
-               "name varchar(50), stock_level int, reorder_level int, order_quantity int, price double,"
-               "category varchar(2), suplier_code varchar(2) )");
-    query.exec("insert into stock values(100200019292, 'Spicy Pizza 12\"', 123, 100, 200, 2.49, 'FR', 'PC')");
+    QSqlQuery query;
+    query.exec("create table articles (code int primary key, "
+               "description varchar(100), brand varchar(100), category varchar(50), "
+               "sellPrice double, buyPrice double, stock int, stockMin int, "
+               "impInt int, vat double, buyDate date, modDate date)");
+    query.exec("insert into articles values(1, 'SANDWICH COCIDO Y QUESO', null, 'COMIDA', 14, 4.5, 4, 2, 0, 21, null,'2014/02/17')");
+
     query.exec("insert into stock values(100212422323, 'Canned Tomatoes 400g', 742, 500, 1000, 0.24, 'TV', 'BW')");
     query.exec("insert into stock values(102313538763, 'Frozen Peas 1lb', 41, 30, 50, 0.89, 'FR', 'FV')");
     query.exec("insert into stock values(403244976252, 'Freshly Squeezed Orange 1L', 32, 10, 25, 2.59, 'JU', 'JL')");

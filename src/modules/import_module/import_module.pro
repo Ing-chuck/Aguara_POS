@@ -1,6 +1,6 @@
 TEMPLATE      = lib
 CONFIG       += plugin
-QT           += widgets
+QT           += widgets sql
 INCLUDEPATH  += ../../core
 HEADERS       = import_module.h
 SOURCES       = import_module.cpp

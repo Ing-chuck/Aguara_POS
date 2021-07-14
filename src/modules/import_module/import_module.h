@@ -6,17 +6,21 @@
 #include <QObject>
 #include <QtPlugin>
 
-class import_module : public QObject, public importArticlesInterface
+class ImportModule : public QObject, public ImportArticlesInterface
 {
     Q_OBJECT
     Q_PLUGIN_METADATA(IID "org.AguaraPOS.importArticlesInterface" FILE "import_module.json")
-    Q_INTERFACES(importArticlesInterface)
+    Q_INTERFACES(ImportArticlesInterface)
 
 public:
-   QStringList features() const override;
-   bool importFrom(QString filename) override;
+    bool registerModule(QString version) const override;
+    QStringList FileTypes() const override;
+    bool ImportFrom(QString filename) override;
 
-signals:
+//signals:
+
+private:
+    void insertInto(QStringList fields, QList<QVariant> data);
 
 };
 

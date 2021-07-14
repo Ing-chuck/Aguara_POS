@@ -8,20 +8,27 @@ QT_BEGIN_NAMESPACE
 //QT dependencies go here
 QT_END_NAMESPACE
 
-class importArticlesInterface
+class AguaraModule {
+public:
+    virtual ~AguaraModule() = default;
+
+    virtual bool registerModule(QString version) const = 0;
+};
+
+class ImportArticlesInterface: public AguaraModule
 {
 public:
-    virtual ~importArticlesInterface() = default;
+    virtual ~ImportArticlesInterface() = default;
 
-    virtual QStringList features() const = 0;
-    virtual bool importFrom(QString filename) = 0;
+    virtual QStringList FileTypes() const = 0;
+    virtual bool ImportFrom(QString filename) = 0;
 };
 
 QT_BEGIN_NAMESPACE
 
 #define importArticlesInterface_iid "org.AguaraPOS.importArticlesInterface/1.0"
 
-Q_DECLARE_INTERFACE(importArticlesInterface, importArticlesInterface_iid)
+Q_DECLARE_INTERFACE(ImportArticlesInterface, importArticlesInterface_iid)
 
 QT_END_NAMESPACE
 

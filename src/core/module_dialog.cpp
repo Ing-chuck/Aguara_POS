@@ -81,9 +81,9 @@ void ModuleDialog::populateTreeWidget(QObject *plugin, const QString &text)
     pluginItem->setFont(0, boldFont);
 
     if (plugin) {
-        auto iImporter = qobject_cast<importArticlesInterface *>(plugin);
+        auto iImporter = qobject_cast<ImportArticlesInterface *>(plugin);
         if (iImporter)
-            addItems(pluginItem, "ImportInterface", iImporter->features());
+            addItems(pluginItem, "ImportInterface", iImporter->FileTypes());
     }
 }
 //! [1]

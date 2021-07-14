@@ -28,6 +28,7 @@ private slots:
 private:
     typedef void (MainWindow::*Member)();
 
+    void loadTable();
     void createActions();
     void createMenus();
     void loadPlugins();
@@ -39,6 +40,8 @@ private:
     QSqlTableModel *model;
     QDir pluginsDir;
     QStringList pluginFileNames;
+
+    QList<QObject*> attachedImportModules;
 
     QMenu* importMenu = nullptr;
     QMenu* helpMenu = nullptr;
