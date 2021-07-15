@@ -116,10 +116,7 @@ void MainWindow::createActions()
 
 void MainWindow::createMenus()
 {
-    importMenu = menuBar()->addMenu(tr("&Import"));
-    importMenu->addAction(importAct);
-
-    menuBar()->addSeparator();
+    // essential not module dependant menus
 
     helpMenu = menuBar()->addMenu(tr("&Help"));
     helpMenu->addAction(aboutAct);
@@ -165,6 +162,11 @@ void MainWindow::populateMenus(QObject *plugin)
         }
         types = types.left(types.lastIndexOf(",")) + ")";
         menuText[0] += types;
+
+        // if this is the first import interface, add a menu
+        if(importMenu == nullptr)
+            importMenu = menuBar()->addMenu(tr("&Import from"));
+
         addToMenu(plugin, menuText, importMenu, &MainWindow::Import);
     }
 }
