@@ -26,9 +26,11 @@ public:
 
 QT_BEGIN_NAMESPACE
 
+#define aguaraModuleInterface_iid "org.AguaraPOS.aguaraModuleInterface/1.0"
 #define importArticlesInterface_iid "org.AguaraPOS.importArticlesInterface/1.0"
 
 Q_DECLARE_INTERFACE(ImportArticlesInterface, importArticlesInterface_iid)
+Q_DECLARE_INTERFACE(AguaraModule, aguaraModuleInterface_iid)
 
 QT_END_NAMESPACE
 

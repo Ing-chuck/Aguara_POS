@@ -6,36 +6,78 @@
 
 #include <QAction>
 #include <QActionGroup>
+#include <QDateTime>
+#include <QFileDialog>
+#include <QKeySequence>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
-#include <QTimer>
 #include <QTableView>
-#include <QFileDialog>
+#include <QTabWidget>
+#include <QTimer>
+#include <QScreen>
+
+
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
+    , newTabShortcut(QShortcut(QKeySequence(tr("Ctrl+N")), this))
 {
     ui->setupUi(this);
-    setWindowTitle("AguaraPOS " VERSION_STRING);
+
+    prepareWindow();
+
+    // set shortcut
+    newTabShortcut.setAutoRepeat(false);
+    connect(&newTabShortcut, SIGNAL(activated()),this,SLOT(addTab()));
+    connect(ui->tabWidget, SIGNAL(tabCloseRequested(int)), this, SLOT(onTabCloseRequested(int)));
 
     createActions();
     createMenus();
     loadPlugins();
-    loadTable();
+    //loadTable();
 
     //QTimer::singleShot(500, this, &MainWindow::aboutModules);
 }
 
 MainWindow::~MainWindow()
 {
+    closeAllTabs();
     delete ui;
 }
 
-void MainWindow::loadTable() {
+// setup all window flags and other properties
+void MainWindow::prepareWindow() {
+    setWindowTitle("AguaraPOS " VERSION_STRING);
+
+    // set window flags
+    //this->setWindowFlags(Qt::FramelessWindowHint);
+
+    // make window fullscreen
+    QMainWindow::showMaximized();
+    ui->centralwidget->showMaximized();
+    ui->statusbar->setSizeGripEnabled(false);
+    //ui->sideBar->setHidden(true);
+
+    // set status bar labels
+    userLabel.setText("user: x");
+
+    // add labels to status bar
+    ui->statusbar->addWidget(&blankLabel);
+    ui->statusbar->addWidget(&userLabel);
+    ui->statusbar->addPermanentWidget(&timeLabel);
+    ui->statusbar->addPermanentWidget(&dateLabel);
+    dateTimeUpdate();
+
+    //set the timer to update the date and time
+    dateTimeTimer.start(1000); //Send the signal of timeout every 1000ms
+    connect(&dateTimeTimer, SIGNAL(timeout()),this,SLOT(dateTimeUpdate()));
+}
+
+void MainWindow::loadTable(QTableView &tableView) {
     // Create the data model:
-    model = new QSqlTableModel(ui->tableView);
+    model = new QSqlTableModel(&tableView);
     model->setEditStrategy(QSqlTableModel::OnManualSubmit);
     model->setTable("articles");
 
@@ -57,11 +99,11 @@ void MainWindow::loadTable() {
     model->select();
 
     // Set the model and hide the ID column:
-    ui->tableView->setModel(model);
+    tableView.setModel(model);
     //ui->tableView->setItemDelegate(new BookDelegate(ui.bookTable));
     //ui->tableView->setColumnHidden(model->fieldIndex("id"), true);
-    ui->tableView->setSelectionMode(QAbstractItemView::SingleSelection);
-    ui->tableView->resizeColumnsToContents();
+    tableView.setSelectionMode(QAbstractItemView::SingleSelection);
+    tableView.resizeColumnsToContents();
 }
 
 void MainWindow::Import() {
@@ -83,7 +125,7 @@ void MainWindow::Import() {
 
         //let this module handle the file
         qobject_cast<ImportArticlesInterface *>(module)->ImportFrom(file);
-        loadTable();
+        //loadTable();
 
         break;
     }
@@ -116,7 +158,7 @@ void MainWindow::createActions()
 
 void MainWindow::createMenus()
 {
-    // essential not module dependant menus
+    // essential module independant menus
 
     helpMenu = menuBar()->addMenu(tr("&Help"));
     helpMenu->addAction(aboutAct);
@@ -135,7 +177,7 @@ void MainWindow::loadPlugins()
 #endif
     pluginsDir.cd("modules/build-modules");
 
-    const auto entryList = pluginsDir.entryList(QDir::Files);
+    const QStringList entryList = pluginsDir.entryList(QDir::Files);
     for (const QString &fileName : entryList) {
         QPluginLoader loader(pluginsDir.absoluteFilePath(fileName));
         QObject *plugin = loader.instance();
@@ -184,5 +226,31 @@ void MainWindow::addToMenu(QObject *plugin, const QStringList &texts,
             action->setCheckable(true);
             actionGroup->addAction(action);
         }
+    }
+}
+
+void MainWindow::dateTimeUpdate() {
+    QDateTime current_time = QDateTime::currentDateTime();
+    QString datestr = current_time.toString( "dd/MM/yyyy"); //Set the format of the display
+    QString timestr = current_time.toString( "h:m A");
+    dateLabel.setText(datestr); //Set the text content of the label as time
+    timeLabel.setText(timestr);
+}
+
+void MainWindow::addTab() {
+    QWidget* page = new QWidget();
+    int pageN = ui->tabWidget->count() + 1;
+    ui->tabWidget->addTab(page, QStringLiteral("tab %1").arg(pageN));
+}
+
+void MainWindow::onTabCloseRequested(int indx) {
+    QWidget* selected = ui->tabWidget->widget(indx);
+    ui->tabWidget->removeTab(indx);
+    delete selected;
+}
+
+void MainWindow::closeAllTabs() {
+    for(int i = 0; i < ui->tabWidget->count(); i++) {
+        onTabCloseRequested(i);
     }
 }
