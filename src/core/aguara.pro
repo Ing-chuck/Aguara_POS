@@ -20,3 +20,6 @@ TRANSLATIONS += \
     aguara_es_PY.ts
 
 LIBS          = -L../modules/built-plugins
+
+RESOURCES += \
+    resources.qrc

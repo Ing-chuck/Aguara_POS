@@ -11,16 +11,19 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class inventoryWidget; }
 QT_END_NAMESPACE
 
-class inventoryWidget : public QObject, public AguaraModule
+class inventoryWidget : public QWidget, public AguaraModule
 {
     Q_OBJECT
     Q_PLUGIN_METADATA(IID aguaraModuleInterface_iid FILE "inventory_module.json")
     Q_INTERFACES(AguaraModule)
 
 public:
+    inventoryWidget(QWidget *parent = nullptr);
+    ~inventoryWidget();
+
     bool registerModule(QString version) const override;
-    //inventoryWidget(QWidget *parent = nullptr);
-    //~inventoryWidget();
+    QString getName() const override;
+    QIcon getIcon() const override;
 
 private:
     Ui::inventoryWidget *ui;

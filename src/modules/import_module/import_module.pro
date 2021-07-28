@@ -4,5 +4,6 @@ QT           += sql
 INCLUDEPATH  += ../../core
 HEADERS       = import_module.h
 SOURCES       = import_module.cpp
+RESOURCES    += resources.qrc
 TARGET        = $$qtLibraryTarget(modulo_importar_)
 DESTDIR       = ../build-modules

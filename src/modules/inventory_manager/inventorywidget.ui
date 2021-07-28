@@ -13,6 +13,16 @@
   <property name="windowTitle">
    <string>inventoryWidget</string>
   </property>
+  <widget class="QTableView" name="tableView">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>801</width>
+     <height>601</height>
+    </rect>
+   </property>
+  </widget>
  </widget>
  <resources/>
  <connections/>

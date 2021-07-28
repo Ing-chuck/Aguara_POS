@@ -3,6 +3,7 @@
 
 #include <QtPlugin>
 #include <QStringList>
+#include <QIcon>
 
 QT_BEGIN_NAMESPACE
 //QT dependencies go here
@@ -13,6 +14,11 @@ public:
     virtual ~AguaraModule() = default;
 
     virtual bool registerModule(QString version) const = 0;
+    virtual QString getName() const = 0;
+    virtual QIcon getIcon() const = 0;
+
+protected:
+    QString name;
 };
 
 class ImportArticlesInterface: public AguaraModule

@@ -15,6 +15,7 @@
 #include <QTableView>
 #include <QTabWidget>
 #include <QTimer>
+#include <QToolButton>
 #include <QScreen>
 
 
@@ -183,10 +184,11 @@ void MainWindow::loadPlugins()
         QObject *plugin = loader.instance();
         if (plugin && dynamic_cast<AguaraModule *>(plugin)->registerModule(VERSION_STRING)) {
             populateMenus(plugin);
+            makeButton(plugin);
             pluginFileNames += fileName;
+            attachedModules.append(plugin);
         }
     }
-    importMenu->setEnabled(!importMenu->actions().isEmpty());
 }
 
 void MainWindow::populateMenus(QObject *plugin)
@@ -229,6 +231,29 @@ void MainWindow::addToMenu(QObject *plugin, const QStringList &texts,
     }
 }
 
+void MainWindow::makeButton(QObject *plugin) {
+    auto moduleWidget = qobject_cast<QWidget *>(plugin);
+    auto module = qobject_cast<AguaraModule *>(plugin);
+    if (module){
+        QToolButton *button = new QToolButton(moduleWidget);
+        QAction *act = new QAction(moduleWidget);
+        act->setIcon(module->getIcon());
+        act->setIconText(module->getName());
+        act->setIconVisibleInMenu(false);
+        button->setDefaultAction(act);
+        button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+        moduleButtonList.append(button);
+        addToSidebar(button);
+
+        //connect button to the tabWidget
+        connect(button, &QToolButton::triggered, this, &MainWindow::addTabFromAction);
+    }
+}
+
+void MainWindow::addToSidebar(QToolButton *button) {
+    ui->sideBar->layout()->addWidget(button);
+}
+
 void MainWindow::dateTimeUpdate() {
     QDateTime current_time = QDateTime::currentDateTime();
     QString datestr = current_time.toString( "dd/MM/yyyy"); //Set the format of the display
@@ -237,16 +262,37 @@ void MainWindow::dateTimeUpdate() {
     timeLabel.setText(timestr);
 }
 
-void MainWindow::addTab() {
-    QWidget* page = new QWidget();
+void MainWindow::addTabFromAction(QAction* act) {
+    QWidget* module = qobject_cast<QWidget*>(act->parent());
+    if(module){
+        addTab(module, act->icon(), act->iconText());
+    }
+}
+
+void MainWindow::addTab(QWidget* widget, QIcon ico, QString label) {
+    QWidget* page = (widget)? widget : new QWidget();
     int pageN = ui->tabWidget->count() + 1;
-    ui->tabWidget->addTab(page, QStringLiteral("tab %1").arg(pageN));
+    label = (label != "")? label : QStringLiteral("tab %1").arg(pageN);
+
+    // check if this widget is already a tab
+    bool newPage = true;
+    if(page == widget){
+        for(int i = 0; i < ui->tabWidget->count(); i++) {
+            if(page == ui->tabWidget->widget(i)){
+                newPage = false;
+                break;
+            }
+        }
+    }
+
+    if(newPage)
+        ui->tabWidget->addTab(page, ico, label);
 }
 
 void MainWindow::onTabCloseRequested(int indx) {
-    QWidget* selected = ui->tabWidget->widget(indx);
+    //QWidget* selected = ui->tabWidget->widget(indx);
     ui->tabWidget->removeTab(indx);
-    delete selected;
+    //delete selected;
 }
 
 void MainWindow::closeAllTabs() {

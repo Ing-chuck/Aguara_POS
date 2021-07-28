@@ -7,6 +7,12 @@
 #include <QTextStream>
 #include <QMap>
 
+ImportModule::ImportModule(QObject *parent)
+    : QObject(parent)
+{
+    name = "Importar";
+}
+
 /// Register the module with the core program
 /// compares the core program's version
 /// with the module's version to determine compatibility
@@ -140,4 +146,14 @@ void ImportModule::insertInto(QStringList fields, QList<QVariant> data) {
         query.bindValue(vals[i], data[i]);
     }
     query.exec();
+}
+
+/// Return the name of this module
+QString ImportModule::getName() const {
+    return name;
+}
+
+/// Return this module's icon
+QIcon ImportModule::getIcon() const {
+    return QIcon(":/icons/icon.png");
 }

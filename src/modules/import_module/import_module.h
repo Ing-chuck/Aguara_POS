@@ -13,11 +13,13 @@ class ImportModule : public QObject, public ImportArticlesInterface
     Q_INTERFACES(ImportArticlesInterface)
 
 public:
-    bool registerModule(QString version) const override;
+    ImportModule(QObject *parent = nullptr);
     QStringList FileTypes() const override;
     bool ImportFrom(QString filename) override;
 
-//signals:
+    bool registerModule(QString version) const override;
+    QString getName() const override;
+    QIcon getIcon() const override;
 
 private:
     void insertInto(QStringList fields, QList<QVariant> data);

@@ -14,6 +14,7 @@ class QAction;
 class QActionGroup;
 class QMenu;
 class QTableView;
+class QToolButton;
 QT_END_NAMESPACE
 
 class MainWindow : public QMainWindow
@@ -30,7 +31,8 @@ private slots:
     void aboutModules();
 
     void dateTimeUpdate();
-    void addTab();
+    void addTabFromAction(QAction* act);
+    void addTab(QWidget* widget = nullptr, QIcon ico = QIcon(), QString label = "");
     void onTabCloseRequested(int indx);
     void closeAllTabs();
 
@@ -45,6 +47,8 @@ private:
     void populateMenus(QObject *plugin);
     void addToMenu(QObject *plugin, const QStringList &texts, QMenu *menu,
                    Member member, QActionGroup *actionGroup = nullptr);
+    void makeButton(QObject *plugin);
+    void addToSidebar(QToolButton *button);
 
     QLabel userLabel;
     QLabel blankLabel;
@@ -58,6 +62,7 @@ private:
     QDir pluginsDir;
     QStringList pluginFileNames;
 
+    QList<QObject*> attachedModules;
     QList<QObject*> attachedImportModules;
 
     QShortcut newTabShortcut;
@@ -66,5 +71,8 @@ private:
     QAction* importAct = nullptr;
     QAction* aboutAct = nullptr;
     QAction* aboutModulesAct = nullptr;
+    QList<QAction*> moduleActList;
+
+    QList<QToolButton*> moduleButtonList;
 };
 #endif // MAINWINDOW_H
