@@ -17,11 +17,8 @@ public:
     QStringList FileTypes() const override;
     bool ImportFrom(QString filename) override;
 
-    bool registerModule(QString version) const override;
-    QString getName() const override;
-    QIcon getIcon() const override;
-
 private:
+    QString compiledVersion() const override;
     void insertInto(QStringList fields, QList<QVariant> data);
 
 };

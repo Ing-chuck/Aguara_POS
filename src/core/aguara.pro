@@ -2,6 +2,7 @@ QT           += sql core gui charts widgets
 CONFIG       += c++11
 
 SOURCES      +=    \
+    interfaces.cpp \
     main.cpp       \
     mainwindow.cpp \
     module_dialog.cpp

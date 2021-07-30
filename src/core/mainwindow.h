@@ -71,8 +71,8 @@ private:
     QAction* importAct = nullptr;
     QAction* aboutAct = nullptr;
     QAction* aboutModulesAct = nullptr;
-    QList<QAction*> moduleActList;
 
+    QList<QSharedPointer<QWidget>> tabPageWidgets;
     QList<QToolButton*> moduleButtonList;
 };
 #endif // MAINWINDOW_H

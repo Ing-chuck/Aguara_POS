@@ -233,8 +233,8 @@ void MainWindow::addToMenu(QObject *plugin, const QStringList &texts,
 
 void MainWindow::makeButton(QObject *plugin) {
     auto moduleWidget = qobject_cast<QWidget *>(plugin);
-    auto module = qobject_cast<AguaraModule *>(plugin);
-    if (module){
+    auto module = dynamic_cast<AmFactory *>(plugin);
+    if (module){ 
         QToolButton *button = new QToolButton(moduleWidget);
         QAction *act = new QAction(moduleWidget);
         act->setIcon(module->getIcon());
@@ -263,9 +263,23 @@ void MainWindow::dateTimeUpdate() {
 }
 
 void MainWindow::addTabFromAction(QAction* act) {
-    QWidget* module = qobject_cast<QWidget*>(act->parent());
-    if(module){
-        addTab(module, act->icon(), act->iconText());
+    auto singleFactory = qobject_cast<AmSingleInstanceFactory*>(act->parent());
+    if(singleFactory){
+        // single instace kind
+        QSharedPointer<QWidget> module(singleFactory->getInstance());
+        if(module){
+            tabPageWidgets.append(module);
+            addTab(module.data(), act->icon(), act->iconText());
+        }
+    }
+    else {
+        // multi instance kind
+        auto multiFactory = qobject_cast<AmMultiInstanceFactory*>(act->parent());
+        if(multiFactory){
+            QSharedPointer<QWidget> module = qobject_cast<QWidget*>(multiFactory->getInstance());
+            tabPageWidgets.append(module);
+            addTab(module.data(), act->icon(), act->iconText());
+        }
     }
 }
 
@@ -290,9 +304,9 @@ void MainWindow::addTab(QWidget* widget, QIcon ico, QString label) {
 }
 
 void MainWindow::onTabCloseRequested(int indx) {
-    //QWidget* selected = ui->tabWidget->widget(indx);
+    // search for and remove from our page list
+    this->tabPageWidgets.removeOne(ui->tabWidget->widget(indx));
     ui->tabWidget->removeTab(indx);
-    //delete selected;
 }
 
 void MainWindow::closeAllTabs() {
