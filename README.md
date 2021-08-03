@@ -14,7 +14,7 @@ El sistema se basa en la arquitectura plug-in que permite la creacion de modulos
 
 # Como empezar un nuevo modulo en Qt Creator
 ### Utilizando el wizard
-La forma mas facil de empezar un modulo nuevo es utilizando el wizard personalizado "qtwidgetsplugin". Este wizard se encunetra en un archivo rar dentro de este repositorio.
+La forma mas facil de empezar un modulo nuevo es utilizando el wizard personalizado "aguaramodule". Este wizard se encunetra en un archivo rar dentro de este repositorio.
 Para utilizarlo, simplemente se debe extraer el contenido del rar dentro de una de las siguientes ubicaciones
 * Carpeta shared dentro de la instalacion de Qt Creator:
   * En Windows: share\qtcreator\templates\wizards
