@@ -1,8 +1,8 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
-#include "version.h"
 #include "interfaces.h"
 #include "module_dialog.h"
+#include <version.h>
 
 #include <QAction>
 #include <QActionGroup>
@@ -305,8 +305,9 @@ void MainWindow::addTab(QWidget* widget, QIcon ico, QString label) {
 
 void MainWindow::onTabCloseRequested(int indx) {
     // search for and remove from our page list
-    this->tabPageWidgets.removeOne(ui->tabWidget->widget(indx));
+    QWidget* page = ui->tabWidget->widget(indx);
     ui->tabWidget->removeTab(indx);
+    this->tabPageWidgets.removeOne(page);
 }
 
 void MainWindow::closeAllTabs() {

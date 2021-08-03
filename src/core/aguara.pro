@@ -2,17 +2,14 @@ QT           += sql core gui charts widgets
 CONFIG       += c++11
 
 SOURCES      +=    \
-    interfaces.cpp \
     main.cpp       \
     mainwindow.cpp \
     module_dialog.cpp
 
 HEADERS      +=     \
     connection.h    \
-    interfaces.h    \
     mainwindow.h    \
     module_dialog.h \
-    version.h
 
 FORMS        += \
     mainwindow.ui
@@ -20,7 +17,9 @@ FORMS        += \
 TRANSLATIONS += \
     aguara_es_PY.ts
 
-LIBS          = -L../modules/built-plugins
+INCLUDEPATH  += ../interfaces
+LIBS         += -L../modules/build-plugins
+LIBS         += -L../build-static -l$$qtLibraryTarget(interfaces)
 
 RESOURCES += \
     resources.qrc

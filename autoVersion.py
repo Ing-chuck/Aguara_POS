@@ -10,7 +10,7 @@
 import os
 from git import Repo
 
-versionPath = './src/core/version.h'
+versionPath = './src/interfaces/version.h'
 
 def getFileName(path):
     return path.split('/')[-1]
