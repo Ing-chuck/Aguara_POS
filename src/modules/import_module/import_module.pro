@@ -1,7 +1,8 @@
 TEMPLATE      = lib
 CONFIG       += plugin c++11
 QT           += sql
-INCLUDEPATH  += ../../core
+INCLUDEPATH  += ../../interfaces
+LIBS         += -L../../build-static -l$$qtLibraryTarget(interfaces)
 HEADERS       = import_module.h
 SOURCES       = import_module.cpp
 RESOURCES    += resources.qrc
