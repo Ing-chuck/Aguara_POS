@@ -8,7 +8,7 @@
 InventoryFactory::InventoryFactory(QWidget *parent) : QWidget(parent), AmSingleInstanceFactory()
 {
     this->name = "Inventory Manager";
-    this->icon = QIcon(":/images/icon.png");
+    this->icon = QIcon(":/inventory_manager/images/icon.png");
 }
 
 /// Program version when this module was compiled

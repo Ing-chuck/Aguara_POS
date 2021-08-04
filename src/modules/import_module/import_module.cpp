@@ -11,7 +11,7 @@ ImportModule::ImportModule(QObject *parent)
     : QObject(parent)
 {
     this->name = "Importar";
-    this->icon = QIcon(":/images/icon.png");
+    this->icon = QIcon(":/import_module/images/icon.png");
 }
 
 /// Register the module with the core program

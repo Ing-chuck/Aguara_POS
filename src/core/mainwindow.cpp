@@ -221,6 +221,7 @@ void MainWindow::addToMenu(QObject *plugin, const QStringList &texts,
 {
     for (const QString &text : texts) {
         auto action = new QAction(text, plugin);
+        action->setIcon(dynamic_cast<AguaraModule*>(plugin)->getIcon());
         connect(action, &QAction::triggered, this, member);
         menu->addAction(action);
 

@@ -8,7 +8,7 @@
 MyModuleFactory::MyModuleFactory(QWidget *parent) : QWidget(parent)
 {
     this->name = "template_SI";
-    this->icon = QIcon(":/images/icon.png");
+    this->icon = QIcon(":/template_SI/images/icon.png");
 }
 
 /// Program version when this module was compiled

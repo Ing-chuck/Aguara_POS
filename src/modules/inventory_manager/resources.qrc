@@ -1,5 +1,5 @@
 <RCC>
-    <qresource prefix="/">
+    <qresource prefix="/inventory_manager">
         <file>images/icon.png</file>
     </qresource>
 </RCC>
