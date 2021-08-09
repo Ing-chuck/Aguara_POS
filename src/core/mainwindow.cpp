@@ -1,7 +1,8 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
-#include "interfaces.h"
+#include "ui_pagecero.h"
 #include "module_dialog.h"
+#include "notificationdialog.h"
 #include <version.h>
 
 #include <QAction>
@@ -23,11 +24,14 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
+    , ui2(new Ui::PageCero)
     , newTabShortcut(QShortcut(QKeySequence(tr("Ctrl+N")), this))
 {
     ui->setupUi(this);
+    ui2->setupUi(&pageCero);
 
     prepareWindow();
+    setUpPageCero();
 
     // set shortcut
     newTabShortcut.setAutoRepeat(false);
@@ -74,6 +78,13 @@ void MainWindow::prepareWindow() {
     //set the timer to update the date and time
     dateTimeTimer.start(1000); //Send the signal of timeout every 1000ms
     connect(&dateTimeTimer, SIGNAL(timeout()),this,SLOT(dateTimeUpdate()));
+}
+
+void MainWindow::setUpPageCero() {
+    addTab(&pageCero, QIcon(), "Notifications");
+    ui->tabWidget->tabBar()->setTabButton(0, QTabBar::RightSide, 0);
+    ui->tabWidget->tabBar()->setTabButton(0, QTabBar::LeftSide, 0);
+    //ui->tabWidget->setTabVisible(0, false);
 }
 
 void MainWindow::loadTable(QTableView &tableView) {
@@ -215,6 +226,16 @@ void MainWindow::populateMenus(QObject *plugin)
     }
 }
 
+void MainWindow::onModuleNotification(ModuleMsg msg) {
+    QPointer<NotificationDialog> nd = new NotificationDialog();
+    nd->setTitle(msg.title);
+    nd->setMsg(msg.message);
+    nd->setPriority(msg.priority);
+
+    pageCero.layout()->addWidget(nd);
+    notificationWidgets.append(nd);
+}
+
 void MainWindow::addToMenu(QObject *plugin, const QStringList &texts,
                            QMenu *menu, Member member,
                            QActionGroup *actionGroup)
@@ -236,6 +257,9 @@ void MainWindow::makeButton(QObject *plugin) {
     auto moduleWidget = qobject_cast<QWidget *>(plugin);
     auto module = dynamic_cast<AmFactory *>(plugin);
     if (module){ 
+        // Factory style module
+        connect(module, SIGNAL(notify(ModuleMsg)), this, SLOT(onModuleNotification(ModuleMsg)));
+
         QToolButton *button = new QToolButton(moduleWidget);
         QAction *act = new QAction(moduleWidget);
         act->setIcon(module->getIcon());
@@ -286,22 +310,24 @@ void MainWindow::addTabFromAction(QAction* act) {
 
 void MainWindow::addTab(QWidget* widget, QIcon ico, QString label) {
     QWidget* page = (widget)? widget : new QWidget();
-    int pageN = ui->tabWidget->count() + 1;
+    int pageN = ui->tabWidget->count();
     label = (label != "")? label : QStringLiteral("tab %1").arg(pageN);
+    int ind;
 
     // check if this widget is already a tab
     bool newPage = true;
-    if(page == widget){
-        for(int i = 0; i < ui->tabWidget->count(); i++) {
-            if(page == ui->tabWidget->widget(i)){
-                newPage = false;
-                break;
-            }
+    for(ind = 0; ind < ui->tabWidget->count(); ind++) {
+        if(page == ui->tabWidget->widget(ind)){
+            newPage = false;
+            break;
         }
     }
 
     if(newPage)
         ui->tabWidget->addTab(page, ico, label);
+
+    // set tab as active
+    ui->tabWidget->setCurrentIndex(ind);
 }
 
 void MainWindow::onTabCloseRequested(int indx) {

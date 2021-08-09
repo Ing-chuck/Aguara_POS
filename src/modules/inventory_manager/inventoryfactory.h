@@ -6,7 +6,7 @@
 #include <QWidget>
 #include <QtPlugin>
 
-class InventoryFactory : public QWidget, public AmSingleInstanceFactory
+class InventoryFactory : public AmSingleInstanceFactory
 {
     Q_OBJECT
     Q_PLUGIN_METADATA(IID amSingleInstanceInterface_iid FILE "inventory_module.json")

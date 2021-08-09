@@ -5,7 +5,7 @@
 
 /// InventoryFactory class
 /// intantiates a InventoryWidget when necessary
-InventoryFactory::InventoryFactory(QWidget *parent) : QWidget(parent), AmSingleInstanceFactory()
+InventoryFactory::InventoryFactory(QWidget *parent) : AmSingleInstanceFactory(parent)
 {
     this->name = "Inventory Manager";
     this->icon = QIcon(":/inventory_manager/images/icon.png");
@@ -19,5 +19,5 @@ QString InventoryFactory::compiledVersion() const {
 
 /// Make a new instance of the module class
 QSharedPointer<QWidget> InventoryFactory::makeInstance() {
-    return QSharedPointer<QWidget>(new inventoryWidget);
+    return QSharedPointer<QWidget>(new inventoryWidget(this));
 }

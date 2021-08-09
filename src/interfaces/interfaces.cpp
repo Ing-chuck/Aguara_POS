@@ -26,8 +26,12 @@ bool AguaraModule::isMultiInstance() const {
     return multiInstance;
 }
 
+AmFactory::AmFactory(QWidget* parent): QWidget(parent) {
+
+}
+
 /// Setup this factory as single instance
-AmSingleInstanceFactory::AmSingleInstanceFactory() {
+AmSingleInstanceFactory::AmSingleInstanceFactory(QWidget* parent): AmFactory(parent) {
     this->multiInstance = false;
 }
 
@@ -46,7 +50,7 @@ QSharedPointer<QWidget> AmSingleInstanceFactory::getInstance() {
 }
 
 /// Setup this factory as multi instance
-AmMultiInstanceFactory::AmMultiInstanceFactory() {
+AmMultiInstanceFactory::AmMultiInstanceFactory(QWidget *parent): AmFactory(parent) {
     this->multiInstance = true;
 }
 

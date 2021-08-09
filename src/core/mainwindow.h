@@ -1,6 +1,8 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include "interfaces.h"
+
 #include <QMainWindow>
 #include <QtSql>
 #include <QDir>
@@ -8,8 +10,10 @@
 #include <QShortcut>
 #include <QTimer>
 
+class NotificationDialog;
+
 QT_BEGIN_NAMESPACE
-namespace Ui { class MainWindow; }
+namespace Ui { class MainWindow; class PageCero; }
 class QAction;
 class QActionGroup;
 class QMenu;
@@ -35,11 +39,13 @@ private slots:
     void addTab(QWidget* widget = nullptr, QIcon ico = QIcon(), QString label = "");
     void onTabCloseRequested(int indx);
     void closeAllTabs();
+    void onModuleNotification(ModuleMsg msg);
 
 private:
     typedef void (MainWindow::*Member)();
 
     void prepareWindow();
+    void setUpPageCero();
     void loadTable(QTableView& tableView);
     void createActions();
     void createMenus();
@@ -57,6 +63,9 @@ private:
     QTimer dateTimeTimer;
 
     Ui::MainWindow *ui;
+    Ui::PageCero *ui2;
+
+    QWidget pageCero;
 
     QSqlTableModel *model;
     QDir pluginsDir;
@@ -74,5 +83,6 @@ private:
 
     QList<QSharedPointer<QWidget>> tabPageWidgets;
     QList<QToolButton*> moduleButtonList;
+    QList<QPointer<NotificationDialog>> notificationWidgets;
 };
 #endif // MAINWINDOW_H

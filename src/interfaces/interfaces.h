@@ -1,13 +1,16 @@
 #ifndef INTERFACES_H
 #define INTERFACES_H
 
+#include "messages.h"
+
+#include <QWidget>
 #include <QtPlugin>
 #include <QStringList>
 #include <QIcon>
 #include <QSharedPointer>
 
 QT_BEGIN_NAMESPACE
-//QT dependencies go here
+//forward declared QT dependencies go here
 QT_END_NAMESPACE
 
 /// Base class to all Aguara Modules (plugins)
@@ -29,7 +32,14 @@ protected:
 };
 
 /// Base class for factory interfaces
-class AmFactory: public AguaraModule {
+class AmFactory: public QWidget, public AguaraModule {
+    Q_OBJECT
+public:
+    explicit AmFactory(QWidget* parent = nullptr);
+
+signals:
+    void notify(ModuleMsg msg);
+
 protected:
     virtual QSharedPointer<QWidget> makeInstance() = 0;
 };
@@ -37,7 +47,7 @@ protected:
 /// Fabricator interface for single instance modules
 class AmSingleInstanceFactory: public AmFactory {
 public:
-    AmSingleInstanceFactory();
+    AmSingleInstanceFactory(QWidget* parent = nullptr);
     QSharedPointer<QWidget> getInstance();
 
 protected:
@@ -47,7 +57,7 @@ protected:
 /// Fabricator interface for multi instance modules
 class AmMultiInstanceFactory: public AmFactory {
 public:
-    AmMultiInstanceFactory();
+    AmMultiInstanceFactory(QWidget* parent = nullptr);
     //int getInstanceCount() const;
     //QList<QSharedPointer<QObject>> getInstances() const;
     //QSharedPointer<QObject> getInstance(int idx) const;

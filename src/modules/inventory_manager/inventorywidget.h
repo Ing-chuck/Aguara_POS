@@ -1,6 +1,8 @@
 #ifndef INVENTORYWIDGET_H
 #define INVENTORYWIDGET_H
 
+#include <interfaces.h>
+
 #include <QWidget>
 
 QT_BEGIN_NAMESPACE
@@ -17,5 +19,7 @@ public:
 
 private:
     Ui::inventoryWidget *ui;
+
+    void emitNotification(ModuleMsg msg);
 };
 #endif // INVENTORYWIDGET_H
