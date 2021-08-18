@@ -6,7 +6,7 @@
 #include <QWidget>
 #include <QtPlugin>
 
-class MyModuleFactory : public QWidget, public AmMultiInstanceFactory
+class MyModuleFactory : public AmMultiInstanceFactory
 {
     Q_OBJECT
     Q_PLUGIN_METADATA(IID amMultiInstanceInterface_iid FILE "module.json")

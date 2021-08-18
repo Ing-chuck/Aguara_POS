@@ -6,7 +6,7 @@
 #include <QObject>
 #include <QtPlugin>
 
-class ImportModule : public QObject, public ImportArticlesInterface
+class ImportModule : public ImportArticlesInterface
 {
     Q_OBJECT
     Q_PLUGIN_METADATA(IID "org.AguaraPOS.importArticlesInterface" FILE "import_module.json")

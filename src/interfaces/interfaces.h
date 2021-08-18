@@ -10,7 +10,7 @@
 #include <QSharedPointer>
 
 QT_BEGIN_NAMESPACE
-//forward declared QT dependencies go here
+// forward declared QT dependencies go here
 QT_END_NAMESPACE
 
 /// Base class to all Aguara Modules (plugins)
@@ -24,27 +24,43 @@ public:
     bool isMultiInstance() const;
 
 protected:
-    virtual QString compiledVersion() const = 0;
+    virtual QString compiledVersion() const;
 
     QString name;
     QIcon icon;
     bool multiInstance;
 };
 
-/// Base class for factory interfaces
-class AmFactory: public QWidget, public AguaraModule {
+/// Base class for QObject aguara modules
+class AguaraObject: public QObject, public AguaraModule {
     Q_OBJECT
 public:
-    explicit AmFactory(QWidget* parent = nullptr);
+    virtual ~AguaraObject() = default;
+    AguaraObject(QObject *parent = nullptr);
+};
+
+/// Base class for QWidget aguara modules
+class AguaraWidget: public QWidget, public AguaraModule {
+    Q_OBJECT
+public:
+    virtual ~AguaraWidget() = default;
+    AguaraWidget(QWidget *parent = nullptr);
 
 signals:
     void notify(ModuleMsg msg);
+};
+
+/// Base class for factory interfaces
+class AmFactory: public AguaraWidget {
+    Q_OBJECT
+public:
+    explicit AmFactory(QWidget* parent = nullptr);
 
 protected:
     virtual QSharedPointer<QWidget> makeInstance() = 0;
 };
 
-/// Fabricator interface for single instance modules
+/// Factory interface for single instance modules
 class AmSingleInstanceFactory: public AmFactory {
 public:
     AmSingleInstanceFactory(QWidget* parent = nullptr);
@@ -54,7 +70,7 @@ protected:
     QWeakPointer<QWidget> instance;
 };
 
-/// Fabricator interface for multi instance modules
+/// Factory interface for multi instance modules
 class AmMultiInstanceFactory: public AmFactory {
 public:
     AmMultiInstanceFactory(QWidget* parent = nullptr);
@@ -67,9 +83,10 @@ protected:
     //QList<QSharedPointer<QObject>> instances;
 };
 
-class ImportArticlesInterface: public AguaraModule {
+class ImportArticlesInterface: public AguaraObject {
 public:
     virtual ~ImportArticlesInterface() = default;
+    ImportArticlesInterface(QObject *parent = nullptr);
 
     virtual QStringList FileTypes() const = 0;
     virtual bool ImportFrom(QString filename) = 0;

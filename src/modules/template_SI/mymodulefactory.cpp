@@ -5,7 +5,7 @@
 
 /// MyModuleFactory class
 /// intantiates a %{MClass} when necessary
-MyModuleFactory::MyModuleFactory(QWidget *parent) : QWidget(parent)
+MyModuleFactory::MyModuleFactory(QWidget *parent) : AmSingleInstanceFactory(parent)
 {
     this->name = "template_SI";
     this->icon = QIcon(":/template_SI/images/icon.png");
@@ -19,6 +19,6 @@ QString MyModuleFactory::compiledVersion() const {
 
 /// Make a new instance of the main module class
 QSharedPointer<QWidget> MyModuleFactory::makeInstance() {
-    return QSharedPointer<QWidget>(new MyModule);
+    return QSharedPointer<QWidget>(new MyModule(this));
 }
 

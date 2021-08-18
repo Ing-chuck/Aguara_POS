@@ -26,7 +26,14 @@ bool AguaraModule::isMultiInstance() const {
     return multiInstance;
 }
 
-AmFactory::AmFactory(QWidget* parent): QWidget(parent) {
+QString AguaraModule::compiledVersion() const {
+    return "";
+}
+
+AguaraObject::AguaraObject(QObject *parent): QObject(parent) {}
+AguaraWidget::AguaraWidget(QWidget *parent): QWidget(parent) {}
+
+AmFactory::AmFactory(QWidget* parent): AguaraWidget(parent) {
 
 }
 
@@ -67,4 +74,8 @@ QList<QSharedPointer<QObject>> AmMultiInstanceFactory::getInstances() const {
 
 QSharedPointer<QWidget> AmMultiInstanceFactory::getInstance() {
     return this->makeInstance();
+}
+
+ImportArticlesInterface::ImportArticlesInterface(QObject *parent) : AguaraObject(parent) {
+
 }

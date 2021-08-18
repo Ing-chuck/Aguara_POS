@@ -8,7 +8,7 @@
 #include <QMap>
 
 ImportModule::ImportModule(QObject *parent)
-    : QObject(parent)
+    : ImportArticlesInterface(parent)
 {
     this->name = "Importar";
     this->icon = QIcon(":/import_module/images/icon.png");

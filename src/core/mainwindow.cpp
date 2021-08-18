@@ -24,11 +24,10 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , ui2(new Ui::PageCero)
     , newTabShortcut(QShortcut(QKeySequence(tr("Ctrl+N")), this))
 {
     ui->setupUi(this);
-    ui2->setupUi(&pageCero);
+    //ui2->setupUi(&pageCero);
 
     prepareWindow();
     setUpPageCero();
@@ -84,7 +83,6 @@ void MainWindow::setUpPageCero() {
     addTab(&pageCero, QIcon(), "Notifications");
     ui->tabWidget->tabBar()->setTabButton(0, QTabBar::RightSide, 0);
     ui->tabWidget->tabBar()->setTabButton(0, QTabBar::LeftSide, 0);
-    //ui->tabWidget->setTabVisible(0, false);
 }
 
 void MainWindow::loadTable(QTableView &tableView) {
@@ -232,7 +230,7 @@ void MainWindow::onModuleNotification(ModuleMsg msg) {
     nd->setMsg(msg.message);
     nd->setPriority(msg.priority);
 
-    pageCero.layout()->addWidget(nd);
+    pageCero.addWidget(nd);
     notificationWidgets.append(nd);
 }
 
@@ -303,12 +301,24 @@ void MainWindow::addTabFromAction(QAction* act) {
         if(multiFactory){
             QSharedPointer<QWidget> module = qobject_cast<QWidget*>(multiFactory->getInstance());
             tabPageWidgets.append(module);
+            QWidget* p = module.data()->parentWidget();
+            if(dynamic_cast<AmFactory*>(p))
+                   qDebug() << "working before adding";
             addTab(module.data(), act->icon(), act->iconText());
+            p = module.data()->parentWidget();
+            if(dynamic_cast<AmFactory*>(p))
+                   qDebug() << "working after adding";
         }
     }
 }
 
 void MainWindow::addTab(QWidget* widget, QIcon ico, QString label) {
+
+    // connet notification
+    AguaraWidget *ag = dynamic_cast<AguaraWidget*>(widget);
+    if(ag){
+        connect(ag, SIGNAL(notify(ModuleMsg)), this, SLOT(onModuleNotification(ModuleMsg)));
+    }
     QWidget* page = (widget)? widget : new QWidget();
     int pageN = ui->tabWidget->count();
     label = (label != "")? label : QStringLiteral("tab %1").arg(pageN);

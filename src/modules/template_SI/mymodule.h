@@ -1,6 +1,7 @@
 #ifndef MYMODULE_H
 #define MYMODULE_H
 
+#include <messages.h>
 
 #include <QWidget>
 
@@ -17,5 +18,7 @@ public:
 
 private:
     Ui::MyModule *ui;
+
+    void emitNotification(ModuleMsg msg);
 };
 #endif // MYMODULE_H

@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include "interfaces.h"
+#include "pagecero.h"
 
 #include <QMainWindow>
 #include <QtSql>
@@ -13,7 +14,7 @@
 class NotificationDialog;
 
 QT_BEGIN_NAMESPACE
-namespace Ui { class MainWindow; class PageCero; }
+namespace Ui { class MainWindow; /*class PageCero;*/ }
 class QAction;
 class QActionGroup;
 class QMenu;
@@ -63,9 +64,9 @@ private:
     QTimer dateTimeTimer;
 
     Ui::MainWindow *ui;
-    Ui::PageCero *ui2;
+    //Ui::PageCero *ui2;
 
-    QWidget pageCero;
+    PageCero pageCero;
 
     QSqlTableModel *model;
     QDir pluginsDir;

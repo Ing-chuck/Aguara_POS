@@ -1,14 +1,13 @@
 #ifndef MYMODULE_H
 #define MYMODULE_H
 
-
-#include <QWidget>
+#include <interfaces.h>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MyModule; }
 QT_END_NAMESPACE
 
-class MyModule : public QWidget
+class MyModule : public AguaraWidget
 {
 
 public:
@@ -17,5 +16,7 @@ public:
 
 private:
     Ui::MyModule *ui;
+
+    void emitNotification(ModuleMsg msg);
 };
 #endif // MYMODULE_H

@@ -5,13 +5,15 @@ SOURCES      +=     \
     main.cpp        \
     mainwindow.cpp  \
     module_dialog.cpp \
-    notificationdialog.cpp
+    notificationdialog.cpp \
+    pagecero.cpp
 
 HEADERS      +=     \
     connection.h    \
     mainwindow.h    \
     module_dialog.h \
-    notificationdialog.h
+    notificationdialog.h \
+    pagecero.h
 
 FORMS        +=     \
     mainwindow.ui   \
