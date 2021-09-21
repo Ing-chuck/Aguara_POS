@@ -24,17 +24,17 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , newTabShortcut(QShortcut(QKeySequence(tr("Ctrl+N")), this))
+    //, newTabShortcut(QShortcut(QKeySequence(tr("Ctrl+N")), this))
 {
     ui->setupUi(this);
-    //ui2->setupUi(&pageCero);
+    ui->dockWidget->setTitleBarWidget(new QWidget);
 
     prepareWindow();
     setUpPageCero();
 
     // set shortcut
-    newTabShortcut.setAutoRepeat(false);
-    connect(&newTabShortcut, SIGNAL(activated()),this,SLOT(addTab()));
+    //newTabShortcut.setAutoRepeat(false);
+    //connect(&newTabShortcut, SIGNAL(activated()),this,SLOT(addTab()));
     connect(ui->tabWidget, SIGNAL(tabCloseRequested(int)), this, SLOT(onTabCloseRequested(int)));
 
     createActions();

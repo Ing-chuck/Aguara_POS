@@ -75,7 +75,7 @@ private:
     QList<QObject*> attachedModules;
     QList<QObject*> attachedImportModules;
 
-    QShortcut newTabShortcut;
+    //QShortcut newTabShortcut;
     QMenu* importMenu = nullptr;
     QMenu* helpMenu = nullptr;
     QAction* importAct = nullptr;
