@@ -16,7 +16,5 @@ public:
 
 private:
     Ui::MyModule *ui;
-
-    void emitNotification(ModuleMsg msg);
 };
 #endif // MYMODULE_H

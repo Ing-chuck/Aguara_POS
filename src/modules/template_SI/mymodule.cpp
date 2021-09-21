@@ -3,7 +3,7 @@
 #include "mymodulefactory.h"
 
 MyModule::MyModule(QWidget *parent)
-    : QWidget(parent)
+    : AguaraWidget(parent)
     , ui(new Ui::MyModule)
 {
     ui->setupUi(this);
@@ -12,7 +12,7 @@ MyModule::MyModule(QWidget *parent)
     msg.title = "MyModule - Constructor";
     msg.message = "New instance created";
     msg.priority = MsgPriority::PriorityVeryLow;
-    emitNotification(msg);
+    emit notify(msg);
 }
 
 MyModule::~MyModule()
@@ -21,13 +21,7 @@ MyModule::~MyModule()
     msg.title = "MyModule - Destructor";
     msg.message = "Instance destroyed";
     msg.priority = MsgPriority::PriorityVeryLow;
-    emitNotification(msg);
+    emit notify(msg);
 
     delete ui;
-}
-
-void MyModule::emitNotification(ModuleMsg msg) {
-    if(dynamic_cast<MyModuleFactory*>(parentWidget())){
-        emit dynamic_cast<AmFactory*>(parentWidget())->notify(msg);
-    }
 }

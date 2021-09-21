@@ -3,7 +3,6 @@
 
 #include <interfaces.h>
 
-#include <QWidget>
 #include <QtPlugin>
 
 class MyModuleFactory : public AmSingleInstanceFactory

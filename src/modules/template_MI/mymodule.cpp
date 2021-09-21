@@ -25,11 +25,3 @@ MyModule::~MyModule()
 
     delete ui;
 }
-
-void MyModule::emitNotification(ModuleMsg msg) {
-    QWidget* p = parentWidget();
-    if(dynamic_cast<MyModuleFactory*>(p)){
-        qDebug() << "emiting" << Qt::endl;
-        emit dynamic_cast<AmFactory*>(p)->notify(msg);
-    }
-}
