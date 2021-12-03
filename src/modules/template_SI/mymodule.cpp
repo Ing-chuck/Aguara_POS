@@ -8,19 +8,13 @@ MyModule::MyModule(QWidget *parent)
 {
     ui->setupUi(this);
 
-    ModuleMsg msg;
-    msg.title = "MyModule - Constructor";
-    msg.message = "New instance created";
-    msg.priority = MsgPriority::PriorityVeryLow;
+    ModuleMsg msg(this->name, "id", "MyModule - Constructor", "New instance created", MsgPriority::PriorityVeryLow);
     emit notify(msg);
 }
 
 MyModule::~MyModule()
 {
-    ModuleMsg msg;
-    msg.title = "MyModule - Destructor";
-    msg.message = "Instance destroyed";
-    msg.priority = MsgPriority::PriorityVeryLow;
+    ModuleMsg msg(this->name, "id", "MyModule - Destructor", "Instance destroyed", MsgPriority::PriorityVeryLow);
     emit notify(msg);
 
     delete ui;

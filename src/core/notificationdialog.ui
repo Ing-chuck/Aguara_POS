@@ -18,10 +18,36 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="QLabel" name="title">
-     <property name="text">
-      <string>TextLabel</string>
-     </property>
+    <widget class="QWidget" name="topBar" native="true">
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <item>
+       <widget class="QLabel" name="title">
+        <property name="text">
+         <string>TextLabel</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="horizontalSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="pushButton">
+        <property name="text">
+         <string>Dismiss</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </widget>
    </item>
    <item>
@@ -42,7 +68,7 @@
         <x>0</x>
         <y>0</y>
         <width>470</width>
-        <height>259</height>
+        <height>231</height>
        </rect>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -50,6 +76,9 @@
         <widget class="QLabel" name="message">
          <property name="text">
           <string>TextLabel</string>
+         </property>
+         <property name="scaledContents">
+          <bool>false</bool>
          </property>
         </widget>
        </item>
@@ -60,5 +89,22 @@
   </layout>
  </widget>
  <resources/>
- <connections/>
+ <connections>
+  <connection>
+   <sender>pushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>NotificationDialog</receiver>
+   <slot>close()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>434</x>
+     <y>29</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>244</x>
+     <y>153</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
 </ui>

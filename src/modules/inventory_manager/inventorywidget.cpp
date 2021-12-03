@@ -10,19 +10,13 @@ inventoryWidget::inventoryWidget(QWidget *parent)
 {
     ui->setupUi(this);
 
-    ModuleMsg msg;
-    msg.title = "Inventory Manager - Constructor";
-    msg.message = "New inventory manager instance created";
-    msg.priority = MsgPriority::PriorityVeryLow;
+    ModuleMsg msg("", "id", "Inventory Manager - Constructor", "New inventory manager instance created", MsgPriority::PriorityVeryLow);
     emitNotification(msg);
 }
 
 inventoryWidget::~inventoryWidget()
 {
-    ModuleMsg msg;
-    msg.title = "Inventory Manager - Destructor";
-    msg.message = "Inventory manager instance destroyed";
-    msg.priority = MsgPriority::PriorityVeryLow;
+    ModuleMsg msg("", "id", "Inventory Manager - Destructor", "Inventory manager instance destroyed", MsgPriority::PriorityVeryLow);
     emitNotification(msg);
 
     delete ui;

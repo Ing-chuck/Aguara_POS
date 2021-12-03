@@ -34,7 +34,7 @@ void NotificationDialog::changeColor() {
     case PriorityLow:
         break;
         this->setStyleSheet("background:  rgb(0, 150, 0);");    // Green
-    case PriorityMedium:
+    case PriorityNormal:
         break;
         this->setStyleSheet("background:  rgb(255, 150, 0);");    // Orange
     case PriorityHigh:
