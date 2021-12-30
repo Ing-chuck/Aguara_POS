@@ -68,7 +68,7 @@ static bool createConnection()
 
     QDir dbDir = QDir(QCoreApplication::applicationDirPath());
 
-#if 0// defined(Q_OS_WIN)
+#if defined(Q_OS_WIN)
     if (dbDir.dirName().toLower() == "debug" || dbDir.dirName().toLower() == "release") {
         dbDir.cdUp();
         dbDir.cdUp();
@@ -91,31 +91,33 @@ static bool createConnection()
         return false;
     }
 
-/*
-    qDebug(db.databaseName().toStdString().c_str());
+
+    QSqlQuery query;
+    query.exec("CREATE TABLE IF NOT EXISTS 'articles' ("
+               "`Codigo` BIGINT UNSIGNED NOT NULL,"
+               "`Descripcion` VARCHAR(200) NULL,"
+               "`Marca` VARCHAR(45) NULL,"
+               "`Rubro` VARCHAR(45) NULL,"
+               "`PrecioVenta` DOUBLE UNSIGNED NOT NULL,"
+               "`Costo` DOUBLE UNSIGNED NOT NULL,"
+               "`Stock` INT UNSIGNED NOT NULL,"
+               "`StockMin` INT UNSIGNED NULL,"
+               "`IVA` DOUBLE NULL,"
+               "`F_Compra` DATE NOT NULL,"
+               "`F_Modif` DATE NULL,"
+               "PRIMARY KEY (`Codigo`))");
+    //query.exec("insert into articles values(1, 'SANDWICH COCIDO Y QUESO', null, 'COMIDA', 14, 4.5, 4, 2, 0, 21, null,'2014/02/17')");
+
+    qDebug() << db.databaseName();
     auto list = db.tables();
-    char temp[2];
-    _itoa_s(int(list.count()), temp, 2);
-    qDebug(temp);
+    qDebug() << list.count();
     for(QString& table : list){
-        qDebug(table.toStdString().c_str());
+        qDebug() << table;
     }
 
-    query.exec("select * from stock");
-    qDebug(query.lastError().text().toStdString().c_str());
-*/
-/*
-    QSqlQuery query;
-    query.exec("create table articles (code int primary key, "
-               "description varchar(100), brand varchar(100), category varchar(50), "
-               "sellPrice double, buyPrice double, stock int, stockMin int, "
-               "impInt int, vat double, buyDate date, modDate date)");
-    query.exec("insert into articles values(1, 'SANDWICH COCIDO Y QUESO', null, 'COMIDA', 14, 4.5, 4, 2, 0, 21, null,'2014/02/17')");
+    query.exec("select * from articles");
+    qDebug() << query.lastError();
 
-    query.exec("insert into stock values(100212422323, 'Canned Tomatoes 400g', 742, 500, 1000, 0.24, 'TV', 'BW')");
-    query.exec("insert into stock values(102313538763, 'Frozen Peas 1lb', 41, 30, 50, 0.89, 'FR', 'FV')");
-    query.exec("insert into stock values(403244976252, 'Freshly Squeezed Orange 1L', 32, 10, 25, 2.59, 'JU', 'JL')");
-*/
     return true;
 }
 

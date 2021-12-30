@@ -3,13 +3,12 @@
 
 #include <interfaces.h>
 
-#include <QWidget>
-
 QT_BEGIN_NAMESPACE
 namespace Ui { class inventoryWidget; }
+class QSqlTableModel;
 QT_END_NAMESPACE
 
-class inventoryWidget : public QWidget
+class inventoryWidget : public AguaraWidget
 {
     Q_OBJECT
 
@@ -20,6 +19,8 @@ public:
 private:
     Ui::inventoryWidget *ui;
 
-    void emitNotification(ModuleMsg msg);
+    void loadTable();
+
+    QSqlTableModel *model;
 };
 #endif // INVENTORYWIDGET_H

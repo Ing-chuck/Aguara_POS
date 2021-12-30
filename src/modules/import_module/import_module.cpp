@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QStringList>
 #include <QSqlQuery>
+#include <QSqlError>
 #include <QTextStream>
 #include <QMap>
 
@@ -43,7 +44,7 @@ bool ImportModule::ImportFrom(QString filename)
     qDebug() << filename;
     QMap<int, QString> headerMap;
     while(!csvStream.atEnd()){
-        QStringList cols = csvStream.readLine().split(';');
+        QStringList cols = csvStream.readLine().split(',');
 
         if(cols[1] == "")
             continue;
@@ -54,10 +55,10 @@ bool ImportModule::ImportFrom(QString filename)
         // checking if this is a header row
         // non header rows start with a number
         bool ok, headerRow = false;
-        cols[1].toDouble(&ok);
+        cols[0].toDouble(&ok);
         if(!ok) {
             //header row
-            qDebug() << cols[1];
+            //qDebug() << cols[1];
             headerRow = true;
         }
 
@@ -70,7 +71,7 @@ bool ImportModule::ImportFrom(QString filename)
                 else {
                     // ensure data is on a valid column
                     // ie. there is a corresponding header
-                    if(headerMap.contains(i)){
+                    if(headerMap.contains(i) && cols[i] != "NULL"){
                         headers.append(headerMap[i]);
                         data.append(cols[i]);
                     }
@@ -92,52 +93,48 @@ void ImportModule::insertInto(QStringList fields, QList<QVariant> data) {
     QStringList vals;
     //;Código;;Descripción;;;Marca;;;Precio;Costo;Stock
     for(QString& field : fields){
-        if(field == QString().fromUtf8("C�digo")) {
-            cols.append("code");
+        if(field == "Codigo") {
+            cols.append("Codigo");
             vals.append(":cod");
         }
-        if(field == "Descripci�n") {
-            cols.append("description");
+        if(field == "Descripcion") {
+            cols.append("Descripcion");
             vals.append(":desc");
         }
         if(field == "Marca") {
-            cols.append("brand");
+            cols.append("Marca");
             vals.append(":bran");
         }
         if(field == "Rubro") {
-            cols.append("category");
+            cols.append("Rubro");
             vals.append(":cat");
         }
-        if(field == "Precio") {
-            cols.append("sellPrice");
+        if(field == "PrecioVenta") {
+            cols.append("PrecioVenta");
             vals.append(":sPrice");
         }
         if(field == "Costo") {
-            cols.append("buyPrice");
+            cols.append("Costo");
             vals.append(":bPrice");
         }
         if(field == "Stock") {
-            cols.append("stock");
+            cols.append("Stock");
             vals.append(":stk");
         }
-        if(field == "StockMinimo") {
-            cols.append("stockMin");
+        if(field == "StockMin") {
+            cols.append("StockMin");
             vals.append(":stkM");
         }
-        if(field == "ImpInt") {
-            cols.append("impInt");
-            vals.append(":iInt");
-        }
-        if(field == "Iva") {
-            cols.append("vat");
+        if(field == "IVA") {
+            cols.append("IVA");
             vals.append(":v");
         }
-        if(field == "F.Compra") {
-            cols.append("buyDate");
+        if(field == "F_Compra") {
+            cols.append("F_Compra");
             vals.append(":bDate");
         }
-        if(field == "F.Modif") {
-            cols.append("modDate");
+        if(field == "F_Modif") {
+            cols.append("F_Modif");
             vals.append(":mDate");
         }
     }
