@@ -106,6 +106,15 @@ static bool createConnection()
                "`F_Compra` DATE NOT NULL,"
                "`F_Modif` DATE NULL,"
                "PRIMARY KEY (`Codigo`))");
+
+    query.exec("CREATE TABLE IF NOT EXISTS 'brands' ("
+               "`brand_id` BIGINT UNSIGNED PRIMARY KEY,"
+               "`brand_name` TEXT NOT NULL)");
+
+    query.exec("CREATE TABLE IF NOT EXISTS busines_types ("
+               "type_id BIGINT UNSIGNED PRIMARY KEY,"
+               "type TEXT NOT NULL)");
+
     //query.exec("insert into articles values(1, 'SANDWICH COCIDO Y QUESO', null, 'COMIDA', 14, 4.5, 4, 2, 0, 21, null,'2014/02/17')");
 
     qDebug() << db.databaseName();
