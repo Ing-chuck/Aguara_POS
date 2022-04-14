@@ -122,16 +122,16 @@ void addItemDialog::getDataFromSelection()
 /// with user input from form
 void addItemDialog::getDataFromInput()
 {
-    itemCode = ui->lineEdit_code->text();
-    itemDescription = ui->lineEdit_description->text();
-    itemBrand = ui->comboBox_brand->currentText();
-    itemType = ui->comboBox_type->currentText();
-    itemPrice = ui->lineEdit_price->text();
-    itemCost = ui->lineEdit_cost->text();
-    itemStock = ui->lineEdit_stock->text();
-    itemStockMin = ui->lineEdit_stockmin->text();
-    itemVat = ui->comboBox_vat->currentText();
-    itemBuyDate = ui->dateEdit->text();
+    itemCode = ui->lineEdit_code->text().trimmed();
+    itemDescription = ui->lineEdit_description->text().trimmed();
+    itemBrand = ui->comboBox_brand->currentText().trimmed();
+    itemType = ui->comboBox_type->currentText().trimmed();
+    itemPrice = ui->lineEdit_price->text().trimmed();
+    itemCost = ui->lineEdit_cost->text().trimmed();
+    itemStock = ui->lineEdit_stock->text().trimmed();
+    itemStockMin = ui->lineEdit_stockmin->text().trimmed();
+    itemVat = ui->comboBox_vat->currentText().trimmed();
+    itemBuyDate = ui->dateEdit->text().trimmed();
     itemModDate = QDate::currentDate().toString(Qt::ISODate);
 }
 
