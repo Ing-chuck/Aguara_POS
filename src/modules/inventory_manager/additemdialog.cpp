@@ -40,9 +40,9 @@ addItemDialog::addItemDialog(QWidget *parent) :
     // Create query models for brand and type comboboxes
     /// TODO
     /// * make db column name configurable
-    brandModel->setQuery("select brand_name From brands ORDER BY brand_name");
-    typeModel->setQuery("select type From busines_types ORDER BY type");
-    vatModel->setQuery("select vat_value From vats ORDER BY vat_value DESC");
+    brandModel->setQuery("select nombre From marcas ORDER BY nombre");
+    typeModel->setQuery("select rubro From rubros ORDER BY rubro");
+    vatModel->setQuery("select categoria From iva_cat ORDER BY categoria DESC");
 
     // Set the comboBoxes with the respective models
     ui->comboBox_brand->setModel(brandModel);
@@ -95,7 +95,7 @@ void addItemDialog::getDataFromSelection()
     itemCode = tableModel->data(tableModel->index(selectedRow, 0)).toString();
     itemDescription = tableModel->data(tableModel->index(selectedRow, 1)).toString();
     itemBrand = tableModel->data(tableModel->index(selectedRow, 2)).toString();
-    itemType = tableModel->data(tableModel->index(selectedRow, 3)).toString();
+    itemCategory = tableModel->data(tableModel->index(selectedRow, 3)).toString();
     itemPrice = tableModel->data(tableModel->index(selectedRow, 4)).toString();
     itemCost = tableModel->data(tableModel->index(selectedRow, 5)).toString();
     itemStock = tableModel->data(tableModel->index(selectedRow, 6)).toString();
@@ -108,7 +108,7 @@ void addItemDialog::getDataFromSelection()
     ui->lineEdit_code->setText(itemCode);
     ui->lineEdit_description->setText(itemDescription);
     ui->comboBox_brand->setCurrentText(itemBrand);
-    ui->comboBox_type->setCurrentText(itemType);
+    ui->comboBox_type->setCurrentText(itemCategory);
     ui->lineEdit_price->setText(itemPrice);
     ui->lineEdit_cost->setText(itemCost);
     ui->lineEdit_stock->setText(itemStock);
@@ -125,7 +125,7 @@ void addItemDialog::getDataFromInput()
     itemCode = ui->lineEdit_code->text().trimmed();
     itemDescription = ui->lineEdit_description->text().trimmed();
     itemBrand = ui->comboBox_brand->currentText().trimmed();
-    itemType = ui->comboBox_type->currentText().trimmed();
+    itemCategory = ui->comboBox_type->currentText().trimmed();
     itemPrice = ui->lineEdit_price->text().trimmed();
     itemCost = ui->lineEdit_cost->text().trimmed();
     itemStock = ui->lineEdit_stock->text().trimmed();
@@ -170,8 +170,10 @@ void addItemDialog::onSaveClicked()
     getDataFromInput();
 
     // Make insert query
-    QString sql = QString("INSERT OR REPLACE INTO articles VALUES('%1',' %2', '%3', '%4', '%5', '%6', '%7', '%8', '%9', '%10', '%11')")
-                  .arg(itemCode, itemDescription, itemBrand, itemType, itemPrice, itemCost, itemStock, itemStockMin, itemVat, itemBuyDate, itemModDate);
+    QString columnNames = "'codigo','descripcion', 'marca_id', 'rubro_id', 'precio', 'costo', 'stock', 'stock_min', 'iva', 'f_compra', 'f_mod'";
+
+    QString sql = QString("INSERT OR REPLACE INTO productos(%12) VALUES('%1','%2', '%3', '%4', '%5', '%6', '%7', '%8', '%9', '%10', '%11')")
+                  .arg(itemCode, itemDescription, itemBrand, itemCategory, itemPrice, itemCost, itemStock, itemStockMin, itemVat, itemBuyDate, itemModDate, columnNames);
 
     QSqlQuery query;
     query.exec(sql);

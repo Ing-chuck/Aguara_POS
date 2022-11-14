@@ -5,13 +5,13 @@ INCLUDEPATH  += ../../interfaces
 LIBS         += -L../../build-static -l$$qtLibraryTarget(interfaces)
 SOURCES      += inventorywidget.cpp \
                 additemdialog.cpp \
-                customsqlmodel.cpp \
                 inventoryfactory.cpp \
+                inventorysqlmodel.cpp \
                 modifytabledialog.cpp
 HEADERS      += inventorywidget.h \
                 additemdialog.h \
-                customsqlmodel.h \
                 inventoryfactory.h \
+                inventorysqlmodel.h \
                 modifytabledialog.h
 RESOURCES    += resources.qrc
 FORMS         = inventorywidget.ui \

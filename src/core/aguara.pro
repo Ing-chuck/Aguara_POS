@@ -24,6 +24,7 @@ TRANSLATIONS +=     \
     aguara_es_PY.ts
 
 INCLUDEPATH  += ../interfaces
+#LIBS         += C:\Qt\6.1.1\msvc2019_64\plugins\sqldrivers
 LIBS         += -L../modules/build-plugins
 LIBS         += -L../build-static -l$$qtLibraryTarget(interfaces)
 

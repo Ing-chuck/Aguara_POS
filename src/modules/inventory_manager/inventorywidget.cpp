@@ -2,7 +2,6 @@
 #include "inventoryfactory.h"
 #include "ui_inventorywidget.h"
 #include "additemdialog.h"
-#include "customsqlmodel.h"
 #include <version.h>
 
 #include <QtSql>
@@ -14,7 +13,7 @@ inventoryWidget::inventoryWidget(QWidget *parent)
     , ui(new Ui::inventoryWidget)
     , addDialog(new addItemDialog(this))
     , editDialog(new addItemDialog(this))
-    , model(new CustomSqlModel(this))
+    , model(new InventorySqlModel(this))
 {
     ui->setupUi(this);
 
@@ -55,20 +54,8 @@ void inventoryWidget::loadTable()
     QTableView *table = ui->tableView;
     // Configure the data model:
     model->setEditStrategy(QSqlTableModel::OnRowChange);
-    model->setTable("articles");
-
-    // Set the localized header captions:
-    model->setHeaderData(0, Qt::Horizontal, tr("Codigo"));
-    model->setHeaderData(1, Qt::Horizontal, tr("Descripcion"));
-    model->setHeaderData(2, Qt::Horizontal, tr("Marca"));
-    model->setHeaderData(3, Qt::Horizontal, tr("Rubro"));
-    model->setHeaderData(4, Qt::Horizontal, tr("PrecioVenta"));
-    model->setHeaderData(5, Qt::Horizontal, tr("Costo"));
-    model->setHeaderData(6, Qt::Horizontal, tr("Stock"));
-    model->setHeaderData(7, Qt::Horizontal, tr("StockMin"));
-    model->setHeaderData(8, Qt::Horizontal, tr("IVA %"));
-    model->setHeaderData(9, Qt::Horizontal, tr("F.Compra"));
-    model->setHeaderData(10, Qt::Horizontal, tr("F.Modif"));
+    model->setTable("productos");
+    model->setFilter("productos.es_activo = true");
 
     // Populate the model:
     if(!refreshModel()){
@@ -77,10 +64,34 @@ void inventoryWidget::loadTable()
     }
 
     table->setModel(model);
+    hideUnusedColumns();
     table->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    table->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    table->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     table->resizeColumnsToContents();
 
+    // move columns to the preffered location
+    table->horizontalHeader()->moveSection(8, 12);  // es_activo
+    table->horizontalHeader()->moveSection(7, 11);  // FMod
+    table->horizontalHeader()->moveSection(6, 10);  // FCom
+    table->horizontalHeader()->moveSection(5, 9);   // Stock Min
+    table->horizontalHeader()->moveSection(4, 8);   // Stock
+    table->horizontalHeader()->moveSection(6, 7);   // IVA
+    table->horizontalHeader()->moveSection(3, 6);   // Costo
+    table->horizontalHeader()->moveSection(2, 5);   // Precio
+
+
+}
+
+/// Hide columns that are not needed from the model
+void inventoryWidget::hideUnusedColumns()
+{
+    // colums
+    // "es_activo"
+    QTableView *table = ui->tableView;
+    QVector<QString> colsToHide = {"es_activo"};
+    for (auto &field : colsToHide) {
+        table->hideColumn(model->fieldIndex(field));
+    }
 }
 
 /// Refresh model data
@@ -129,6 +140,8 @@ void inventoryWidget::onItemRemovePressed()
         if(btn == QMessageBox::Ok)
         {
             //deleteRow(model->data(indx).toString());
+            //TODO
+            //set this item's es_activo to false in the database
             model->removeRows(row, 1);
             refreshModel();
         }

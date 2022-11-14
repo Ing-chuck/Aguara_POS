@@ -65,7 +65,24 @@
 
 static bool createConnection()
 {
+    QSqlDatabase db = QSqlDatabase::addDatabase("QPSQL");
+    db.setHostName("localhost");
+    db.setPort(5432);
+    db.setDatabaseName("pos");
+    db.setUserName("aguara_instance");
+    db.setPassword("aguara");
 
+    if (!db.open()) {
+        qDebug() << db.lastError();
+        QMessageBox::critical(nullptr, QObject::tr("Cannot open database"),
+            QObject::tr("No se pudo conectar a la base de datos.\n"
+                        "Click Cancel para salir."), QMessageBox::Cancel);
+        return false;
+    }
+
+    return true;
+
+/*
     QDir dbDir = QDir(QCoreApplication::applicationDirPath());
 
 #if defined(Q_OS_WIN)
@@ -128,6 +145,7 @@ static bool createConnection()
     qDebug() << query.lastError();
 
     return true;
+*/
 }
 
 #endif

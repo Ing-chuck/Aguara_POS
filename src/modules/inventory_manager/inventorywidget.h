@@ -2,10 +2,11 @@
 #define INVENTORYWIDGET_H
 
 #include <interfaces.h>
+#include "inventorysqlmodel.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class inventoryWidget; }
-class QSqlTableModel;
+class QSqlRelationalTableModel;
 class QCompleter;
 QT_END_NAMESPACE
 
@@ -23,10 +24,11 @@ private:
     Ui::inventoryWidget *ui = nullptr;
     addItemDialog *addDialog = nullptr;
     addItemDialog *editDialog = nullptr;
-    QSqlTableModel *model = nullptr;
+    InventorySqlModel *model = nullptr;
     QCompleter *searchCompleter;
 
     void loadTable();
+    void hideUnusedColumns();
     bool refreshModel();
 
 private slots:

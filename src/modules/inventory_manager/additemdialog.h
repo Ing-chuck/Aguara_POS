@@ -47,7 +47,7 @@ private:
     QString itemCode;
     QString itemDescription;
     QString itemBrand;
-    QString itemType;
+    QString itemCategory;
     QString itemPrice;
     QString itemCost;
     QString itemStock;
