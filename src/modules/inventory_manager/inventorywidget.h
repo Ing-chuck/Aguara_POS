@@ -2,11 +2,10 @@
 #define INVENTORYWIDGET_H
 
 #include <interfaces.h>
-#include "inventorysqlmodel.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class inventoryWidget; }
-class QSqlRelationalTableModel;
+class QAbstractItemModel;
 class QCompleter;
 QT_END_NAMESPACE
 
@@ -17,22 +16,23 @@ class inventoryWidget : public AguaraWidget
     Q_OBJECT
 
 public:
-    explicit inventoryWidget(QWidget *parent = nullptr);
+    explicit inventoryWidget(ProductService *products, QWidget *parent = nullptr);
     ~inventoryWidget();
 
 private:
     Ui::inventoryWidget *ui = nullptr;
+    ProductService *products = nullptr;
     addItemDialog *addDialog = nullptr;
     addItemDialog *editDialog = nullptr;
-    InventorySqlModel *model = nullptr;
-    QCompleter *searchCompleter;
+    QAbstractItemModel *model = nullptr;
+    QCompleter *searchCompleter = nullptr;
 
     void loadTable();
-    void hideUnusedColumns();
-    bool refreshModel();
+    QString selectedCode() const;
 
 private slots:
     void onItemAddedEdited(QString id);
+    void onItemEditPressed();
     void onItemRemovePressed();
     void onCompleterAccepted(const QModelIndex &index);
 };

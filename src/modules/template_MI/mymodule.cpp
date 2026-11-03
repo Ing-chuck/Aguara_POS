@@ -1,12 +1,16 @@
 #include "mymodule.h"
 #include "ui_mymodule.h"
-#include "mymodulefactory.h"
+
+#include <QTimer>
 
 /*
 **** message notification syntax ****
 
-     msg(this->name, "id", "title", "text", [priority = normal], [lifetime in seconds = -1])
+     ModuleMsg msg("", "id", "title", "text", [priority = normal], [lifetime in seconds = -1]);
      emit notify(msg);
+
+     The core fills in the sender name. Signals emitted directly in the
+     constructor are lost (nothing is connected yet), so defer them.
 */
 
 MyModule::MyModule(QWidget *parent)
@@ -15,14 +19,14 @@ MyModule::MyModule(QWidget *parent)
 {
     ui->setupUi(this);
 
-    ModuleMsg msg(this->name, "id", "MyModule - Constructor", "New instance created", MsgPriority::PriorityVeryLow);
-    emit notify(msg);
+    QTimer::singleShot(0, this, [this]() {
+        emit notify(ModuleMsg("", "id", "MyModule - Constructor", "New instance created", MsgPriority::PriorityVeryLow));
+    });
 }
 
 MyModule::~MyModule()
 {
-    ModuleMsg msg(this->name, "id", "MyModule - Destructor", "Instance destroyed", MsgPriority::PriorityVeryLow);
-    emit notify(msg);
+    emit notify(ModuleMsg("", "id", "MyModule - Destructor", "Instance destroyed", MsgPriority::PriorityVeryLow));
 
     delete ui;
 }

@@ -1,17 +1,16 @@
 #include "module_dialog.h"
-#include "interfaces.h"
 
 #include <QDir>
 #include <QGridLayout>
 #include <QHeaderView>
 #include <QLabel>
-#include <QPluginLoader>
 #include <QPushButton>
+#include <QStyle>
 #include <QStringList>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
-ModuleDialog::ModuleDialog(const QString &path, const QStringList &fileNames,
+ModuleDialog::ModuleDialog(const QString &path, const QList<LoadedModule> &modules,
                            QWidget *parent) :
     QDialog(parent),
     label(new QLabel),
@@ -41,55 +40,41 @@ ModuleDialog::ModuleDialog(const QString &path, const QStringList &fileNames,
                             QIcon::Normal, QIcon::Off);
     featureIcon.addPixmap(style()->standardPixmap(QStyle::SP_FileIcon));
 
-    setWindowTitle(tr("Plugin Information"));
-    findPlugins(path, fileNames);
-}
+    setWindowTitle(tr("Module Information"));
 
-//! [0]
-void ModuleDialog::findPlugins(const QString &path,
-                               const QStringList &fileNames)
-{
-    label->setText(tr("Found the following modules\n"
-                      "(looked in %1):")
+    label->setText(tr("Loaded the following modules\n"
+                      "(from %1):")
                    .arg(QDir::toNativeSeparators(path)));
 
-    const QDir dir(path);
-
-    const auto staticInstances = QPluginLoader::staticInstances();
-    for (QObject *plugin : staticInstances)
-        populateTreeWidget(plugin, tr("%1 (Static Plugin)")
-                                   .arg(plugin->metaObject()->className()));
-
-    for (const QString &fileName : fileNames) {
-        QPluginLoader loader(dir.absoluteFilePath(fileName));
-        QObject *plugin = loader.instance();
-        if (plugin)
-            populateTreeWidget(plugin, fileName);
-    }
+    for (const LoadedModule &module : modules)
+        populateTreeWidget(module);
 }
-//! [0]
 
-//! [1]
-void ModuleDialog::populateTreeWidget(QObject *plugin, const QString &text)
+void ModuleDialog::populateTreeWidget(const LoadedModule &module)
 {
     auto pluginItem = new QTreeWidgetItem(treeWidget);
-    pluginItem->setText(0, text);
+    pluginItem->setText(0, QString("%1 %2  (%3)").arg(module.info.name,
+                                                      module.info.version,
+                                                      module.fileName));
+    pluginItem->setIcon(0, module.info.icon);
+    pluginItem->setToolTip(0, module.info.description);
     pluginItem->setExpanded(true);
 
     QFont boldFont = pluginItem->font(0);
     boldFont.setBold(true);
     pluginItem->setFont(0, boldFont);
 
-    if (plugin) {
-        auto iImporter = qobject_cast<ImportArticlesInterface *>(plugin);
-        if (iImporter)
-            addItems(pluginItem, "ImportInterface", iImporter->FileTypes());
+    if (module.widgets) {
+        addItems(pluginItem, tr("Page"),
+                 { module.widgets->allowsMultipleInstances() ? tr("multiple instances")
+                                                             : tr("single instance") });
     }
+    if (module.importer)
+        addItems(pluginItem, tr("Import"), module.importer->fileTypes());
 }
-//! [1]
 
 void ModuleDialog::addItems(QTreeWidgetItem *pluginItem,
-                            const char *interfaceName,
+                            const QString &interfaceName,
                             const QStringList &features)
 {
     auto interfaceItem = new QTreeWidgetItem(pluginItem);

@@ -1,14 +1,18 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include "corehost.h"
 #include "ui_pagecero.h"
 #include "module_dialog.h"
 #include "notificationdialog.h"
 #include <version.h>
 
 #include <QAction>
-#include <QActionGroup>
 #include <QDateTime>
+#include <QDebug>
 #include <QFileDialog>
+#include <QFileInfo>
+#include <QLibrary>
+#include <QPluginLoader>
 #include <QKeySequence>
 #include <QMenu>
 #include <QMenuBar>
@@ -21,9 +25,10 @@
 
 
 
-MainWindow::MainWindow(QWidget *parent)
+MainWindow::MainWindow(CoreHost *host, QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
+    , host(host)
     //, newTabShortcut(QShortcut(QKeySequence(tr("Ctrl+N")), this))
 {
     ui->setupUi(this);
@@ -39,6 +44,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     createActions();
     createMenus();
+
+    // modules without a page (e.g. importers) notify through the host
+    connect(host, &CoreHost::notificationRequested, this, &MainWindow::onModuleNotification);
     loadPlugins();
     //loadTable();
 
@@ -47,7 +55,15 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
-    closeAllTabs();
+    // Delete module pages while the window is still fully alive, and stop
+    // listening to them first: their destructors may still emit notify().
+    for (int i = ui->tabWidget->count() - 1; i >= 0; --i) {
+        QWidget *page = ui->tabWidget->widget(i);
+        if (page == &pageCero)
+            continue;
+        disconnect(page, nullptr, this, nullptr);
+        delete page;
+    }
     delete ui;
 }
 
@@ -85,56 +101,22 @@ void MainWindow::setUpPageCero() {
     ui->tabWidget->tabBar()->setTabButton(0, QTabBar::LeftSide, 0);
 }
 
-void MainWindow::loadTable(QTableView &tableView) {
-    // Create the data model:
-    model = new QSqlTableModel(&tableView);
-    model->setEditStrategy(QSqlTableModel::OnManualSubmit);
-    model->setTable("articles");
-
-    // Set the localized header captions:
-    model->setHeaderData(0, Qt::Horizontal, tr("Product Code"));
-    model->setHeaderData(1, Qt::Horizontal, tr("Item Name"));
-    model->setHeaderData(2, Qt::Horizontal, tr("Brand"));
-    model->setHeaderData(3, Qt::Horizontal, tr("Category"));
-    model->setHeaderData(4, Qt::Horizontal, tr("Sell Price"));
-    model->setHeaderData(5, Qt::Horizontal, tr("Buy Price"));
-    model->setHeaderData(6, Qt::Horizontal, tr("Stock"));
-    model->setHeaderData(7, Qt::Horizontal, tr("Minimum Stock"));
-    model->setHeaderData(8, Qt::Horizontal, tr("InteralImp"));
-    model->setHeaderData(9, Qt::Horizontal, tr("VAT"));
-    model->setHeaderData(10, Qt::Horizontal, tr("Buy Date"));
-    model->setHeaderData(11, Qt::Horizontal, tr("Modified Date"));
-
-    // Populate the model:
-    model->select();
-
-    // Set the model and hide the ID column:
-    tableView.setModel(model);
-    //ui->tableView->setItemDelegate(new BookDelegate(ui.bookTable));
-    //ui->tableView->setColumnHidden(model->fieldIndex("id"), true);
-    tableView.setSelectionMode(QAbstractItemView::SingleSelection);
-    tableView.resizeColumnsToContents();
-}
-
 void MainWindow::Import() {
     qDebug() << "importing";
 
     QString file = QFileDialog::getOpenFileName(this, "Select file to import", QDir::currentPath(), "CSV Files (*.csv)");
+    if (file.isEmpty())
+        return;
 
-    //naively determine file type
-    QString file_ext = file.split(".").last();
+    const QString file_ext = QFileInfo(file).suffix().toLower();
 
     //search for module that can handle this type
-    qDebug() << "List size: " << attachedImportModules.size();
-    for(QObject* module : attachedImportModules){
-
-        QStringList typeList = qobject_cast<ImportArticlesInterface *>(module)->FileTypes();
-        qDebug() << "types: " << typeList;
-        if(!typeList.contains(file_ext))
+    for (const LoadedModule &module : qAsConst(modules)) {
+        if (!module.importer || !module.importer->fileTypes().contains(file_ext))
             continue;
 
         //let this module handle the file
-        qobject_cast<ImportArticlesInterface *>(module)->ImportFrom(file);
+        module.importer->importFrom(file);
         //loadTable();
 
         break;
@@ -149,7 +131,7 @@ void MainWindow::about()
 
 void MainWindow::aboutModules()
 {
-    ModuleDialog dialog(pluginsDir.path(), pluginFileNames, this);
+    ModuleDialog dialog(pluginsDir.path(), modules, this);
     dialog.exec();
 }
 
@@ -175,53 +157,79 @@ void MainWindow::createMenus()
     helpMenu->addAction(aboutModulesAct);
 }
 
+/// Load every module from the "modules" folder next to the executable.
 void MainWindow::loadPlugins()
 {
     pluginsDir = QDir(QCoreApplication::applicationDirPath());
-
-#if defined(Q_OS_WIN)
-    if (pluginsDir.dirName().toLower() == "debug" || pluginsDir.dirName().toLower() == "release") {
-        pluginsDir.cdUp();
-        pluginsDir.cdUp();
+    if (!pluginsDir.cd("modules")) {
+        qWarning() << "Modules folder not found:" << pluginsDir.absoluteFilePath("modules");
+        return;
     }
-#endif
-    pluginsDir.cd("modules/build-modules");
 
     const QStringList entryList = pluginsDir.entryList(QDir::Files);
     for (const QString &fileName : entryList) {
+        if (!QLibrary::isLibrary(fileName))     // skips import libraries (.a) etc.
+            continue;
+
         QPluginLoader loader(pluginsDir.absoluteFilePath(fileName));
-        QObject *plugin = loader.instance();
-        if (plugin && dynamic_cast<AguaraModule *>(plugin)->registerModule(VERSION_STRING)) {
-            populateMenus(plugin);
-            makeButton(plugin);
-            pluginFileNames += fileName;
-            attachedModules.append(plugin);
+
+        // Check the interface version from the metadata before loading any
+        // code: a module built against another interface version is skipped.
+        const QString iid = loader.metaData().value("IID").toString();
+        if (iid != QLatin1String(AguaraModuleInterface_iid)) {
+            qWarning() << "Skipping" << fileName << "- interface" << iid
+                       << "expected" << AguaraModuleInterface_iid;
+            onModuleNotification(ModuleMsg("Aguara", "module-skipped:" + fileName,
+                tr("Module not loaded"),
+                tr("%1 was built for a different version of Aguara and was not loaded.").arg(fileName),
+                MsgPriority::PriorityHigh));
+            continue;
         }
+
+        QObject *plugin = loader.instance();
+        auto module = qobject_cast<AguaraModuleInterface *>(plugin);
+        if (!module) {
+            qWarning() << "Could not load" << fileName << ":" << loader.errorString();
+            loader.unload();
+            continue;
+        }
+
+        if (!module->initialize(host)) {
+            qWarning() << "Module" << fileName << "failed to initialize";
+            onModuleNotification(ModuleMsg("Aguara", "module-init-failed:" + fileName,
+                tr("Module not loaded"),
+                tr("%1 could not start: a service it needs is missing.").arg(module->moduleInfo().name),
+                MsgPriority::PriorityHigh));
+            continue;
+        }
+
+        LoadedModule loaded;
+        loaded.fileName = fileName;
+        loaded.instance = plugin;
+        loaded.info     = module->moduleInfo();
+        loaded.widgets  = qobject_cast<WidgetModuleInterface *>(plugin);
+        loaded.importer = qobject_cast<ImportArticlesInterface *>(plugin);
+        modules.append(loaded);
+
+        if (loaded.importer)
+            addImportMenuEntry(modules.last());
+        if (loaded.widgets)
+            makeButton(modules.size() - 1);
     }
 }
 
-void MainWindow::populateMenus(QObject *plugin)
+/// Add an "Import from" menu entry for a module that can import articles.
+void MainWindow::addImportMenuEntry(const LoadedModule &module)
 {
-    QStringList menuText;
-    menuText.append("");
+    // if this is the first import module, add the menu
+    if (importMenu == nullptr)
+        importMenu = menuBar()->addMenu(tr("&Import from"));
 
-    auto iImport = qobject_cast<ImportArticlesInterface *>(plugin);
-    if (iImport){
-        //attach
-        attachedImportModules.append(plugin);
-        QString types = "(";
-        for(QString& type : iImport->FileTypes()){
-            types += type + ",";
-        }
-        types = types.left(types.lastIndexOf(",")) + ")";
-        menuText[0] += types;
-
-        // if this is the first import interface, add a menu
-        if(importMenu == nullptr)
-            importMenu = menuBar()->addMenu(tr("&Import from"));
-
-        addToMenu(plugin, menuText, importMenu, &MainWindow::Import);
-    }
+    const QString text = QString("%1 (%2)").arg(module.info.name,
+                                                module.importer->fileTypes().join(", "));
+    auto action = new QAction(module.info.icon, text, this);
+    connect(action, &QAction::triggered, this, &MainWindow::Import);
+    importMenu->addAction(action);
 }
 
 void MainWindow::onModuleNotification(ModuleMsg msg) {
@@ -234,43 +242,19 @@ void MainWindow::onModuleNotification(ModuleMsg msg) {
     notificationWidgets.append(nd);
 }
 
-void MainWindow::addToMenu(QObject *plugin, const QStringList &texts,
-                           QMenu *menu, Member member,
-                           QActionGroup *actionGroup)
-{
-    for (const QString &text : texts) {
-        auto action = new QAction(text, plugin);
-        action->setIcon(dynamic_cast<AguaraModule*>(plugin)->getIcon());
-        connect(action, &QAction::triggered, this, member);
-        menu->addAction(action);
+/// Add a sidebar button that opens the module's page.
+void MainWindow::makeButton(int moduleIndex) {
+    const LoadedModule &module = modules.at(moduleIndex);
 
-        if (actionGroup) {
-            action->setCheckable(true);
-            actionGroup->addAction(action);
-        }
-    }
-}
+    QToolButton *button = new QToolButton(ui->sideBar);
+    QAction *act = new QAction(module.info.icon, module.info.name, button);
+    act->setIconVisibleInMenu(false);
+    button->setDefaultAction(act);
+    button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    moduleButtonList.append(button);
+    addToSidebar(button);
 
-void MainWindow::makeButton(QObject *plugin) {
-    auto moduleWidget = qobject_cast<QWidget *>(plugin);
-    auto module = dynamic_cast<AmFactory *>(plugin);
-    if (module){ 
-        // Factory style module
-        connect(module, SIGNAL(notify(ModuleMsg)), this, SLOT(onModuleNotification(ModuleMsg)));
-
-        QToolButton *button = new QToolButton(moduleWidget);
-        QAction *act = new QAction(moduleWidget);
-        act->setIcon(module->getIcon());
-        act->setIconText(module->getName());
-        act->setIconVisibleInMenu(false);
-        button->setDefaultAction(act);
-        button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-        moduleButtonList.append(button);
-        addToSidebar(button);
-
-        //connect button to the tabWidget
-        connect(button, &QToolButton::triggered, this, &MainWindow::addTabFromAction);
-    }
+    connect(act, &QAction::triggered, this, [this, moduleIndex]() { openModulePage(moduleIndex); });
 }
 
 void MainWindow::addToSidebar(QToolButton *button) {
@@ -285,40 +269,37 @@ void MainWindow::dateTimeUpdate() {
     timeLabel.setText(timestr);
 }
 
-void MainWindow::addTabFromAction(QAction* act) {
-    auto singleFactory = qobject_cast<AmSingleInstanceFactory*>(act->parent());
-    if(singleFactory){
-        // single instace kind
-        QSharedPointer<QWidget> module(singleFactory->getInstance());
-        if(module){
-            tabPageWidgets.append(module);
-            addTab(module.data(), act->icon(), act->iconText());
-        }
+/// Show a module's page: re-focus the open one for single-instance modules,
+/// otherwise create a new page. The tab widget owns the page from here on.
+void MainWindow::openModulePage(int moduleIndex) {
+    LoadedModule &module = modules[moduleIndex];
+    const bool multi = module.widgets->allowsMultipleInstances();
+
+    if (!multi && module.openPage) {
+        addTab(module.openPage);    // already a tab: just make it current
+        return;
     }
-    else {
-        // multi instance kind
-        auto multiFactory = qobject_cast<AmMultiInstanceFactory*>(act->parent());
-        if(multiFactory){
-            QSharedPointer<QWidget> module = qobject_cast<QWidget*>(multiFactory->getInstance());
-            tabPageWidgets.append(module);
-            QWidget* p = module.data()->parentWidget();
-            if(dynamic_cast<AmFactory*>(p))
-                   qDebug() << "working before adding";
-            addTab(module.data(), act->icon(), act->iconText());
-            p = module.data()->parentWidget();
-            if(dynamic_cast<AmFactory*>(p))
-                   qDebug() << "working after adding";
-        }
+
+    QWidget *page = module.widgets->createWidget();
+    if (!page)
+        return;
+
+    if (auto ag = qobject_cast<AguaraWidget *>(page)) {
+        const QString sender = module.info.name;
+        connect(ag, &AguaraWidget::notify, this, [this, sender](ModuleMsg msg) {
+            if (msg.senderName.isEmpty())
+                msg.senderName = sender;
+            onModuleNotification(msg);
+        });
     }
+
+    if (!multi)
+        module.openPage = page;
+    addTab(page, module.info.icon, module.info.name);
 }
 
 void MainWindow::addTab(QWidget* widget, QIcon ico, QString label) {
 
-    // connet notification
-    AguaraWidget *ag = dynamic_cast<AguaraWidget*>(widget);
-    if(ag){
-        connect(ag, SIGNAL(notify(ModuleMsg)), this, SLOT(onModuleNotification(ModuleMsg)));
-    }
     QWidget* page = (widget)? widget : new QWidget();
     int pageN = ui->tabWidget->count();
     label = (label != "")? label : QStringLiteral("tab %1").arg(pageN);
@@ -341,14 +322,14 @@ void MainWindow::addTab(QWidget* widget, QIcon ico, QString label) {
 }
 
 void MainWindow::onTabCloseRequested(int indx) {
-    // search for and remove from our page list
     QWidget* page = ui->tabWidget->widget(indx);
-    ui->tabWidget->removeTab(indx);
-    this->tabPageWidgets.removeOne(page);
-}
+    if (page == &pageCero)      // the notifications page is permanent
+        return;
 
-void MainWindow::closeAllTabs() {
-    for(int i = 0; i < ui->tabWidget->count(); i++) {
-        onTabCloseRequested(i);
+    ui->tabWidget->removeTab(indx);
+    for (LoadedModule &module : modules) {
+        if (module.openPage == page)
+            module.openPage = nullptr;  // don't hand out a page about to be deleted
     }
+    page->deleteLater();
 }

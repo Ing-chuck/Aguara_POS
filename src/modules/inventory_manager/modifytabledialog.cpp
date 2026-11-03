@@ -1,44 +1,44 @@
 #include "modifytabledialog.h"
 #include "ui_modifytabledialog.h"
 
-#include <QInputEvent>
-#include <QtSql>
+#include <QAbstractProxyModel>
 #include <QCompleter>
-#include <QPushButton>
+#include <QHeaderView>
 #include <QMessageBox>
-#include <QRegularExpression>
+#include <QPushButton>
+#include <QStandardItemModel>
 
-modifyTableDialog::modifyTableDialog(QSqlQueryModel *model, bool modifyBrand, QWidget *parent) :
+modifyTableDialog::modifyTableDialog(ProductService *products, List list, QWidget *parent) :
     QDialog(parent),
     ui(new Ui::modifyTableDialog),
-    model(model)
+    model(new QStandardItemModel(this)),
+    products(products),
+    list(list)
 {
     // Window configuration
     setWindowFlag(Qt::FramelessWindowHint);
     setAttribute(Qt::WA_DeleteOnClose);
-    //QCoreApplication::instance()->installEventFilter(this);
     parent->setEnabled(false);
     setEnabled(true);
 
     ui->setupUi(this);
 
     // Make line edits write in all caps
-    //QObject::connect(ui->lineEdit_search, &QLineEdit::textEdited, this, &modifyTableDialog::onSearchTextChanged);
-    QObject::connect(ui->lineEdit_search, &QLineEdit::textEdited, this, [&](const QString &text){ui->lineEdit_search->setText(text.toUpper());});
-    QObject::connect(ui->lineEdit_add, &QLineEdit::textEdited, this, [&](const QString &text){ui->lineEdit_add->setText(text.toUpper());});
+    QObject::connect(ui->lineEdit_search, &QLineEdit::textEdited, this, [this](const QString &text){ui->lineEdit_search->setText(text.toUpper());});
+    QObject::connect(ui->lineEdit_add, &QLineEdit::textEdited, this, [this](const QString &text){ui->lineEdit_add->setText(text.toUpper());});
 
-    if(modifyBrand) {
+    if (list == Brands) {
         ui->label_title->setText(tr("Actualizar Tabla de Marcas"));
-        table = "brands";
-        model->setHeaderData(0, Qt::Horizontal, tr("Marcas"));
+        model->setHorizontalHeaderLabels({ tr("Marcas") });
     }
     else {
         ui->label_title->setText(tr("Actualizar Tabla de Rubros"));
-        table = "busines_types";
-        model->setHeaderData(0, Qt::Horizontal, tr("Rubros"));
+        model->setHorizontalHeaderLabels({ tr("Rubros") });
     }
+    reload();
 
     ui->tableView->setModel(model);
+    ui->tableView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     ui->tableView->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 
     // Search completer
@@ -50,88 +50,71 @@ modifyTableDialog::modifyTableDialog(QSqlQueryModel *model, bool modifyBrand, QW
     connect(searchCompleter, QOverload<const QModelIndex &>::of(&QCompleter::highlighted), this, &modifyTableDialog::onCompleterAccepted);
 
     // Connect add and remove buttons
-    QObject::connect(ui->button_add, &QPushButton::clicked, this, &modifyTableDialog::onAddItem);
-    QObject::connect(ui->button_remove, &QPushButton::clicked, this, &modifyTableDialog::onRemoveItem);
+    QObject::connect(ui->button_add, &QToolButton::clicked, this, &modifyTableDialog::onAddItem);
+    QObject::connect(ui->button_remove, &QToolButton::clicked, this, &modifyTableDialog::onRemoveItem);
 }
 
 modifyTableDialog::~modifyTableDialog()
 {
-    //QCoreApplication::instance()->removeEventFilter(this);
     this->parentWidget()->setEnabled(true);
     delete ui;
 }
 
-void modifyTableDialog::onSearchTextChanged(const QString &text)
+/// Refill the list from the service (id kept in Qt::UserRole)
+void modifyTableDialog::reload()
 {
-    ui->lineEdit_search->setText(text.toUpper());
+    const QList<NamedItem> items = (list == Brands) ? products->brands() : products->categories();
+    model->removeRows(0, model->rowCount());
+    for (const NamedItem &item : items) {
+        auto row = new QStandardItem(item.name);
+        row->setData(item.id, Qt::UserRole);
+        model->appendRow(row);
+    }
 }
 
 void modifyTableDialog::onCompleterAccepted(const QModelIndex &index)
 {
-    qDebug() << __FUNCTION__;
-    ui->tableView->selectionModel()->select(index,QItemSelectionModel::Select);
+    auto proxy = qobject_cast<QAbstractProxyModel *>(searchCompleter->completionModel());
+    const QModelIndex source = proxy ? proxy->mapToSource(index) : index;
+    if (source.isValid())
+        ui->tableView->selectRow(source.row());
 }
 
 void modifyTableDialog::onAddItem()
 {
-    if(ui->lineEdit_add->text() != "")
-    {
-        QString name = ui->lineEdit_add->text();
-        QString col = (table == "brands")? "brand_name" : "type";
-        QString sql = QString("INSERT INTO %1 ('%2') VALUES('%3')").arg(table, col, name);
-        doQueryAndRefresh(sql);
-        ui->lineEdit_add->setText("");
+    const QString name = ui->lineEdit_add->text().trimmed();
+    if (name.isEmpty())
+        return;
+
+    const qint64 id = (list == Brands) ? products->addBrand(name) : products->addCategory(name);
+    if (!id) {
+        QMessageBox::warning(this, tr("Error"), products->lastError());
+        return;
     }
+    ui->lineEdit_add->setText("");
+    reload();
+    emit listChanged();
 }
 
 void modifyTableDialog::onRemoveItem()
 {
-    if(ui->tableView->selectionModel()->hasSelection())
-    {
-        QModelIndex indx = ui->tableView->currentIndex();
-        QString warningTitle = tr("ATENCION");
-        QString warningBody = tr("Esta accion es permanente\n esta seguro que desea continuar?");
-        QMessageBox::StandardButton btn = QMessageBox::warning(this, warningTitle, warningBody, QMessageBox::Ok|QMessageBox::Cancel, QMessageBox::Cancel);
-        if(btn == QMessageBox::Ok)
-        {
-            deleteRow(model->data(indx).toString());
-        }
+    if (!ui->tableView->selectionModel()->hasSelection())
+        return;
+
+    const QModelIndex indx = ui->tableView->currentIndex();
+    const qint64 id = model->data(indx, Qt::UserRole).toLongLong();
+    QString warningTitle = tr("ATENCION");
+    QString warningBody = tr("¿Quitar \"%1\" de la lista?\n"
+                             "Los articulos que ya la tienen la conservan.").arg(model->data(indx).toString());
+    QMessageBox::StandardButton btn = QMessageBox::warning(this, warningTitle, warningBody, QMessageBox::Ok|QMessageBox::Cancel, QMessageBox::Cancel);
+    if (btn != QMessageBox::Ok)
+        return;
+
+    const bool ok = (list == Brands) ? products->removeBrand(id) : products->removeCategory(id);
+    if (!ok) {
+        QMessageBox::warning(this, tr("Error"), products->lastError());
+        return;
     }
-}
-
-void modifyTableDialog::deleteRow(QString val)
-{
-    qDebug() << "atempting to delete: " << val;
-
-    QString col = (table == "brands")? "brand_name" : "type";
-    QString sql = "DELETE FROM " + table + " WHERE " + col + " = '" + val + "'";
-
-    doQueryAndRefresh(sql);
-}
-
-void modifyTableDialog::doQueryAndRefresh(QString sql)
-{
-    QSqlQuery query = model->query();
-    QString lastQuery = query.executedQuery();
-    query.exec(sql);
-    if (model->lastError().isValid())
-        qDebug() << model->lastError();
-
-    // Refresh model
-    model->setQuery(lastQuery);
-}
-
-bool modifyTableDialog::eventFilter(QObject *obj, QEvent *e)
-{
-    if (!dynamic_cast<QInputEvent*>(e))
-        return false;
-
-    QObject* target = this->parent();
-    while(obj != NULL)
-    {
-        if(obj == target)
-            return true;
-        obj = obj->parent();
-    }
-    return false;
+    reload();
+    emit listChanged();
 }

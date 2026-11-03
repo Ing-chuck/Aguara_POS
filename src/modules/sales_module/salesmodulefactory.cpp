@@ -3,22 +3,22 @@
 
 #include <version.h>
 
-/// SalesModuleFactory class
-/// intantiates a SalesModule when necessary
-SalesModuleFactory::SalesModuleFactory(QWidget *parent) : AmSingleInstanceFactory(parent)
+SalesModuleFactory::SalesModuleFactory(QObject *parent) : QObject(parent)
 {
-    this->name = "sales_module";
-    this->icon = QIcon(":/sales_module/images/icon.png");
 }
 
-/// Program version when this module was compiled
-/// used to determine compatibility with the main program
-QString SalesModuleFactory::compiledVersion() const {
-    return QString(VERSION_STRING);
+ModuleInfo SalesModuleFactory::moduleInfo() const
+{
+    ModuleInfo info;
+    info.id          = "sales";
+    info.name        = "Ventas";
+    info.description = "Registro de ventas";
+    info.version     = VERSION_STRING;
+    info.icon        = QIcon(":/sales_module/images/icon.png");
+    return info;
 }
 
-/// Make a new instance of the main module class
-QSharedPointer<QWidget> SalesModuleFactory::makeInstance() {
-    return QSharedPointer<QWidget>(new SalesModule);
+QWidget *SalesModuleFactory::createWidget(QWidget *parent)
+{
+    return new SalesModule(parent);
 }
-

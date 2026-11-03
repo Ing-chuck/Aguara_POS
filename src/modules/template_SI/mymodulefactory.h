@@ -3,21 +3,23 @@
 
 #include <interfaces.h>
 
-#include <QtPlugin>
+#include <QObject>
 
-class MyModuleFactory : public AmSingleInstanceFactory
+/// Plugin root object: describes the module and creates its pages.
+class MyModuleFactory : public QObject,
+                        public AguaraModuleInterface,
+                        public WidgetModuleInterface
 {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID amSingleInstanceInterface_iid FILE "module.json")
-    Q_INTERFACES(AmSingleInstanceFactory)
+    Q_PLUGIN_METADATA(IID AguaraModuleInterface_iid FILE "module.json")
+    Q_INTERFACES(AguaraModuleInterface WidgetModuleInterface)
 
 public:
-    explicit MyModuleFactory(QWidget *parent = nullptr);
+    explicit MyModuleFactory(QObject *parent = nullptr);
 
-private:
-    QString compiledVersion() const override;
-    QSharedPointer<QWidget> makeInstance() override;
-
+    ModuleInfo moduleInfo() const override;
+    QWidget *createWidget(QWidget *parent = nullptr) override;
+    bool allowsMultipleInstances() const override { return false; }
 };
 
 #endif // MYMODULEFACTORY_H

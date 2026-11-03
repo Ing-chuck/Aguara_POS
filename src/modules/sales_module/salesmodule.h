@@ -10,6 +10,7 @@ QT_END_NAMESPACE
 
 class SalesModule : public AguaraWidget
 {
+    Q_OBJECT
 
 public:
     SalesModule(QWidget *parent = nullptr);

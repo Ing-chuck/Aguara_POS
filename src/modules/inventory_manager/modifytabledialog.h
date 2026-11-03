@@ -1,42 +1,46 @@
 #ifndef MODIFYTABLEDIALOG_H
 #define MODIFYTABLEDIALOG_H
 
+#include <productservice.h>
+
 #include <QDialog>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class modifyTableDialog;
 }
-class QSqlQueryModel;
 class QCompleter;
+class QStandardItemModel;
 QT_END_NAMESPACE
 
+/// Add or remove brands or categories.
 class modifyTableDialog : public QDialog
 {
     Q_OBJECT
 
 public:
-    explicit modifyTableDialog(QSqlQueryModel *model, bool modifyBrand = true, QWidget *parent = nullptr);
+    enum List { Brands, Categories };
+
+    explicit modifyTableDialog(ProductService *products, List list, QWidget *parent);
     ~modifyTableDialog();
 
-protected:
-    //void mouseReleaseEvent(QMouseEvent *event) override;
+signals:
+    /// An entry was added or removed.
+    void listChanged();
 
 private:
     Ui::modifyTableDialog *ui;
     QCompleter *searchCompleter;
-    QSqlQueryModel *model;
-    QString table;
+    QStandardItemModel *model;
+    ProductService *products;
+    List list;
 
-    void deleteRow(QString val);
-    bool eventFilter(QObject *, QEvent*) override;
+    void reload();
 
 private slots:
-    void onSearchTextChanged(const QString &text);
     void onCompleterAccepted(const QModelIndex &index);
     void onAddItem();
     void onRemoveItem();
-    void doQueryAndRefresh(QString sql);
 };
 
 #endif // MODIFYTABLEDIALOG_H

@@ -1,109 +1,115 @@
 #ifndef INTERFACES_H
 #define INTERFACES_H
 
+#include "aguara_global.h"
+#include "aguarahost.h"
 #include "messages.h"
+#include "money.h"
+#include "productservice.h"
 
+#include <QIcon>
+#include <QString>
+#include <QStringList>
 #include <QWidget>
 #include <QtPlugin>
-#include <QStringList>
-#include <QIcon>
-#include <QSharedPointer>
 
-QT_BEGIN_NAMESPACE
-// forward declared QT dependencies go here
-QT_END_NAMESPACE
+/*
+    How an Aguara module is put together
+    ------------------------------------
+    A module is a Qt plugin whose root object is a plain QObject that
+    implements AguaraModuleInterface (who am I) plus one or more capability
+    interfaces (what can I do):
 
-/// Base class to all Aguara Modules (plugins)
-class AguaraModule {
-public:
-    virtual ~AguaraModule() = default;
+        class MyModule : public QObject,
+                         public AguaraModuleInterface,
+                         public WidgetModuleInterface
+        {
+            Q_OBJECT
+            Q_PLUGIN_METADATA(IID AguaraModuleInterface_iid FILE "module.json")
+            Q_INTERFACES(AguaraModuleInterface WidgetModuleInterface)
+            ...
+        };
 
-    bool registerModule(QString version) const;
-    QString getName() const;
-    QIcon getIcon() const;
-    bool isMultiInstance() const;
+    The root object is created once when the core loads the plugin, and is
+    only a descriptor/factory. The widgets it creates are separate objects,
+    owned by the core once handed over.
 
-protected:
-    virtual QString compiledVersion() const;
+    Right after loading, the core calls initialize() with the host, where the
+    module fetches the services it needs (see aguarahost.h). Data lives in
+    the core: modules use services such as ProductService, never SQL.
 
-    QString name;
-    QIcon icon;
-    bool multiInstance;
+    Compatibility: each interface ID ends in a version. When an interface
+    changes in an incompatible way, bump its version. Modules built against
+    the old version then no longer match, and the core skips them instead of
+    crashing.
+*/
+
+/// Static description of a module: everything the core needs to list it
+/// and show it to the user, without creating any of its widgets.
+struct ModuleInfo {
+    QString id;           ///< stable, unique, machine-readable (e.g. "inventory")
+    QString name;         ///< user-visible name
+    QString description;  ///< one line shown in "About modules"
+    QString version;      ///< the module's own version, for display
+    QIcon   icon;
 };
 
-/// Base class for QObject aguara modules
-class AguaraObject: public QObject, public AguaraModule {
-    Q_OBJECT
+/// Implemented by every module. The core rejects plugins that don't.
+class AguaraModuleInterface {
 public:
-    virtual ~AguaraObject() = default;
-    AguaraObject(QObject *parent = nullptr);
+    virtual ~AguaraModuleInterface() = default;
+    virtual ModuleInfo moduleInfo() const = 0;
+
+    /// Called once, before any other capability method. Fetch services here.
+    /// Return false if something the module needs is missing: the core then
+    /// skips the module and tells the user.
+    virtual bool initialize(AguaraHost *host) { Q_UNUSED(host) return true; }
 };
 
-/// Base class for QWidget aguara modules
-class AguaraWidget: public QWidget, public AguaraModule {
-    Q_OBJECT
+/// Capability: the module provides a page that the core shows as a tab.
+class WidgetModuleInterface {
 public:
-    virtual ~AguaraWidget() = default;
-    AguaraWidget(QWidget *parent = nullptr);
+    virtual ~WidgetModuleInterface() = default;
 
-signals:
-    void notify(ModuleMsg msg);
+    /// Create a new page. The caller takes ownership.
+    /// If the page derives from AguaraWidget, its notify() signal is
+    /// connected to the core's notification area.
+    virtual QWidget *createWidget(QWidget *parent = nullptr) = 0;
+
+    /// false: the core keeps at most one page open and re-focuses it.
+    /// true: every click on the module's button opens a new page.
+    virtual bool allowsMultipleInstances() const { return false; }
 };
 
-/// Base class for factory interfaces
-class AmFactory: public AguaraWidget {
-    Q_OBJECT
-public:
-    explicit AmFactory(QWidget* parent = nullptr);
-
-protected:
-    virtual QSharedPointer<QWidget> makeInstance() = 0;
-};
-
-/// Factory interface for single instance modules
-class AmSingleInstanceFactory: public AmFactory {
-public:
-    AmSingleInstanceFactory(QWidget* parent = nullptr);
-    QSharedPointer<QWidget> getInstance();
-
-protected:
-    QWeakPointer<QWidget> instance;
-};
-
-/// Factory interface for multi instance modules
-class AmMultiInstanceFactory: public AmFactory {
-public:
-    AmMultiInstanceFactory(QWidget* parent = nullptr);
-    //int getInstanceCount() const;
-    //QList<QSharedPointer<QObject>> getInstances() const;
-    //QSharedPointer<QObject> getInstance(int idx) const;
-    QSharedPointer<QWidget> getInstance();
-
-protected:
-    //QList<QSharedPointer<QObject>> instances;
-};
-
-class ImportArticlesInterface: public AguaraObject {
+/// Capability: the module can import articles from files.
+class ImportArticlesInterface {
 public:
     virtual ~ImportArticlesInterface() = default;
-    ImportArticlesInterface(QObject *parent = nullptr);
 
-    virtual QStringList FileTypes() const = 0;
-    virtual bool ImportFrom(QString filename) = 0;
+    /// File extensions this importer handles, without the dot (e.g. "csv").
+    virtual QStringList fileTypes() const = 0;
+    virtual bool importFrom(const QString &fileName) = 0;
 };
 
-QT_BEGIN_NAMESPACE
+/// Optional base class for module pages that send notifications to the user.
+class AGUARA_EXPORT AguaraWidget : public QWidget {
+    Q_OBJECT
+public:
+    explicit AguaraWidget(QWidget *parent = nullptr);
+    ~AguaraWidget() override;
 
-#define aguaraModuleInterface_iid        "org.AguaraPOS.aguaraModuleInterface/1.0"
-#define amSingleInstanceInterface_iid    "org.AguaraPOS.amSingleInstanceInterface/1.0"
-#define amMultiInstanceInterface_iid     "org.AguaraPOS.amMultiInstanceInterface/1.0"
-#define importArticlesInterface_iid      "org.AguaraPOS.importArticlesInterface/1.0"
+signals:
+    /// Signals emitted from the constructor are lost: nothing is connected
+    /// yet. Defer them, e.g. QTimer::singleShot(0, this, ...).
+    void notify(const ModuleMsg &msg);
+};
 
-Q_DECLARE_INTERFACE(ImportArticlesInterface, importArticlesInterface_iid)
-Q_DECLARE_INTERFACE(AguaraModule, aguaraModuleInterface_iid)
-Q_DECLARE_INTERFACE(AmSingleInstanceFactory, amSingleInstanceInterface_iid)
-Q_DECLARE_INTERFACE(AmMultiInstanceFactory, amMultiInstanceInterface_iid)
+#define AguaraModuleInterface_iid    "org.AguaraPOS.ModuleInterface/1.0"
+#define WidgetModuleInterface_iid    "org.AguaraPOS.WidgetModuleInterface/1.0"
+#define ImportArticlesInterface_iid  "org.AguaraPOS.ImportArticlesInterface/1.0"
 
-QT_END_NAMESPACE
+Q_DECLARE_INTERFACE(AguaraModuleInterface,   AguaraModuleInterface_iid)
+Q_DECLARE_INTERFACE(WidgetModuleInterface,   WidgetModuleInterface_iid)
+Q_DECLARE_INTERFACE(ImportArticlesInterface, ImportArticlesInterface_iid)
 
 #endif // INTERFACES_H

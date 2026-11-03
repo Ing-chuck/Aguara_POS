@@ -1,6 +1,7 @@
 #ifndef MESSAGES_H
 #define MESSAGES_H
 
+#include <QMetaType>
 #include <QString>
 
 /// 5 level priority list
@@ -16,8 +17,9 @@ enum MsgPriority {
 /// Message notification struct
 /// Contains all necesary data for a module to send notifications to the user
 struct ModuleMsg {
-    ModuleMsg(QString sender, QString ID, QString title, QString body
-              , MsgPriority prio = MsgPriority::PriorityNormal, double lifetime = -1) {
+    ModuleMsg(QString sender = QString(), QString ID = QString(),
+              QString title = QString(), QString body = QString(),
+              MsgPriority prio = MsgPriority::PriorityNormal, double lifetime = -1) {
         senderName = sender;
         id = ID;
         priority = prio;
@@ -36,5 +38,7 @@ struct ModuleMsg {
     QString title;
     QString message;
 };
+
+Q_DECLARE_METATYPE(ModuleMsg)
 
 #endif // MESSAGES_H

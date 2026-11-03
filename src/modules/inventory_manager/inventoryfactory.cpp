@@ -3,21 +3,28 @@
 
 #include <version.h>
 
-/// InventoryFactory class
-/// intantiates a InventoryWidget when necessary
-InventoryFactory::InventoryFactory(QWidget *parent) : AmSingleInstanceFactory(parent)
+InventoryFactory::InventoryFactory(QObject *parent) : QObject(parent)
 {
-    this->name = "Inventory Manager";
-    this->icon = QIcon(":/inventory_manager/images/icon.png");
 }
 
-/// Program version when this module was compiled
-/// used to determine compatibility with the main program
-QString InventoryFactory::compiledVersion() const {
-    return QString(VERSION_STRING);
+ModuleInfo InventoryFactory::moduleInfo() const
+{
+    ModuleInfo info;
+    info.id          = "inventory";
+    info.name        = "Inventory Manager";
+    info.description = "Alta, baja y modificacion de articulos";
+    info.version     = VERSION_STRING;
+    info.icon        = QIcon(":/inventory_manager/images/icon.png");
+    return info;
 }
 
-/// Make a new instance of the module class
-QSharedPointer<QWidget> InventoryFactory::makeInstance() {
-    return QSharedPointer<QWidget>(new inventoryWidget(this));
+bool InventoryFactory::initialize(AguaraHost *host)
+{
+    products = host->service<ProductService>();
+    return products != nullptr;
+}
+
+QWidget *InventoryFactory::createWidget(QWidget *parent)
+{
+    return new inventoryWidget(products, parent);
 }

@@ -37,6 +37,10 @@ target_wrapper.*
 
 # QtCreator
 *.autosave
+.qtcreator/
+
+# Build output (Qt Creator shadow builds land in build/ folders)
+build/
 
 # QtCreator Qml
 *.qmlproject.user

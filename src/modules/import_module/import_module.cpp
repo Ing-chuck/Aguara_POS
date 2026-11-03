@@ -1,147 +1,198 @@
 #include "import_module.h"
 #include <version.h>
 
+#include <QDate>
 #include <QFile>
-#include <QStringList>
-#include <QSqlQuery>
-#include <QSqlError>
+#include <QFileInfo>
+#include <QHash>
 #include <QTextStream>
-#include <QMap>
+
+namespace {
+
+/// Product fields a CSV column can map to
+enum class Field { Code, Description, Brand, Category, Price, Cost, Stock, StockMin, Vat, Purchased, Ignored };
+inline uint qHash(Field f, uint seed = 0) { return ::qHash(int(f), seed); }
+
+/// "Código" -> "codigo", "Precio Venta" -> "precioventa"
+QString normalizeHeader(QString h)
+{
+    h = h.trimmed().toLower();
+    const QString from = QStringLiteral("áéíóúüñ");
+    const QString to   = QStringLiteral("aeiouun");
+    for (int i = 0; i < from.size(); ++i)
+        h.replace(from.at(i), to.at(i));
+    h.remove(QLatin1Char(' '));
+    h.remove(QLatin1Char('_'));
+    return h;
+}
+
+Field fieldForHeader(const QString &header)
+{
+    static const QHash<QString, Field> fields = {
+        { "codigo", Field::Code },           { "descripcion", Field::Description },
+        { "marca", Field::Brand },           { "rubro", Field::Category },
+        { "precioventa", Field::Price },     { "precio", Field::Price },
+        { "costo", Field::Cost },            { "stock", Field::Stock },
+        { "stockmin", Field::StockMin },     { "iva", Field::Vat },
+        { "fcompra", Field::Purchased },     { "fechacompra", Field::Purchased },
+    };
+    return fields.value(normalizeHeader(header), Field::Ignored);
+}
+
+QDate parseDate(const QString &text)
+{
+    for (const char *format : { "yyyy-MM-dd", "dd/MM/yyyy", "yyyy/MM/dd", "d/M/yyyy" }) {
+        const QDate d = QDate::fromString(text, QLatin1String(format));
+        if (d.isValid())
+            return d;
+    }
+    return QDate();
+}
+
+} // namespace
 
 ImportModule::ImportModule(QObject *parent)
-    : ImportArticlesInterface(parent)
+    : QObject(parent)
 {
-    this->name = "Importar";
-    this->icon = QIcon(":/import_module/images/icon.png");
 }
 
-/// Register the module with the core program
-/// compares the core program's version
-/// with the module's version to determine compatibility
-QString ImportModule::compiledVersion() const {
-    return QString(VERSION_STRING);
+ModuleInfo ImportModule::moduleInfo() const {
+    ModuleInfo info;
+    info.id          = "import";
+    info.name        = "Importar";
+    info.description = "Importa articulos desde archivos CSV";
+    info.version     = VERSION_STRING;
+    info.icon        = QIcon(":/import_module/images/icon.png");
+    return info;
 }
 
-/// Returns a list of features
-/// describing the function of the module
-QStringList ImportModule::FileTypes() const {
-    QStringList typelist;
-    typelist.append("csv");
-
-    return typelist;
+bool ImportModule::initialize(AguaraHost *h)
+{
+    host = h;
+    products = host->service<ProductService>();
+    return products != nullptr;
 }
 
-/// Read a csv file and update the SQLite database
-bool ImportModule::ImportFrom(QString filename)
+/// File types this importer can read
+QStringList ImportModule::fileTypes() const {
+    return { "csv" };
+}
+
+void ImportModule::report(const QString &title, const QString &text, MsgPriority priority)
+{
+    host->notify(ModuleMsg(moduleInfo().name, "import", title, text, priority));
+}
+
+/// Read a CSV file of articles and save them through the ProductService.
+/// The first row whose first cell isn't a number is taken as the header row;
+/// columns are matched by name (Codigo, Descripcion, Marca, Rubro,
+/// PrecioVenta/Precio, Costo, Stock, StockMin, IVA, F_Compra), others ignored.
+/// The separator (',' or ';') is detected from the first line.
+/// All rows are saved in one transaction: a database error saves nothing.
+bool ImportModule::importFrom(const QString &filename)
 {
     QFile csv(filename);
-    if(!csv.open(QIODevice::ReadOnly)) {
+    if (!csv.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        report(tr("Importacion fallida"), tr("No se pudo abrir %1").arg(filename), MsgPriority::PriorityHigh);
         return false;
     }
-    QTextStream csvStream;
-    csvStream.setDevice(&csv);
+    QTextStream csvStream(&csv);
+    csvStream.setCodec("UTF-8");
 
-    qDebug() << filename;
-    QMap<int, QString> headerMap;
-    while(!csvStream.atEnd()){
-        QStringList cols = csvStream.readLine().split(',');
+    QChar separator;
+    QHash<int, Field> columns;      // column index -> field, from the header row
+    QList<Product> parsed;
+    QStringList problems;
+    int lineNumber = 0;
 
-        if(cols[1] == "")
-            continue;
-        // remove whaite spaces just in case
-        for(QString &col : cols)
+    while (!csvStream.atEnd()) {
+        const QString line = csvStream.readLine();
+        ++lineNumber;
+        if (separator.isNull())
+            separator = line.count(QLatin1Char(';')) > line.count(QLatin1Char(',')) ? QLatin1Char(';') : QLatin1Char(',');
+
+        QStringList cols = line.split(separator);
+        // remove white spaces just in case
+        for (QString &col : cols)
             col = col.trimmed();
+        if (cols.join(QString()).isEmpty())
+            continue;
 
         // checking if this is a header row
         // non header rows start with a number
-        bool ok, headerRow = false;
-        cols[0].toDouble(&ok);
-        if(!ok) {
-            //header row
-            //qDebug() << cols[1];
-            headerRow = true;
-        }
-
-        QList<QVariant> data;
-        QStringList headers; // headers to which the data on this row corresponds to
-        for(int i = 0; i < cols.size(); i++){
-            if(cols[i] != ""){
-                if(headerRow)
-                    headerMap.insert(i, cols[i]);
-                else {
-                    // ensure data is on a valid column
-                    // ie. there is a corresponding header
-                    if(headerMap.contains(i) && cols[i] != "NULL"){
-                        headers.append(headerMap[i]);
-                        data.append(cols[i]);
-                    }
-                }
+        bool isNumber = false;
+        cols[0].toDouble(&isNumber);
+        if (!isNumber && columns.isEmpty()) {
+            for (int i = 0; i < cols.size(); i++) {
+                const Field f = fieldForHeader(cols[i]);
+                if (f != Field::Ignored)
+                    columns.insert(i, f);
             }
+            continue;
+        }
+        if (columns.isEmpty())
+            continue;               // data before any header: nothing to map it to
+
+        // Collect this row's values by field
+        QHash<Field, QString> values;
+        for (auto it = columns.cbegin(); it != columns.cend(); ++it) {
+            const QString value = it.key() < cols.size() ? cols[it.key()] : QString();
+            if (!value.isEmpty() && value != "NULL")
+                values.insert(it.value(), value);
         }
 
-        if(!headerRow)
-            insertInto(headers, data);
-    }
+        // An existing product keeps whatever this file doesn't mention
+        // (e.g. a price list without a Stock column doesn't reset stock).
+        Product p;
+        p.purchased = QDate::currentDate();
+        if (const std::optional<Product> existing = products->product(values.value(Field::Code))) {
+            p = *existing;
+            p.brandId = p.categoryId = 0;       // resolved again from the names
+        }
 
+        bool ok = true;
+        for (auto it = values.cbegin(); it != values.cend() && ok; ++it) {
+            const QString &value = it.value();
+            switch (it.key()) {
+            case Field::Code:        p.code = value; break;
+            case Field::Description: p.description = value; break;
+            case Field::Brand:       p.brandName = value; break;
+            case Field::Category:    p.categoryName = value; break;
+            case Field::Price:       ok = AguaraMoney::parse(value, &p.price); break;
+            case Field::Cost:        ok = AguaraMoney::parse(value, &p.cost); break;
+            case Field::Stock:       p.stock = value.toInt(&ok); break;
+            case Field::StockMin:    p.stockMin = value.toInt(&ok); break;
+            case Field::Vat:         p.vatRate = QString(value).remove('%').toInt(&ok); break;
+            case Field::Purchased:   p.purchased = parseDate(value); ok = p.purchased.isValid(); break;
+            case Field::Ignored:     break;
+            }
+            if (!ok)
+                problems << tr("linea %1: valor invalido \"%2\"").arg(lineNumber).arg(value);
+        }
+        if (ok && (p.code.isEmpty() || p.description.isEmpty())) {
+            problems << tr("linea %1: falta codigo o descripcion").arg(lineNumber);
+            ok = false;
+        }
+        if (ok)
+            parsed.append(p);
+    }
     csv.close();
+
+    int saved = 0;
+    if (!products->importProducts(parsed, &saved)) {
+        report(tr("Importacion fallida"),
+               tr("%1\nNo se importo ningun articulo.").arg(products->lastError()),
+               MsgPriority::PriorityHigh);
+        return false;
+    }
+
+    QString text = tr("%1 articulos importados desde %2.").arg(saved).arg(QFileInfo(filename).fileName());
+    if (!problems.isEmpty()) {
+        text += tr("\n%1 lineas omitidas:\n").arg(problems.size())
+              + QStringList(problems.mid(0, 5)).join('\n')
+              + (problems.size() > 5 ? QStringLiteral("\n...") : QString());
+    }
+    report(tr("Importacion terminada"), text,
+           problems.isEmpty() ? MsgPriority::PriorityNormal : MsgPriority::PriorityHigh);
     return true;
-}
-
-void ImportModule::insertInto(QStringList fields, QList<QVariant> data) {
-    QSqlQuery query;
-    QStringList cols;
-    QStringList vals;
-    //;Código;;Descripción;;;Marca;;;Precio;Costo;Stock
-    for(QString& field : fields){
-        if(field == "Codigo") {
-            cols.append("Codigo");
-            vals.append(":cod");
-        }
-        if(field == "Descripcion") {
-            cols.append("Descripcion");
-            vals.append(":desc");
-        }
-        if(field == "Marca") {
-            cols.append("Marca");
-            vals.append(":bran");
-        }
-        if(field == "Rubro") {
-            cols.append("Rubro");
-            vals.append(":cat");
-        }
-        if(field == "PrecioVenta") {
-            cols.append("PrecioVenta");
-            vals.append(":sPrice");
-        }
-        if(field == "Costo") {
-            cols.append("Costo");
-            vals.append(":bPrice");
-        }
-        if(field == "Stock") {
-            cols.append("Stock");
-            vals.append(":stk");
-        }
-        if(field == "StockMin") {
-            cols.append("StockMin");
-            vals.append(":stkM");
-        }
-        if(field == "IVA") {
-            cols.append("IVA");
-            vals.append(":v");
-        }
-        if(field == "F_Compra") {
-            cols.append("F_Compra");
-            vals.append(":bDate");
-        }
-        if(field == "F_Modif") {
-            cols.append("F_Modif");
-            vals.append(":mDate");
-        }
-    }
-
-    query.prepare("INSERT INTO articles (" + cols.join(", ") + ") VALUES (" + vals.join(", ") + ")");
-    for(int i = 0; i < vals.size(); i++) {
-        query.bindValue(vals[i], data[i]);
-    }
-    query.exec();
 }

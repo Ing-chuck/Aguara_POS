@@ -2,23 +2,22 @@
 #define MAINWINDOW_H
 
 #include "interfaces.h"
+#include "loadedmodule.h"
 #include "pagecero.h"
 
 #include <QMainWindow>
-#include <QtSql>
 #include <QDir>
 #include <QLabel>
 #include <QShortcut>
 #include <QTimer>
 
+class CoreHost;
 class NotificationDialog;
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; /*class PageCero;*/ }
 class QAction;
-class QActionGroup;
 class QMenu;
-class QTableView;
 class QToolButton;
 QT_END_NAMESPACE
 
@@ -27,7 +26,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = nullptr);
+    explicit MainWindow(CoreHost *host, QWidget *parent = nullptr);
     ~MainWindow();
 
 private slots:
@@ -36,25 +35,19 @@ private slots:
     void aboutModules();
 
     void dateTimeUpdate();
-    void addTabFromAction(QAction* act);
+    void openModulePage(int moduleIndex);
     void addTab(QWidget* widget = nullptr, QIcon ico = QIcon(), QString label = "");
     void onTabCloseRequested(int indx);
-    void closeAllTabs();
     void onModuleNotification(ModuleMsg msg);
 
 private:
-    typedef void (MainWindow::*Member)();
-
     void prepareWindow();
     void setUpPageCero();
-    void loadTable(QTableView& tableView);
     void createActions();
     void createMenus();
     void loadPlugins();
-    void populateMenus(QObject *plugin);
-    void addToMenu(QObject *plugin, const QStringList &texts, QMenu *menu,
-                   Member member, QActionGroup *actionGroup = nullptr);
-    void makeButton(QObject *plugin);
+    void addImportMenuEntry(const LoadedModule &module);
+    void makeButton(int moduleIndex);
     void addToSidebar(QToolButton *button);
 
     QLabel userLabel;
@@ -68,12 +61,10 @@ private:
 
     PageCero pageCero;
 
-    QSqlTableModel *model;
+    CoreHost *host;
     QDir pluginsDir;
-    QStringList pluginFileNames;
 
-    QList<QObject*> attachedModules;
-    QList<QObject*> attachedImportModules;
+    QList<LoadedModule> modules;
 
     //QShortcut newTabShortcut;
     QMenu* importMenu = nullptr;
@@ -82,7 +73,6 @@ private:
     QAction* aboutAct = nullptr;
     QAction* aboutModulesAct = nullptr;
 
-    QList<QSharedPointer<QWidget>> tabPageWidgets;
     QList<QToolButton*> moduleButtonList;
     QList<QPointer<NotificationDialog>> notificationWidgets;
 };

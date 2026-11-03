@@ -3,22 +3,22 @@
 
 #include <version.h>
 
-/// MyModuleFactory class
-/// intantiates a %{MClass} when necessary
-MyModuleFactory::MyModuleFactory(QWidget *parent) : AmMultiInstanceFactory(parent)
+MyModuleFactory::MyModuleFactory(QObject *parent) : QObject(parent)
 {
-    this->name = "template_MI";
-    this->icon = QIcon(":/template_MI/images/icon.png");
 }
 
-/// Program version when this module was compiled
-/// used to determine compatibility with the main program
-QString MyModuleFactory::compiledVersion() const {
-    return QString(VERSION_STRING);
+ModuleInfo MyModuleFactory::moduleInfo() const
+{
+    ModuleInfo info;
+    info.id          = "template_MI";
+    info.name        = "template_MI";
+    info.description = "Template for a multi-instance module";
+    info.version     = VERSION_STRING;
+    info.icon        = QIcon(":/template_MI/images/icon.png");
+    return info;
 }
 
-/// Make a new instance of the main module class
-QSharedPointer<QWidget> MyModuleFactory::makeInstance() {
-    return QSharedPointer<QWidget>(new MyModule(this));
+QWidget *MyModuleFactory::createWidget(QWidget *parent)
+{
+    return new MyModule(parent);
 }
-

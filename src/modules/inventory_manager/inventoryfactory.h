@@ -3,22 +3,26 @@
 
 #include <interfaces.h>
 
-#include <QWidget>
-#include <QtPlugin>
+#include <QObject>
 
-class InventoryFactory : public AmSingleInstanceFactory
+/// Plugin root object: describes the inventory module and creates its page.
+class InventoryFactory : public QObject,
+                         public AguaraModuleInterface,
+                         public WidgetModuleInterface
 {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID amSingleInstanceInterface_iid FILE "inventory_module.json")
-    Q_INTERFACES(AmSingleInstanceFactory)
+    Q_PLUGIN_METADATA(IID AguaraModuleInterface_iid FILE "inventory_module.json")
+    Q_INTERFACES(AguaraModuleInterface WidgetModuleInterface)
 
 public:
-    explicit InventoryFactory(QWidget *parent = nullptr);
+    explicit InventoryFactory(QObject *parent = nullptr);
+
+    ModuleInfo moduleInfo() const override;
+    bool initialize(AguaraHost *host) override;
+    QWidget *createWidget(QWidget *parent = nullptr) override;
 
 private:
-    QString compiledVersion() const override;
-    QSharedPointer<QWidget> makeInstance() override;
-
+    ProductService *products = nullptr;
 };
 
 #endif // INVENTORYFACTORY_H
