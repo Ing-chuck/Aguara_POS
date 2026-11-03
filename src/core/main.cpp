@@ -1,3 +1,4 @@
+#include "connectionmonitor.h"
 #include "corehost.h"
 #include "database.h"
 #include "databasesettingsdialog.h"
@@ -58,10 +59,30 @@ int main(int argc, char *argv[])
         showSettings = false;
     }
 
+    // Keeps a PostgreSQL connection alive (reconnects after a server restart
+    // or network failure); a no-op for SQLite.
+    ConnectionMonitor connection(database.connectionName(),
+                                 database.backend() == DatabaseSettings::PostgreSQL);
+
     // Services modules can use, looked up through the host.
-    SqlProductService products(database.connectionName());
+    SqlProductService products(&connection);
     CoreHost host;
     host.registerService(ProductService_iid, &products);
+
+    // Tell the user when the server is unreachable and when it's back
+    // (same sender+id, so the second message replaces the first).
+    QObject::connect(&connection, &ConnectionMonitor::connectionLost, &host, [&host](const QString &error) {
+        host.notify(ModuleMsg(QStringLiteral("Aguara"), QStringLiteral("db-connection"),
+            QCoreApplication::translate("main", "Sin conexion con el servidor"),
+            QCoreApplication::translate("main", "No se puede acceder a los datos. Se reintenta automaticamente.\n%1").arg(error),
+            MsgPriority::PriorityVeryHigh));
+    });
+    QObject::connect(&connection, &ConnectionMonitor::reconnected, &host, [&host]() {
+        host.notify(ModuleMsg(QStringLiteral("Aguara"), QStringLiteral("db-connection"),
+            QCoreApplication::translate("main", "Conexion restablecida"),
+            QCoreApplication::translate("main", "Se recupero la conexion con el servidor de datos."),
+            MsgPriority::PriorityLow, 10));
+    });
 
     MainWindow w(&host);
     w.show();

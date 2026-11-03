@@ -10,6 +10,7 @@ LIBS           += -L$$AGUARA_LIB_DIR -laguara_interfaces
 win32-g++: PRE_TARGETDEPS += $$AGUARA_LIB_DIR/libaguara_interfaces.a
 
 SOURCES      +=     \
+    connectionmonitor.cpp \
     corehost.cpp    \
     database.cpp    \
     databasesettingsdialog.cpp \
@@ -21,6 +22,7 @@ SOURCES      +=     \
     sqlproductservice.cpp
 
 HEADERS      +=     \
+    connectionmonitor.h \
     corehost.h      \
     database.h      \
     databasesettingsdialog.h \

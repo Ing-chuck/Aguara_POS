@@ -1,11 +1,11 @@
 #include "import_module.h"
+#include "csvreader.h"
 #include <version.h>
 
 #include <QDate>
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
-#include <QTextStream>
 
 namespace {
 
@@ -87,31 +87,27 @@ void ImportModule::report(const QString &title, const QString &text, MsgPriority
 /// The first row whose first cell isn't a number is taken as the header row;
 /// columns are matched by name (Codigo, Descripcion, Marca, Rubro,
 /// PrecioVenta/Precio, Costo, Stock, StockMin, IVA, F_Compra), others ignored.
-/// The separator (',' or ';') is detected from the first line.
+/// The separator (',' or ';') is detected from the first line. Quoted fields
+/// ("..." with "" for a quote) may contain the separator and line breaks.
+/// Encoding: UTF-8, or Windows-1252 (Excel on Spanish Windows).
 /// All rows are saved in one transaction: a database error saves nothing.
 bool ImportModule::importFrom(const QString &filename)
 {
     QFile csv(filename);
-    if (!csv.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    if (!csv.open(QIODevice::ReadOnly)) {
         report(tr("Importacion fallida"), tr("No se pudo abrir %1").arg(filename), MsgPriority::PriorityHigh);
         return false;
     }
-    QTextStream csvStream(&csv);
-    csvStream.setCodec("UTF-8");
+    const QString text = Csv::decode(csv.readAll());
+    csv.close();
 
-    QChar separator;
     QHash<int, Field> columns;      // column index -> field, from the header row
     QList<Product> parsed;
     QStringList problems;
-    int lineNumber = 0;
 
-    while (!csvStream.atEnd()) {
-        const QString line = csvStream.readLine();
-        ++lineNumber;
-        if (separator.isNull())
-            separator = line.count(QLatin1Char(';')) > line.count(QLatin1Char(',')) ? QLatin1Char(';') : QLatin1Char(',');
-
-        QStringList cols = line.split(separator);
+    for (const Csv::Record &record : Csv::parse(text, Csv::detectSeparator(text))) {
+        const int lineNumber = record.line;
+        QStringList cols = record.fields;
         // remove white spaces just in case
         for (QString &col : cols)
             col = col.trimmed();
@@ -176,7 +172,6 @@ bool ImportModule::importFrom(const QString &filename)
         if (ok)
             parsed.append(p);
     }
-    csv.close();
 
     int saved = 0;
     if (!products->importProducts(parsed, &saved)) {
@@ -186,13 +181,13 @@ bool ImportModule::importFrom(const QString &filename)
         return false;
     }
 
-    QString text = tr("%1 articulos importados desde %2.").arg(saved).arg(QFileInfo(filename).fileName());
+    QString summary = tr("%1 articulos importados desde %2.").arg(saved).arg(QFileInfo(filename).fileName());
     if (!problems.isEmpty()) {
-        text += tr("\n%1 lineas omitidas:\n").arg(problems.size())
-              + QStringList(problems.mid(0, 5)).join('\n')
-              + (problems.size() > 5 ? QStringLiteral("\n...") : QString());
+        summary += tr("\n%1 lineas omitidas:\n").arg(problems.size())
+                 + QStringList(problems.mid(0, 5)).join('\n')
+                 + (problems.size() > 5 ? QStringLiteral("\n...") : QString());
     }
-    report(tr("Importacion terminada"), text,
+    report(tr("Importacion terminada"), summary,
            problems.isEmpty() ? MsgPriority::PriorityNormal : MsgPriority::PriorityHigh);
     return true;
 }

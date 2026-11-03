@@ -17,7 +17,7 @@ class ProductTableModel : public QSqlQueryModel
 public:
     ProductTableModel(const QString &connectionName, QObject *parent);
 
-    void refresh();
+    bool refresh();     ///< false if the query failed (see lastError())
 
     QVariant data(const QModelIndex &item, int role = Qt::DisplayRole) const override;
     QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
@@ -26,14 +26,17 @@ private:
     QString m_connectionName;
 };
 
-/// ProductService on the core's SQLite database.
+class ConnectionMonitor;
+
+/// ProductService on the core's database (SQLite or PostgreSQL).
 class SqlProductService : public QObject, public ProductService
 {
     Q_OBJECT
     Q_INTERFACES(ProductService)
 
 public:
-    explicit SqlProductService(const QString &connectionName, QObject *parent = nullptr);
+    /// `monitor` provides the connection and must outlive the service.
+    explicit SqlProductService(ConnectionMonitor *monitor, QObject *parent = nullptr);
 
     QAbstractItemModel *createProductTableModel(QObject *parent) override;
     std::optional<Product> product(const QString &code) const override;
@@ -62,7 +65,13 @@ private:
     bool deactivate(const QString &table, qint64 id);
     void refreshModels();
     void changed();
+    void subscribe();
+    bool begin();
+    bool commit();
+    void rollback();
 
+    ConnectionMonitor *m_monitor;
+    bool m_inTransaction = false;
     QString m_connectionName;
     bool m_notifications = false;   // PostgreSQL LISTEN/NOTIFY active
     mutable QString m_lastError;

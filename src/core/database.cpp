@@ -152,8 +152,12 @@ bool Database::openPostgres(const DatabaseSettings &settings)
     db.setUserName(settings.user);
     if (!settings.password.isEmpty())
         db.setPassword(settings.password);
-    // fail fast if the server is unreachable, and name this client in pg_stat_activity
-    db.setConnectOptions(QStringLiteral("connect_timeout=5;application_name=AguaraPOS"));
+    // fail fast if the server is unreachable, and name this client in pg_stat_activity.
+    // TCP keepalives: a connection whose network went away (cable, switch,
+    // server PC powered off) errors out in about a minute instead of waiting for the
+    // operating system's much longer timeout.
+    db.setConnectOptions(QStringLiteral("connect_timeout=5;application_name=AguaraPOS;"
+                                        "keepalives=1;keepalives_idle=10;keepalives_interval=5"));
     if (!db.open()) {
         m_lastError = db.lastError().text();
         return false;

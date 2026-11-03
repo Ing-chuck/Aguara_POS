@@ -1,6 +1,8 @@
 #include "sqlproductservice.h"
+#include "connectionmonitor.h"
 
 #include <QDate>
+#include <QDebug>
 #include <QSqlDatabase>
 #include <QSqlDriver>
 #include <QSqlError>
@@ -42,13 +44,14 @@ ProductTableModel::ProductTableModel(const QString &connectionName, QObject *par
     refresh();
 }
 
-void ProductTableModel::refresh()
+bool ProductTableModel::refresh()
 {
-    setQuery(QString::fromLatin1(kProductListSql), QSqlDatabase::database(m_connectionName));
+    setQuery(QString::fromLatin1(kProductListSql), QSqlDatabase::database(m_connectionName, false));
     // SQLite results are fetched lazily; load everything so rowCount() is
     // the real count (a shop's catalog is thousands of rows, not millions).
     while (canFetchMore())
         fetchMore();
+    return !lastError().isValid();
 }
 
 QVariant ProductTableModel::data(const QModelIndex &item, int role) const
@@ -103,21 +106,35 @@ QVariant ProductTableModel::headerData(int section, Qt::Orientation orientation,
 
 // --- SqlProductService ------------------------------------------------------
 
-SqlProductService::SqlProductService(const QString &connectionName, QObject *parent)
-    : QObject(parent), m_connectionName(connectionName)
+SqlProductService::SqlProductService(ConnectionMonitor *monitor, QObject *parent)
+    : QObject(parent), m_monitor(monitor), m_connectionName(monitor->connectionName())
 {
     // Shared database (PostgreSQL): hear about other tills' changes.
     // SQLite has no notifications, and only this program writes to the file.
     QSqlDriver *driver = db().driver();
-    if (driver && driver->hasFeature(QSqlDriver::EventNotifications)
-        && driver->subscribeToNotification(QString::fromLatin1(kChangesChannel))) {
+    if (driver && driver->hasFeature(QSqlDriver::EventNotifications)) {
         m_notifications = true;
+        subscribe();
         connect(driver, QOverload<const QString &, QSqlDriver::NotificationSource, const QVariant &>::of(&QSqlDriver::notification),
                 this, [this](const QString &name, QSqlDriver::NotificationSource source, const QVariant &) {
                     if (name == QLatin1String(kChangesChannel) && source == QSqlDriver::OtherSource)
                         refreshModels();
                 });
     }
+
+    // After a lost connection is restored: LISTEN again (subscriptions belong
+    // to the old connection) and reload, since other tills may have changed
+    // products in the meantime.
+    connect(m_monitor, &ConnectionMonitor::reconnected, this, [this]() {
+        if (m_notifications)
+            subscribe();
+        refreshModels();
+    });
+}
+
+void SqlProductService::subscribe()
+{
+    db().driver()->subscribeToNotification(QString::fromLatin1(kChangesChannel));
 }
 
 /// After a successful write: refresh this till's lists, and tell the others.
@@ -126,38 +143,79 @@ void SqlProductService::changed()
     refreshModels();
     if (m_notifications) {
         QSqlQuery q(db());
-        q.exec(QStringLiteral("NOTIFY %1").arg(QString::fromLatin1(kChangesChannel)));
+        // not prepared: PostgreSQL can't PREPARE a NOTIFY
+        if (!m_monitor->exec(q, QStringLiteral("NOTIFY %1").arg(QString::fromLatin1(kChangesChannel))))
+            qWarning() << "Could not notify other tills:" << m_monitor->lastError();
     }
 }
 
 QSqlDatabase SqlProductService::db() const
 {
-    return QSqlDatabase::database(m_connectionName);
+    return QSqlDatabase::database(m_connectionName, false);   // reopening is ConnectionMonitor's job
 }
 
 bool SqlProductService::exec(QSqlQuery &q) const
 {
-    if (q.exec())
+    // reconnects (and retries outside a transaction) if the server went away
+    if (m_monitor->exec(q, m_inTransaction))
         return true;
-    m_lastError = q.lastError().text();
+    m_lastError = m_monitor->lastError();
     return false;
+}
+
+bool SqlProductService::begin()
+{
+    if (m_monitor->connectionBroken())
+        m_monitor->reconnect();
+    if (!db().transaction()) {
+        // BEGIN is often what discovers a connection dropped while idle
+        if (!(m_monitor->connectionBroken() && m_monitor->reconnect() && db().transaction())) {
+            m_lastError = m_monitor->isConnected() ? db().lastError().text()
+                                                   : tr("Sin conexion con el servidor de datos.");
+            return false;
+        }
+    }
+    m_inTransaction = true;
+    return true;
+}
+
+bool SqlProductService::commit()
+{
+    m_inTransaction = false;
+    QSqlDatabase database = db();
+    if (database.commit())
+        return true;
+    m_lastError = database.lastError().text();
+    database.rollback();
+    return false;
+}
+
+void SqlProductService::rollback()
+{
+    m_inTransaction = false;
+    db().rollback();
 }
 
 QAbstractItemModel *SqlProductService::createProductTableModel(QObject *parent)
 {
     auto model = new ProductTableModel(m_connectionName, parent);
     m_models.append(model);
+    if (model->lastError().isValid() && m_monitor->connectionBroken())
+        m_monitor->reconnect();     // on success, reconnected() refreshes it
     return model;
 }
 
 void SqlProductService::refreshModels()
 {
+    bool failed = false;
     for (int i = m_models.size() - 1; i >= 0; --i) {
         if (m_models.at(i))
-            m_models.at(i)->refresh();
+            failed = !m_models.at(i)->refresh() || failed;
         else
             m_models.removeAt(i);     // owner deleted it
     }
+    if (failed && m_monitor->connectionBroken())
+        m_monitor->reconnect();     // on success, reconnected() refreshes again
 }
 
 std::optional<Product> SqlProductService::product(const QString &code) const
@@ -194,20 +252,14 @@ std::optional<Product> SqlProductService::product(const QString &code) const
 
 bool SqlProductService::saveProduct(const Product &product, const QString &previousCode)
 {
-    QSqlDatabase database = db();
-    if (!database.transaction()) {
-        m_lastError = database.lastError().text();
+    if (!begin())
         return false;
-    }
     if (!saveOne(product, previousCode)) {
-        database.rollback();
+        rollback();
         return false;
     }
-    if (!database.commit()) {
-        m_lastError = database.lastError().text();
-        database.rollback();
+    if (!commit())
         return false;
-    }
     changed();
     return true;
 }
@@ -217,23 +269,17 @@ bool SqlProductService::importProducts(const QList<Product> &products, int *save
     if (saved)
         *saved = 0;
 
-    QSqlDatabase database = db();
-    if (!database.transaction()) {
-        m_lastError = database.lastError().text();
+    if (!begin())
         return false;
-    }
     for (const Product &p : products) {
         if (!saveOne(p, QString())) {
             m_lastError = tr("Product %1: %2").arg(p.code, m_lastError);
-            database.rollback();
+            rollback();
             return false;
         }
     }
-    if (!database.commit()) {
-        m_lastError = database.lastError().text();
-        database.rollback();
+    if (!commit())
         return false;
-    }
     if (saved)
         *saved = products.size();
     changed();
