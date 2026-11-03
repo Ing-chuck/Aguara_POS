@@ -1,27 +1,27 @@
 # This script is meant to automatically increase the version number
-# defined in version.h of the core program
-# usesGitPython module to check if there are changes in the repository (not counting changes to version.h itself)
-# if there are, make sure to increse the patch version
+# defined in src/interfaces/version.h
+# uses the GitPython module to check if there are changes in the repository (not counting changes to version.h itself)
+# if there are, make sure to increase the patch version
 # might be expanded to create tags based on the version number
 
 # Should be added as a build step in Qt creator
-# before the make command
+# before the make command (any working directory: paths are relative to this script)
 
 import os
 from git import Repo
 
-versionPath = './src/interfaces/version.h'
+repoDir = os.path.dirname(os.path.abspath(__file__))
+versionPath = os.path.join(repoDir, 'src', 'interfaces', 'version.h')
 
 def getFileName(path):
     return path.split('/')[-1]
 
 #attempt to open the repository
-wd = os.getcwd()
-repo = Repo(wd)
+repo = Repo(repoDir)
 
 #only update if there are changes
 if(repo.is_dirty()):
-    
+
     #load diffs agains working coppy
     hcDiff = repo.head.commit.diff(None)
 
@@ -31,20 +31,17 @@ if(repo.is_dirty()):
         lines = []
         with open(versionPath, mode='r') as vFile:
             for line in vFile:
-                if('VERSION_PATCH' in line):
-                    words = line.split()
+                words = line.split()
+                # only the "#define VERSION_PATCH <n>" line
+                if(len(words) == 3 and words[0] == '#define' and words[1] == 'VERSION_PATCH'):
                     try:
                         words[-1] = str(int(words[-1]) + 1)
+                        line = ' '.join(words) + '\n'
                     except ValueError:
-                        #ignore this error
-                        l = 0
-                    line = ' '.join(words) + '\n'
+                        pass    # leave the line as it is
                 lines.append(line)
 
         #write the updated file
         with open(versionPath, mode='w') as vFile:
             for line in lines:
                 vFile.write(line)
-        
-
- 

@@ -232,14 +232,28 @@ void MainWindow::addImportMenuEntry(const LoadedModule &module)
     importMenu->addAction(action);
 }
 
+/// Show a notification. Sender + id identify a message (see messages.h):
+/// a message with the same pair updates the card already shown instead of
+/// adding another one.
 void MainWindow::onModuleNotification(ModuleMsg msg) {
-    QPointer<NotificationDialog> nd = new NotificationDialog();
-    nd->setTitle(msg.title);
-    nd->setMsg(msg.message);
-    nd->setPriority(msg.priority);
+    notificationWidgets.removeAll(QPointer<NotificationDialog>());     // dismissed/expired
 
-    pageCero.addWidget(nd);
-    notificationWidgets.append(nd);
+    const QString key = msg.senderName + QLatin1Char('\n') + msg.id;
+    NotificationDialog *nd = nullptr;
+    for (const QPointer<NotificationDialog> &existing : qAsConst(notificationWidgets)) {
+        if (existing->property("aguaraKey").toString() == key) {
+            nd = existing;
+            break;
+        }
+    }
+
+    if (!nd) {
+        nd = new NotificationDialog();
+        nd->setProperty("aguaraKey", key);
+        pageCero.addWidget(nd);
+        notificationWidgets.append(nd);
+    }
+    nd->setMessage(msg);
 }
 
 /// Add a sidebar button that opens the module's page.
@@ -264,7 +278,9 @@ void MainWindow::addToSidebar(QToolButton *button) {
 void MainWindow::dateTimeUpdate() {
     QDateTime current_time = QDateTime::currentDateTime();
     QString datestr = current_time.toString( "dd/MM/yyyy"); //Set the format of the display
-    QString timestr = current_time.toString( "h:m A");
+    // 24-hour "21:05": two-digit minutes, and no AM/PM text, which comes from
+    // the system locale and is empty on some Spanish Windows installs
+    QString timestr = current_time.toString( "HH:mm");
     dateLabel.setText(datestr); //Set the text content of the label as time
     timeLabel.setText(timestr);
 }

@@ -8,5 +8,7 @@
 #define VERSION_MINOR 0
 #define VERSION_PATCH 23
 
-#define VERSION_STRING "v" TOSTRING(VERSION_MAJOR) "." TOSTRING(VERSION_MINOR)// "." TOSTRING(VERSION_PATCH)
+// For display only. Module compatibility is checked by the versioned
+// interface IDs (interfaces.h), not by this string.
+#define VERSION_STRING "v" TOSTRING(VERSION_MAJOR) "." TOSTRING(VERSION_MINOR) "." TOSTRING(VERSION_PATCH)
 #endif // VERSION_H
