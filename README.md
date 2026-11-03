@@ -66,5 +66,10 @@ Para utilizarlo, simplemente se debe extraer el contenido del rar dentro de una 
   * En Windows: %APPDATA%\QtProject\qtcreator\templates\wizards
   * En Linux y macOS: $HOME/.config/QtProject/qtcreator/templates/wizards
 
+Reiniciar Qt Creator. Luego, en el arbol del proyecto, clic derecho sobre el proyecto `modules` >
+**New Subproject...** > **AguaraPOS Module**: crea el modulo en `src/modules` y lo agrega a
+`modules.pro`. El wizard permite elegir si el modulo admite varias paginas abiertas a la vez y si
+usa productos (`ProductService`).
+
 ### Utilizando el projecto template
 Otra forma simple de empezar un projecto nuevo, es duplicando el projecto "template" que ya existe en la carpeta de modulos, solo debes tener quidado al renombrar loas archivos o clases, asegurandote de hacerlo en todos los archivos, incluyendo el .ui si lo necesitas.
