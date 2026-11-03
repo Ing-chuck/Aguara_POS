@@ -1,4 +1,6 @@
 #include "connectionmonitor.h"
+#include "errors.h"
+#include "logging.h"
 
 #include <QLibrary>
 #include <QSqlDriver>
@@ -125,6 +127,7 @@ bool ConnectionMonitor::reopen()
     db.close();                     // keeps host/port/user/password/options
     if (db.open()) {
         m_serverStart = readServerStart();
+        qCInfo(lcDatabase) << "Reconnected to the server" << m_connectionName;
         setConnected(true);
         emit reconnected();
         return true;
@@ -147,8 +150,10 @@ void ConnectionMonitor::setConnected(bool connected, const QString &error)
         return;
     m_connected = connected;
     updateTimer();                  // retry faster while down
-    if (!connected)
+    if (!connected) {
+        qCWarning(lcDatabase).noquote() << "Lost the connection to the server" << m_connectionName << ":" << error;
         emit connectionLost(error);
+    }
 }
 
 bool ConnectionMonitor::exec(QSqlQuery &query, bool inTransaction)
@@ -169,9 +174,13 @@ bool ConnectionMonitor::exec(QSqlQuery &query, const QString &sql, bool inTransa
 /// a transaction) run the statement again.
 bool ConnectionMonitor::recover(QSqlQuery &query, bool inTransaction)
 {
-    m_lastError = query.lastError().text();
-    if (!connectionBroken())
-        return false;               // an ordinary error (constraint, syntax...)
+    const QSqlError error = query.lastError();
+    if (!connectionBroken()) {      // an ordinary error (constraint, syntax...)
+        m_lastError = AguaraErrors::logAndExplain(error, QStringLiteral("SQL: %1").arg(query.lastQuery().simplified()));
+        return false;
+    }
+    qCWarning(lcDatabase).noquote() << "Connection broken during:" << query.lastQuery().simplified()
+                                    << "-" << error.text();
 
     // The connection is gone. Remember the statement and its values: the old
     // QSqlQuery is invalidated by reconnecting.
@@ -181,12 +190,13 @@ bool ConnectionMonitor::recover(QSqlQuery &query, bool inTransaction)
         values.append(query.boundValue(i));
 
     if (!reconnect()) {
-        m_lastError = tr("Sin conexion con el servidor de datos: %1").arg(m_lastError);
+        m_lastError = tr("Sin conexión con el servidor de datos. Se reintenta automáticamente; "
+                         "intente de nuevo en unos momentos.");
         return false;
     }
     if (inTransaction) {
-        m_lastError = tr("Se perdio la conexion con el servidor durante la operacion; "
-                         "ya se reconecto. Intente de nuevo.");
+        m_lastError = tr("Se perdió la conexión con el servidor durante la operación; "
+                         "ya se reconectó. Intente de nuevo.");
         return false;
     }
 
@@ -201,7 +211,7 @@ bool ConnectionMonitor::recover(QSqlQuery &query, bool inTransaction)
         ok = query.exec();
     }
     if (!ok)
-        m_lastError = query.lastError().text();
+        m_lastError = AguaraErrors::logAndExplain(query.lastError(), QStringLiteral("SQL (retry): %1").arg(sql.simplified()));
     return ok;
 }
 

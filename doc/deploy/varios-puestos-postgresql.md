@@ -41,9 +41,21 @@ puestos solo necesitan el cliente (paso 2).
 
    Reiniciar el servicio de PostgreSQL.
 4. Abrir el puerto TCP 5432 en el firewall del servidor, solo para la red local.
-5. **Respaldos**: programar una tarea diaria con
-   `pg_dump -U aguara -F c -f D:\respaldos\aguara-%date%.backup aguara`
-   y guardar copias fuera del equipo.
+5. **Respaldos**: copiar `scripts\backup-postgresql.ps1` al servidor (por ejemplo a
+   `C:\AguaraPOS\`). El script ejecuta `pg_dump`, deja las copias en una carpeta y conserva las
+   30 más nuevas.
+   - La contraseña la lee `pg_dump` de `%APPDATA%\postgresql\pgpass.conf` del usuario de Windows
+     que ejecuta la tarea. Una línea: `localhost:5432:aguara:aguara:CONTRASEÑA`.
+   - Programar la tarea diaria, como ese usuario:
+
+         schtasks /Create /TN "AguaraPOS backup" /SC DAILY /ST 23:00 /TR "powershell -NoProfile -ExecutionPolicy Bypass -File C:\AguaraPOS\backup-postgresql.ps1 -Destination D:\AguaraBackups"
+
+   - Probarla una vez con `schtasks /Run /TN "AguaraPOS backup"` y revisar que aparezca el
+     archivo `aguara-AAAAMMDD-HHMMSS.dump`.
+   - **Copiar también los respaldos a otro disco u otro equipo**: una copia en el mismo disco se
+     pierde con ese disco.
+   - Restaurar, con AguaraPOS cerrado en todos los puestos:
+     `pg_restore --clean --if-exists -h localhost -U aguara -d aguara D:\AguaraBackups\aguara-....dump`
 
 ## 2. Cada puesto
 
@@ -59,10 +71,14 @@ servidores PostgreSQL actuales):
 3. Iniciar `aguara.exe --configure-database`, elegir **Servidor en la red**, completar
    servidor, puerto, base de datos, usuario y contraseña, y **Probar conexion**.
    La configuracion se guarda en `%APPDATA%\Aguara\AguaraPOS\aguara.ini`.
+   La contraseña queda **cifrada** con DPAPI de Windows: solo el mismo usuario de Windows en el
+   mismo equipo puede leerla. Si se copia `aguara.ini` a otro equipo o usuario, hay que volver a
+   escribir la contraseña. (Las versiones anteriores la guardaban en texto plano; al iniciar se
+   cifra sola.)
 
    Si se deja la contraseña vacia, se usa el archivo estandar de PostgreSQL
-   `%APPDATA%\postgresql\pgpass.conf` (linea `192.168.1.10:5432:aguara:aguara:contraseña`).
-   En ambos casos la contraseña queda en texto plano en el perfil del usuario de Windows.
+   `%APPDATA%\postgresql\pgpass.conf` (linea `192.168.1.10:5432:aguara:aguara:contraseña`),
+   que queda en texto plano en el perfil del usuario de Windows.
 
 Cuando un puesto modifica productos, los demas actualizan sus listas automaticamente.
 

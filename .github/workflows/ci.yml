@@ -1,0 +1,68 @@
+# Build with the shipping toolchain (Qt 5.15.2 + MinGW 8.1, 32-bit: runs on
+# Windows 7) and run every test suite: on SQLite, then on a throwaway
+# PostgreSQL server (including the server restart / outage tests).
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: Qt 5.15.2 MinGW 32-bit
+    runs-on: windows-2022          # comes with PostgreSQL ($PGBIN) for the server side
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash                # Git Bash: qmake and make see the same shell
+    env:
+      QT_QPA_PLATFORM: offscreen   # widget tests without a desktop
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt 5.15.2 and MinGW 8.1 (32-bit)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '5.15.2'
+          host: windows
+          target: desktop
+          arch: win32_mingw81
+          tools: 'tools_mingw,qt.tools.win32_mingw810'
+          cache: true
+
+      - name: Download the 32-bit PostgreSQL client (libpq 10)
+        run: |
+          curl -sSfL -o pg10.zip https://get.enterprisedb.com/postgresql/postgresql-10.23-1-windows-binaries.zip
+          7z x -y -opg10 pg10.zip "pgsql/bin/*.dll" > /dev/null
+          ls pg10/pgsql/bin/libpq.dll
+          # libpq 10 needs the Visual C++ 2013 runtime (x86)
+          choco install vcredist2013 -y --no-progress > /dev/null
+
+      - name: Build (release)
+        run: |
+          export PATH="$(cygpath -u "$IQTA_TOOLS")/mingw810_32/bin:$PATH"
+          mkdir -p build && cd build
+          qmake ../Aguara_POS.pro CONFIG+=release CONFIG-=debug_and_release \
+                AGUARA_LIBPQ_DIR="$(cygpath -m "$GITHUB_WORKSPACE/pg10/pgsql/bin")"
+          mingw32-make -j4
+
+      - name: Tests (SQLite)
+        run: tests/run-tests.sh build build/test-results/sqlite
+
+      - name: Tests (PostgreSQL)
+        run: |
+          PG_BIN="$(cygpath -u "$PGBIN")" BUILD_DIR=build \
+            TEST_COMMAND="bash tests/run-tests.sh build build/test-results/postgresql" \
+            tests/run-postgresql-tests.sh
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            build/test-results/
+            build/pgtest/pg.log
+          if-no-files-found: ignore

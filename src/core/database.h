@@ -22,7 +22,8 @@ struct DatabaseSettings {
     int     port = 5432;
     QString name = QStringLiteral("aguara");
     QString user = QStringLiteral("aguara");
-    QString password;           ///< empty = let libpq use %APPDATA%\postgresql\pgpass.conf
+    QString password;           ///< empty = let libpq use %APPDATA%\postgresql\pgpass.conf;
+                                ///< saved encrypted for this Windows user (DPAPI)
 
     static QString settingsPath();      ///< <AppData>/aguara.ini
     static QString defaultSqlitePath(); ///< <AppData>/aguara.db
@@ -65,8 +66,13 @@ public:
     bool migrate(const QString &owner, const QList<Migration> &migrations);
     int  schemaVersion(const QString &owner) const;
 
+    /// SQLite only: write a consistent copy of the open database to `file`
+    /// (replaced if it exists) without stopping the program.
+    bool backupTo(const QString &file);
+
     QString connectionName() const { return m_connectionName; }
     DatabaseSettings::Backend backend() const { return m_backend; }
+    /// Why the last call failed, in Spanish for the user; details are in the log.
     QString lastError() const { return m_lastError; }
 
 private:

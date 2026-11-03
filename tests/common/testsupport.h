@@ -1,0 +1,147 @@
+#ifndef TESTSUPPORT_H
+#define TESTSUPPORT_H
+
+// Helpers shared by the suites that need a database.
+//
+// Backends: SQLite always (a file in a temporary folder). PostgreSQL only when
+// AGUARA_TEST_PG_HOST is set (plus _PORT, _USER, _PASSWORD), and only on a
+// database named aguara_test, because the suites drop and recreate its schema.
+
+#include "connectionmonitor.h"
+#include "corehost.h"
+#include "database.h"
+#include "sqlproductservice.h"
+
+#include <QCoreApplication>
+#include <QElapsedTimer>
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QTemporaryDir>
+#include <QTest>
+#include <QThread>
+
+#include <functional>
+#include <memory>
+
+namespace TestSupport {
+
+inline bool postgresConfigured()
+{
+    return !qEnvironmentVariableIsEmpty("AGUARA_TEST_PG_HOST");
+}
+
+inline DatabaseSettings postgresSettings()
+{
+    DatabaseSettings s;
+    s.backend  = DatabaseSettings::PostgreSQL;
+    s.host     = qEnvironmentVariable("AGUARA_TEST_PG_HOST");
+    s.port     = qEnvironmentVariableIsSet("AGUARA_TEST_PG_PORT") ? qEnvironmentVariableIntValue("AGUARA_TEST_PG_PORT") : 5432;
+    s.name     = QStringLiteral("aguara_test");
+    s.user     = qEnvironmentVariable("AGUARA_TEST_PG_USER", QStringLiteral("aguara"));
+    s.password = qEnvironmentVariable("AGUARA_TEST_PG_PASSWORD");
+    return s;
+}
+
+inline const char *postgresSkipReason()
+{
+    return "PostgreSQL not configured: set AGUARA_TEST_PG_HOST (see tests/README.md)";
+}
+
+/// Global data rows: every test function runs once per backend.
+/// Use in initTestCase_data(); read with QFETCH_GLOBAL(int, backend).
+inline void addBackendRows()
+{
+    QTest::addColumn<int>("backend");
+    QTest::newRow("sqlite") << int(DatabaseSettings::SQLite);
+    QTest::newRow("postgresql") << int(DatabaseSettings::PostgreSQL);
+}
+
+/// Process events for up to `ms` until `done` returns true.
+inline bool waitFor(const std::function<bool()> &done, int ms = 5000)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (!done() && timer.elapsed() < ms) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        QThread::msleep(10);
+    }
+    return done();
+}
+
+/// A migrated, empty core database with the services on top, as main() sets
+/// them up. Each open() starts from scratch.
+class CoreFixture
+{
+public:
+    explicit CoreFixture(const QString &connectionName = QStringLiteral("aguara"))
+        : database(connectionName) {}
+    ~CoreFixture() { close(); }
+
+    /// SQLite: a new file in `dir`. PostgreSQL: drops and recreates the
+    /// public schema of aguara_test. Returns false with `error` set.
+    bool open(DatabaseSettings::Backend backend, const QString &dir, QString *error)
+    {
+        close();
+        DatabaseSettings s;
+        if (backend == DatabaseSettings::PostgreSQL) {
+            s = postgresSettings();
+        } else {
+            static int counter = 0;
+            s.sqlitePath = QStringLiteral("%1/test-%2.db").arg(dir).arg(++counter);
+        }
+        settings = s;
+        if (!database.open(s)) {
+            *error = database.lastError();
+            return false;
+        }
+        if (backend == DatabaseSettings::PostgreSQL) {
+            QSqlQuery q(QSqlDatabase::database(database.connectionName()));
+            if (!q.exec(QStringLiteral("DROP SCHEMA public CASCADE")) || !q.exec(QStringLiteral("CREATE SCHEMA public"))) {
+                *error = QStringLiteral("cannot reset the test schema");
+                return false;
+            }
+        }
+        if (!database.migrate(QStringLiteral("core"), coreMigrations())) {
+            *error = database.lastError();
+            return false;
+        }
+        monitor.reset(new ConnectionMonitor(database.connectionName(), backend == DatabaseSettings::PostgreSQL));
+        monitor->setHealthCheckInterval(0);     // tests drive it explicitly
+        products.reset(new SqlProductService(monitor.get()));
+        host.reset(new CoreHost);
+        host->registerService(ProductService_iid, products.get());
+        return true;
+    }
+
+    void close()
+    {
+        host.reset();
+        products.reset();
+        monitor.reset();
+        database.close();
+    }
+
+    QSqlDatabase connection() const { return QSqlDatabase::database(database.connectionName(), false); }
+
+    DatabaseSettings settings;
+    Database database;
+    std::unique_ptr<ConnectionMonitor> monitor;
+    std::unique_ptr<SqlProductService> products;
+    std::unique_ptr<CoreHost> host;
+};
+
+} // namespace TestSupport
+
+/// In a test function of a suite with addBackendRows(): open `fixture` on the
+/// current row's backend (skipping PostgreSQL when it isn't configured).
+#define AGUARA_OPEN_FIXTURE(fixture, dir)                                           \
+    do {                                                                            \
+        QFETCH_GLOBAL(int, backend);                                                \
+        if (backend == DatabaseSettings::PostgreSQL && !TestSupport::postgresConfigured()) \
+            QSKIP(TestSupport::postgresSkipReason());                               \
+        QString openError_;                                                         \
+        if (!(fixture).open(DatabaseSettings::Backend(backend), (dir), &openError_)) \
+            QFAIL(qPrintable(openError_));                                          \
+    } while (0)
+
+#endif // TESTSUPPORT_H

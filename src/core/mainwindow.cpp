@@ -1,12 +1,15 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include "backup.h"
 #include "corehost.h"
+#include "logging.h"
 #include "ui_pagecero.h"
 #include "module_dialog.h"
 #include "notificationdialog.h"
 #include <version.h>
 
 #include <QAction>
+#include <QApplication>
 #include <QDateTime>
 #include <QDebug>
 #include <QFileDialog>
@@ -22,14 +25,16 @@
 #include <QTimer>
 #include <QToolButton>
 #include <QScreen>
+#include <QShortcut>
+#include <QStandardPaths>
 
 
 
-MainWindow::MainWindow(CoreHost *host, QWidget *parent)
+MainWindow::MainWindow(CoreHost *host, Backup *backup, QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , host(host)
-    //, newTabShortcut(QShortcut(QKeySequence(tr("Ctrl+N")), this))
+    , backup(backup)
 {
     ui->setupUi(this);
     ui->dockWidget->setTitleBarWidget(new QWidget);
@@ -37,13 +42,11 @@ MainWindow::MainWindow(CoreHost *host, QWidget *parent)
     prepareWindow();
     setUpPageCero();
 
-    // set shortcut
-    //newTabShortcut.setAutoRepeat(false);
-    //connect(&newTabShortcut, SIGNAL(activated()),this,SLOT(addTab()));
     connect(ui->tabWidget, SIGNAL(tabCloseRequested(int)), this, SLOT(onTabCloseRequested(int)));
 
     createActions();
     createMenus();
+    createShortcuts();
 
     // modules without a page (e.g. importers) notify through the host
     connect(host, &CoreHost::notificationRequested, this, &MainWindow::onModuleNotification);
@@ -96,37 +99,82 @@ void MainWindow::prepareWindow() {
 }
 
 void MainWindow::setUpPageCero() {
-    addTab(&pageCero, QIcon(), "Notifications");
+    addTab(&pageCero, QIcon(), tr("Avisos"));
     ui->tabWidget->tabBar()->setTabButton(0, QTabBar::RightSide, 0);
     ui->tabWidget->tabBar()->setTabButton(0, QTabBar::LeftSide, 0);
 }
 
-void MainWindow::Import() {
-    qDebug() << "importing";
+/// Import articles from a file. With `only` set, offer only that module's
+/// file types; otherwise every importer's, and the file's extension picks
+/// the module.
+void MainWindow::Import(ImportArticlesInterface *only)
+{
+    QStringList patterns;
+    for (const LoadedModule &module : qAsConst(modules)) {
+        if (module.importer && (!only || module.importer == only)) {
+            for (const QString &type : module.importer->fileTypes())
+                patterns << QStringLiteral("*.") + type;
+        }
+    }
+    if (patterns.isEmpty()) {
+        QMessageBox::information(this, tr("Importar artículos"),
+                                 tr("No hay ningún módulo de importación instalado."));
+        return;
+    }
+    patterns.removeDuplicates();
 
-    QString file = QFileDialog::getOpenFileName(this, "Select file to import", QDir::currentPath(), "CSV Files (*.csv)");
+    if (lastImportDir.isEmpty())
+        lastImportDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    const QString file = QFileDialog::getOpenFileName(this, tr("Importar artículos"), lastImportDir,
+        tr("Archivos de artículos (%1)").arg(patterns.join(QLatin1Char(' '))));
     if (file.isEmpty())
         return;
+    lastImportDir = QFileInfo(file).absolutePath();
 
-    const QString file_ext = QFileInfo(file).suffix().toLower();
-
-    //search for module that can handle this type
+    const QString extension = QFileInfo(file).suffix().toLower();
     for (const LoadedModule &module : qAsConst(modules)) {
-        if (!module.importer || !module.importer->fileTypes().contains(file_ext))
+        if (!module.importer || (only && module.importer != only)
+            || !module.importer->fileTypes().contains(extension))
             continue;
-
-        //let this module handle the file
-        module.importer->importFrom(file);
-        //loadTable();
-
-        break;
+        qCInfo(lcModules) << "Importing" << file << "with" << module.info.name;
+        module.importer->importFrom(file);     // the module reports the result as a notification
+        return;
     }
+    QMessageBox::warning(this, tr("Importar artículos"),
+                         tr("Ningún módulo puede importar archivos .%1.").arg(extension));
+}
+
+/// Archivo > Copia de seguridad...
+void MainWindow::backupNow()
+{
+    if (!backup || !backup->isAvailable()) {
+        QMessageBox::information(this, tr("Copia de seguridad"),
+            tr("Los datos están en el servidor de la red: la copia de seguridad se hace en el servidor "
+               "(ver la guía de instalación de varios puestos)."));
+        return;
+    }
+    const QString suggested = QDir(Backup::defaultDirectory()).filePath(Backup::fileNameFor(QDateTime::currentDateTime()));
+    const QString file = QFileDialog::getSaveFileName(this, tr("Guardar copia de seguridad"), suggested,
+                                                      tr("Copia de AguaraPOS (*.db)"));
+    if (file.isEmpty())
+        return;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const bool ok = backup->backupTo(file);
+    QApplication::restoreOverrideCursor();
+    if (ok)
+        QMessageBox::information(this, tr("Copia de seguridad"),
+                                 tr("Copia guardada en:\n%1").arg(QDir::toNativeSeparators(file)));
+    else
+        QMessageBox::warning(this, tr("Copia de seguridad"), backup->lastError());
 }
 
 void MainWindow::about()
 {
-   QMessageBox::about(this, tr("About AguaraPOS"),
-            tr("TODO"));
+    QMessageBox::about(this, tr("Acerca de AguaraPOS"),
+        tr("<b>AguaraPOS %1</b><br>Sistema de punto de venta.<br><br>"
+           "Registro del programa:<br>%2")
+            .arg(QStringLiteral(VERSION_STRING),
+                 QDir::toNativeSeparators(AguaraLog::filePath()).toHtmlEscaped()));
 }
 
 void MainWindow::aboutModules()
@@ -137,24 +185,77 @@ void MainWindow::aboutModules()
 
 void MainWindow::createActions()
 {
-    importAct = new QAction(tr("&Import"), this);
-    importAct->setShortcuts(QKeySequence::New);
-    connect(importAct, &QAction::triggered, this, &MainWindow::Import);
+    // Ctrl+I, not Ctrl+N: "new" belongs to the open page (e.g. a new article).
+    importAct = new QAction(tr("&Importar artículos..."), this);
+    importAct->setObjectName(QStringLiteral("importAction"));
+    importAct->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_I));
+    importAct->setEnabled(false);               // until an import module loads
+    connect(importAct, &QAction::triggered, this, [this]() { Import(); });
 
-    aboutAct = new QAction(tr("&About"), this);
+    backupAct = new QAction(tr("&Copia de seguridad..."), this);
+    backupAct->setObjectName(QStringLiteral("backupAction"));
+    connect(backupAct, &QAction::triggered, this, &MainWindow::backupNow);
+
+    quitAct = new QAction(tr("&Salir"), this);
+    quitAct->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Q));
+    connect(quitAct, &QAction::triggered, this, &QWidget::close);
+
+    aboutAct = new QAction(tr("&Acerca de AguaraPOS"), this);
     connect(aboutAct, &QAction::triggered, this, &MainWindow::about);
 
-    aboutModulesAct = new QAction(tr("About &Plugins"), this);
+    aboutModulesAct = new QAction(tr("&Módulos instalados..."), this);
     connect(aboutModulesAct, &QAction::triggered, this, &MainWindow::aboutModules);
 }
 
 void MainWindow::createMenus()
 {
     // essential module independant menus
+    fileMenu = menuBar()->addMenu(tr("&Archivo"));
+    fileMenu->addAction(importAct);
+    fileMenu->addAction(backupAct);
+    fileMenu->addSeparator();
+    fileMenu->addAction(quitAct);
 
-    helpMenu = menuBar()->addMenu(tr("&Help"));
+    helpMenu = menuBar()->addMenu(tr("A&yuda"));
     helpMenu->addAction(aboutAct);
     helpMenu->addAction(aboutModulesAct);
+}
+
+/// Keyboard: Ctrl+1..9 open the modules in sidebar order, Ctrl+W closes the
+/// page, Ctrl+Tab / Ctrl+Shift+Tab move between pages, F1 shows the
+/// notifications page.
+void MainWindow::createShortcuts()
+{
+    for (int n = 1; n <= 9; ++n) {
+        auto shortcut = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_0 + n), this);
+        connect(shortcut, &QShortcut::activated, this, [this, n]() {
+            int seen = 0;
+            for (int i = 0; i < modules.size(); ++i) {
+                if (modules.at(i).widgets && ++seen == n) {
+                    openModulePage(i);
+                    return;
+                }
+            }
+        });
+    }
+    auto closePage = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_W), this);
+    connect(closePage, &QShortcut::activated, this, [this]() {
+        onTabCloseRequested(ui->tabWidget->currentIndex());
+    });
+    auto next = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_Tab), this);
+    connect(next, &QShortcut::activated, this, [this]() {
+        const int count = ui->tabWidget->count();
+        if (count > 1)
+            ui->tabWidget->setCurrentIndex((ui->tabWidget->currentIndex() + 1) % count);
+    });
+    auto previous = new QShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_Backtab), this);
+    connect(previous, &QShortcut::activated, this, [this]() {
+        const int count = ui->tabWidget->count();
+        if (count > 1)
+            ui->tabWidget->setCurrentIndex((ui->tabWidget->currentIndex() + count - 1) % count);
+    });
+    auto notifications = new QShortcut(QKeySequence(Qt::Key_F1), this);
+    connect(notifications, &QShortcut::activated, this, [this]() { addTab(&pageCero); });
 }
 
 /// Load every module from the "modules" folder next to the executable.
@@ -162,7 +263,7 @@ void MainWindow::loadPlugins()
 {
     pluginsDir = QDir(QCoreApplication::applicationDirPath());
     if (!pluginsDir.cd("modules")) {
-        qWarning() << "Modules folder not found:" << pluginsDir.absoluteFilePath("modules");
+        qCWarning(lcModules) << "Modules folder not found:" << pluginsDir.absoluteFilePath("modules");
         return;
     }
 
@@ -177,11 +278,11 @@ void MainWindow::loadPlugins()
         // code: a module built against another interface version is skipped.
         const QString iid = loader.metaData().value("IID").toString();
         if (iid != QLatin1String(AguaraModuleInterface_iid)) {
-            qWarning() << "Skipping" << fileName << "- interface" << iid
-                       << "expected" << AguaraModuleInterface_iid;
+            qCWarning(lcModules) << "Skipping" << fileName << "- interface" << iid
+                                 << "expected" << AguaraModuleInterface_iid;
             onModuleNotification(ModuleMsg("Aguara", "module-skipped:" + fileName,
-                tr("Module not loaded"),
-                tr("%1 was built for a different version of Aguara and was not loaded.").arg(fileName),
+                tr("Módulo no cargado"),
+                tr("%1 es para otra versión de AguaraPOS y no se cargó.").arg(fileName),
                 MsgPriority::PriorityHigh));
             continue;
         }
@@ -189,16 +290,16 @@ void MainWindow::loadPlugins()
         QObject *plugin = loader.instance();
         auto module = qobject_cast<AguaraModuleInterface *>(plugin);
         if (!module) {
-            qWarning() << "Could not load" << fileName << ":" << loader.errorString();
+            qCWarning(lcModules) << "Could not load" << fileName << ":" << loader.errorString();
             loader.unload();
             continue;
         }
 
         if (!module->initialize(host)) {
-            qWarning() << "Module" << fileName << "failed to initialize";
+            qCWarning(lcModules) << "Module" << fileName << "failed to initialize";
             onModuleNotification(ModuleMsg("Aguara", "module-init-failed:" + fileName,
-                tr("Module not loaded"),
-                tr("%1 could not start: a service it needs is missing.").arg(module->moduleInfo().name),
+                tr("Módulo no cargado"),
+                tr("%1 no pudo iniciar: le falta un servicio del programa.").arg(module->moduleInfo().name),
                 MsgPriority::PriorityHigh));
             continue;
         }
@@ -210,6 +311,7 @@ void MainWindow::loadPlugins()
         loaded.widgets  = qobject_cast<WidgetModuleInterface *>(plugin);
         loaded.importer = qobject_cast<ImportArticlesInterface *>(plugin);
         modules.append(loaded);
+        qCInfo(lcModules) << "Loaded module" << fileName << loaded.info.id << loaded.info.version;
 
         if (loaded.importer)
             addImportMenuEntry(modules.last());
@@ -221,14 +323,19 @@ void MainWindow::loadPlugins()
 /// Add an "Import from" menu entry for a module that can import articles.
 void MainWindow::addImportMenuEntry(const LoadedModule &module)
 {
-    // if this is the first import module, add the menu
-    if (importMenu == nullptr)
-        importMenu = menuBar()->addMenu(tr("&Import from"));
+    importAct->setEnabled(true);
+
+    // if this is the first import module, add the submenu
+    if (importMenu == nullptr) {
+        importMenu = new QMenu(tr("Importar &desde"), this);
+        fileMenu->insertMenu(backupAct, importMenu);
+    }
 
     const QString text = QString("%1 (%2)").arg(module.info.name,
                                                 module.importer->fileTypes().join(", "));
     auto action = new QAction(module.info.icon, text, this);
-    connect(action, &QAction::triggered, this, &MainWindow::Import);
+    ImportArticlesInterface *importer = module.importer;
+    connect(action, &QAction::triggered, this, [this, importer]() { Import(importer); });
     importMenu->addAction(action);
 }
 
@@ -266,6 +373,8 @@ void MainWindow::makeButton(int moduleIndex) {
     button->setDefaultAction(act);
     button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
     moduleButtonList.append(button);
+    if (moduleButtonList.size() <= 9)
+        button->setToolTip(tr("%1 (Ctrl+%2)").arg(module.info.name).arg(moduleButtonList.size()));
     addToSidebar(button);
 
     connect(act, &QAction::triggered, this, [this, moduleIndex]() { openModulePage(moduleIndex); });

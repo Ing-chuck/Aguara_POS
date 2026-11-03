@@ -1,7 +1,11 @@
 #include "database.h"
+#include "errors.h"
+#include "logging.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QSettings>
 #include <QSqlDatabase>
@@ -12,11 +16,70 @@
 
 #include <algorithm>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <wincrypt.h>
+#endif
+
 namespace {
 // Arbitrary constant: the PostgreSQL advisory lock that serializes migrations
 // when several tills start at the same time.
 const int kMigrationLockKey = 0x4147; // "AG"
+
+QString tr(const char *text)
+{
+    return QCoreApplication::translate("Database", text);
 }
+
+// The database password is kept encrypted with Windows DPAPI: only the same
+// Windows user on the same computer can decrypt it, so a copy of aguara.ini
+// doesn't reveal it. (On other systems it is only base64-encoded.)
+const char kPasswordKey[]          = "password";            // older versions: plain text
+const char kProtectedPasswordKey[] = "password_protected";  // DPAPI, base64
+
+QByteArray protect(const QString &password)
+{
+#ifdef Q_OS_WIN
+    QByteArray plain = password.toUtf8();
+    DATA_BLOB in;
+    in.pbData = reinterpret_cast<BYTE *>(plain.data());
+    in.cbData = DWORD(plain.size());
+    DATA_BLOB out = {};
+    if (!CryptProtectData(&in, L"AguaraPOS", nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &out)) {
+        qCWarning(lcApp) << "CryptProtectData failed, error" << GetLastError();
+        return QByteArray();
+    }
+    const QByteArray result(reinterpret_cast<const char *>(out.pbData), int(out.cbData));
+    LocalFree(out.pbData);
+    return result.toBase64();
+#else
+    return password.toUtf8().toBase64();
+#endif
+}
+
+bool unprotect(const QByteArray &stored, QString *password)
+{
+    QByteArray blob = QByteArray::fromBase64(stored);
+#ifdef Q_OS_WIN
+    DATA_BLOB in;
+    in.pbData = reinterpret_cast<BYTE *>(blob.data());
+    in.cbData = DWORD(blob.size());
+    DATA_BLOB out = {};
+    if (!CryptUnprotectData(&in, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &out)) {
+        qCWarning(lcApp) << "The saved database password can't be decrypted (aguara.ini copied from"
+                            " another computer or Windows user?), error" << GetLastError();
+        return false;
+    }
+    *password = QString::fromUtf8(reinterpret_cast<const char *>(out.pbData), int(out.cbData));
+    SecureZeroMemory(out.pbData, out.cbData);
+    LocalFree(out.pbData);
+    return true;
+#else
+    *password = QString::fromUtf8(blob);
+    return true;
+#endif
+}
+} // namespace
 
 // --- DatabaseSettings -------------------------------------------------------
 
@@ -44,7 +107,15 @@ DatabaseSettings DatabaseSettings::load()
     s.port       = ini.value(QStringLiteral("port"), s.port).toInt();
     s.name       = ini.value(QStringLiteral("name"), s.name).toString();
     s.user       = ini.value(QStringLiteral("user"), s.user).toString();
-    s.password   = ini.value(QStringLiteral("password")).toString();
+    if (ini.contains(QLatin1String(kProtectedPasswordKey))) {
+        unprotect(ini.value(QLatin1String(kProtectedPasswordKey)).toByteArray(), &s.password);
+    } else if (ini.contains(QLatin1String(kPasswordKey))) {
+        // written in plain text by an older version: encrypt it now
+        s.password = ini.value(QLatin1String(kPasswordKey)).toString();
+        ini.remove(QLatin1String(kPasswordKey));
+        if (!s.password.isEmpty())
+            ini.setValue(QLatin1String(kProtectedPasswordKey), protect(s.password));
+    }
     return s;
 }
 
@@ -59,7 +130,11 @@ void DatabaseSettings::save() const
     ini.setValue(QStringLiteral("port"), port);
     ini.setValue(QStringLiteral("name"), name);
     ini.setValue(QStringLiteral("user"), user);
-    ini.setValue(QStringLiteral("password"), password);
+    ini.remove(QLatin1String(kPasswordKey));
+    if (password.isEmpty())
+        ini.remove(QLatin1String(kProtectedPasswordKey));
+    else
+        ini.setValue(QLatin1String(kProtectedPasswordKey), protect(password));
 }
 
 QString DatabaseSettings::describe() const
@@ -96,14 +171,14 @@ bool Database::open(const DatabaseSettings &settings)
 bool Database::openSqlite(const DatabaseSettings &settings)
 {
     if (!QSqlDatabase::isDriverAvailable(QStringLiteral("QSQLITE"))) {
-        m_lastError = QStringLiteral("The Qt SQLite driver (qsqlite) is not available.");
+        m_lastError = tr("Falta el componente de SQLite (qsqlite) en la instalación. Reinstale AguaraPOS.");
         return false;
     }
 
     const QFileInfo file(settings.sqlitePath.isEmpty() ? DatabaseSettings::defaultSqlitePath()
                                                        : settings.sqlitePath);
     if (!QDir().mkpath(file.absolutePath())) {
-        m_lastError = QStringLiteral("Cannot create folder %1").arg(file.absolutePath());
+        m_lastError = tr("No se puede crear la carpeta %1.").arg(QDir::toNativeSeparators(file.absolutePath()));
         return false;
     }
 
@@ -112,7 +187,8 @@ bool Database::openSqlite(const DatabaseSettings &settings)
         m_open = true;      // from here on close() must remove the connection
         db.setDatabaseName(file.absoluteFilePath());
         if (!db.open()) {
-            m_lastError = db.lastError().text();
+            m_lastError = AguaraErrors::logAndExplain(db.lastError(),
+                QStringLiteral("Opening SQLite file %1").arg(file.absoluteFilePath()));
             return false;
         }
     }
@@ -131,7 +207,7 @@ bool Database::openSqlite(const DatabaseSettings &settings)
 bool Database::openPostgres(const DatabaseSettings &settings)
 {
     if (settings.host.trimmed().isEmpty()) {
-        m_lastError = QStringLiteral("No PostgreSQL server configured (host is empty).");
+        m_lastError = tr("No se indicó el servidor de datos.");
         return false;
     }
 
@@ -139,10 +215,11 @@ bool Database::openPostgres(const DatabaseSettings &settings)
     m_open = true;
     if (!db.isValid()) {
         // The Qt plugin loads, but libpq.dll (or one of its DLLs) is missing.
-        m_lastError = QStringLiteral(
-            "PostgreSQL support is not installed on this computer: libpq.dll and its "
-            "DLLs (libssl-1_1, libcrypto-1_1, libintl-8, libiconv-2) must be next to "
-            "aguara.exe, and the Visual C++ 2013 (x86) runtime installed.");
+        qCWarning(lcDatabase) << "QPSQL driver not usable: libpq.dll or one of its DLLs"
+                                 " (libssl-1_1, libcrypto-1_1, libintl-8, libiconv-2) or the"
+                                 " Visual C++ 2013 x86 runtime is missing";
+        m_lastError = tr("Falta en este equipo el componente para conectarse al servidor (PostgreSQL). "
+                         "Ver la guía de instalación de varios puestos.");
         return false;
     }
 
@@ -159,7 +236,8 @@ bool Database::openPostgres(const DatabaseSettings &settings)
     db.setConnectOptions(QStringLiteral("connect_timeout=5;application_name=AguaraPOS;"
                                         "keepalives=1;keepalives_idle=10;keepalives_interval=5"));
     if (!db.open()) {
-        m_lastError = db.lastError().text();
+        m_lastError = AguaraErrors::logAndExplain(db.lastError(),
+            QStringLiteral("Connecting to %1").arg(settings.describe()));
         return false;
     }
     return true;
@@ -181,7 +259,7 @@ bool Database::exec(const QString &sql)
 {
     QSqlQuery q(QSqlDatabase::database(m_connectionName));
     if (!q.exec(sql)) {
-        m_lastError = QStringLiteral("%1\n(%2)").arg(q.lastError().text(), sql.simplified());
+        m_lastError = AguaraErrors::logAndExplain(q.lastError(), QStringLiteral("SQL: %1").arg(sql.simplified()));
         return false;
     }
     return true;
@@ -203,7 +281,7 @@ bool Database::beginMigrationTransaction()
 {
     QSqlDatabase db = QSqlDatabase::database(m_connectionName);
     if (!db.transaction()) {
-        m_lastError = db.lastError().text();
+        m_lastError = AguaraErrors::logAndExplain(db.lastError(), QStringLiteral("BEGIN (migration)"));
         return false;
     }
     if (m_backend == DatabaseSettings::PostgreSQL
@@ -249,7 +327,7 @@ bool Database::migrate(const QString &owner, const QList<Migration> &migrations)
         const QStringList &statements = m_backend == DatabaseSettings::PostgreSQL ? m.postgresql : m.sqlite;
         bool ok = !statements.isEmpty();
         if (!ok)
-            m_lastError = QStringLiteral("no statements for this database type");
+            qCWarning(lcDatabase) << "Migration" << owner << m.version << "has no statements for this database type";
         for (const QString &statement : statements) {
             if (!exec(statement)) {
                 ok = false;
@@ -267,20 +345,51 @@ bool Database::migrate(const QString &owner, const QList<Migration> &migrations)
             q.addBindValue(QDateTime::currentDateTime().toString(Qt::ISODate));
             ok = q.exec();
             if (!ok)
-                m_lastError = q.lastError().text();
+                m_lastError = AguaraErrors::logAndExplain(q.lastError(), QStringLiteral("Recording migration"));
         }
 
         if (!ok) {
             db.rollback();
-            m_lastError = QStringLiteral("Migration %1 v%2 (%3) failed: %4")
-                              .arg(owner).arg(m.version).arg(m.description, m_lastError);
+            qCWarning(lcDatabase) << "Migration" << owner << m.version << m.description << "failed";
+            m_lastError = tr("No se pudo actualizar la estructura de la base de datos (%1, versión %2). %3")
+                              .arg(owner).arg(m.version).arg(m_lastError);
             return false;
         }
         if (!db.commit()) {
-            m_lastError = db.lastError().text();
+            m_lastError = AguaraErrors::logAndExplain(db.lastError(), QStringLiteral("COMMIT (migration)"));
             return false;
         }
+        qCInfo(lcDatabase) << "Applied migration" << owner << m.version << m.description;
     }
+    return true;
+}
+
+bool Database::backupTo(const QString &file)
+{
+    if (!m_open || m_backend != DatabaseSettings::SQLite) {
+        m_lastError = tr("La copia de seguridad desde el programa es solo para datos guardados en este "
+                         "equipo. Con servidor, la copia se hace en el servidor.");
+        return false;
+    }
+    const QFileInfo target(file);
+    if (!QDir().mkpath(target.absolutePath())) {
+        m_lastError = tr("No se puede crear la carpeta %1.").arg(QDir::toNativeSeparators(target.absolutePath()));
+        return false;
+    }
+    if (target.exists() && !QFile::remove(target.absoluteFilePath())) {
+        m_lastError = tr("No se puede reemplazar el archivo %1.").arg(QDir::toNativeSeparators(file));
+        return false;
+    }
+    // VACUUM INTO writes a consistent, compacted copy while the program keeps
+    // working (SQLite 3.27+; Qt 5.15 ships 3.33).
+    QSqlQuery q(QSqlDatabase::database(m_connectionName, false));
+    q.prepare(QStringLiteral("VACUUM INTO ?"));
+    q.addBindValue(target.absoluteFilePath());
+    if (!q.exec()) {
+        m_lastError = AguaraErrors::logAndExplain(q.lastError(), QStringLiteral("Backup to %1").arg(file));
+        return false;
+    }
+    qCInfo(lcApp) << "Database backed up to" << target.absoluteFilePath();
     return true;
 }
 

@@ -28,9 +28,13 @@ private:
     QCompleter *searchCompleter = nullptr;
 
     void loadTable();
+    void setUpKeyboard();
     QString selectedCode() const;
 
 private slots:
+    void focusSearch();
+    void onSearchEntered();
+    void onItemAddPressed();
     void onItemAddedEdited(QString id);
     void onItemEditPressed();
     void onItemRemovePressed();

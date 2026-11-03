@@ -1,4 +1,6 @@
 #include "sqlproductservice.h"
+#include "errors.h"
+#include "logging.h"
 #include "connectionmonitor.h"
 
 #include <QDate>
@@ -51,7 +53,11 @@ bool ProductTableModel::refresh()
     // the real count (a shop's catalog is thousands of rows, not millions).
     while (canFetchMore())
         fetchMore();
-    return !lastError().isValid();
+    if (lastError().isValid()) {
+        qCWarning(lcDatabase) << "Product list refresh failed:" << lastError().text();
+        return false;
+    }
+    return true;
 }
 
 QVariant ProductTableModel::data(const QModelIndex &item, int role) const
@@ -110,9 +116,11 @@ SqlProductService::SqlProductService(ConnectionMonitor *monitor, QObject *parent
     : QObject(parent), m_monitor(monitor), m_connectionName(monitor->connectionName())
 {
     // Shared database (PostgreSQL): hear about other tills' changes.
-    // SQLite has no notifications, and only this program writes to the file.
+    // SQLite: only this program writes to the file, nothing to hear. (Qt's
+    // SQLite driver also reports EventNotifications, for its own table
+    // hooks, but has no NOTIFY: ask the monitor, not the driver.)
     QSqlDriver *driver = db().driver();
-    if (driver && driver->hasFeature(QSqlDriver::EventNotifications)) {
+    if (m_monitor->isPostgres() && driver && driver->hasFeature(QSqlDriver::EventNotifications)) {
         m_notifications = true;
         subscribe();
         connect(driver, QOverload<const QString &, QSqlDriver::NotificationSource, const QVariant &>::of(&QSqlDriver::notification),
@@ -145,7 +153,7 @@ void SqlProductService::changed()
         QSqlQuery q(db());
         // not prepared: PostgreSQL can't PREPARE a NOTIFY
         if (!m_monitor->exec(q, QStringLiteral("NOTIFY %1").arg(QString::fromLatin1(kChangesChannel))))
-            qWarning() << "Could not notify other tills:" << m_monitor->lastError();
+            qCWarning(lcDatabase) << "Could not notify other tills:" << m_monitor->lastError();
     }
 }
 
@@ -170,8 +178,10 @@ bool SqlProductService::begin()
     if (!db().transaction()) {
         // BEGIN is often what discovers a connection dropped while idle
         if (!(m_monitor->connectionBroken() && m_monitor->reconnect() && db().transaction())) {
-            m_lastError = m_monitor->isConnected() ? db().lastError().text()
-                                                   : tr("Sin conexion con el servidor de datos.");
+            m_lastError = m_monitor->isConnected()
+                ? AguaraErrors::logAndExplain(db().lastError(), QStringLiteral("BEGIN"))
+                : tr("Sin conexión con el servidor de datos. Se reintenta automáticamente; "
+                     "intente de nuevo en unos momentos.");
             return false;
         }
     }
@@ -185,7 +195,7 @@ bool SqlProductService::commit()
     QSqlDatabase database = db();
     if (database.commit())
         return true;
-    m_lastError = database.lastError().text();
+    m_lastError = AguaraErrors::logAndExplain(database.lastError(), QStringLiteral("COMMIT"));
     database.rollback();
     return false;
 }
@@ -273,7 +283,7 @@ bool SqlProductService::importProducts(const QList<Product> &products, int *save
         return false;
     for (const Product &p : products) {
         if (!saveOne(p, QString())) {
-            m_lastError = tr("Product %1: %2").arg(p.code, m_lastError);
+            m_lastError = tr("Artículo %1: %2").arg(p.code, m_lastError);
             rollback();
             return false;
         }
@@ -293,14 +303,14 @@ bool SqlProductService::saveOne(const Product &in, const QString &previousCode)
     p.code = p.code.trimmed();
     p.description = p.description.trimmed();
 
-    if (p.code.isEmpty())        { m_lastError = tr("The product code is empty."); return false; }
-    if (p.description.isEmpty()) { m_lastError = tr("The product description is empty."); return false; }
-    if (p.price < 0 || p.cost < 0) { m_lastError = tr("Price and cost cannot be negative."); return false; }
+    if (p.code.isEmpty())        { m_lastError = tr("Falta el código del artículo."); return false; }
+    if (p.description.isEmpty()) { m_lastError = tr("Falta la descripción del artículo."); return false; }
+    if (p.price < 0 || p.cost < 0) { m_lastError = tr("El precio y el costo no pueden ser negativos."); return false; }
 
     bool vatOk = false;
     for (const VatCategory &v : vatCategories())
         vatOk = vatOk || v.rate == p.vatRate;
-    if (!vatOk) { m_lastError = tr("Unknown IVA rate %1%.").arg(p.vatRate); return false; }
+    if (!vatOk) { m_lastError = tr("La tasa de IVA %1% no existe.").arg(p.vatRate); return false; }
 
     if (!p.brandId && !p.brandName.trimmed().isEmpty()) {
         p.brandId = findOrCreate(QStringLiteral("marcas"), QStringLiteral("nombre"), p.brandName);
@@ -320,12 +330,12 @@ bool SqlProductService::saveOne(const Product &in, const QString &previousCode)
     const bool exists = q.next();
 
     if (!previousCode.isEmpty() && previousCode != p.code) {
-        if (!exists) { m_lastError = tr("Product %1 no longer exists.").arg(previousCode); return false; }
+        if (!exists) { m_lastError = tr("El artículo %1 ya no existe.").arg(previousCode); return false; }
         QSqlQuery taken(db());
         taken.prepare(QStringLiteral("SELECT 1 FROM productos WHERE codigo = ?"));
         taken.addBindValue(p.code);
         if (!exec(taken)) return false;
-        if (taken.next()) { m_lastError = tr("Code %1 is already used by another product.").arg(p.code); return false; }
+        if (taken.next()) { m_lastError = tr("El código %1 ya lo usa otro artículo.").arg(p.code); return false; }
     }
 
     QSqlQuery w(db());
@@ -365,7 +375,7 @@ bool SqlProductService::deactivateProduct(const QString &code)
     if (!exec(q))
         return false;
     if (q.numRowsAffected() == 0) {
-        m_lastError = tr("Product %1 does not exist.").arg(code);
+        m_lastError = tr("El artículo %1 no existe.").arg(code);
         return false;
     }
     changed();
@@ -377,7 +387,7 @@ qint64 SqlProductService::findOrCreate(const QString &table, const QString &name
 {
     const QString trimmed = name.trimmed();
     if (trimmed.isEmpty()) {
-        m_lastError = tr("The name is empty.");
+        m_lastError = tr("Falta el nombre.");
         return 0;
     }
 

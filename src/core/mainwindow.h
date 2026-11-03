@@ -8,9 +8,9 @@
 #include <QMainWindow>
 #include <QDir>
 #include <QLabel>
-#include <QShortcut>
 #include <QTimer>
 
+class Backup;
 class CoreHost;
 class NotificationDialog;
 
@@ -26,11 +26,13 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(CoreHost *host, QWidget *parent = nullptr);
+    /// `backup` may be null (no backup menu action then does anything useful).
+    explicit MainWindow(CoreHost *host, Backup *backup = nullptr, QWidget *parent = nullptr);
     ~MainWindow();
 
 private slots:
-    void Import();
+    void Import(ImportArticlesInterface *only = nullptr);
+    void backupNow();
     void about();
     void aboutModules();
 
@@ -45,6 +47,7 @@ private:
     void setUpPageCero();
     void createActions();
     void createMenus();
+    void createShortcuts();
     void loadPlugins();
     void addImportMenuEntry(const LoadedModule &module);
     void makeButton(int moduleIndex);
@@ -62,14 +65,18 @@ private:
     PageCero pageCero;
 
     CoreHost *host;
+    Backup *backup;
     QDir pluginsDir;
+    QString lastImportDir;
 
     QList<LoadedModule> modules;
 
-    //QShortcut newTabShortcut;
+    QMenu* fileMenu = nullptr;
     QMenu* importMenu = nullptr;
     QMenu* helpMenu = nullptr;
     QAction* importAct = nullptr;
+    QAction* backupAct = nullptr;
+    QAction* quitAct = nullptr;
     QAction* aboutAct = nullptr;
     QAction* aboutModulesAct = nullptr;
 
