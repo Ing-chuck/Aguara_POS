@@ -32,6 +32,9 @@ private slots:
     void onTest();
 
 private:
+    void showStatus(const QString &text, const char *role);
+
+private:
     QComboBox      *backend;
     QStackedWidget *pages;
     QLineEdit      *sqlitePath;

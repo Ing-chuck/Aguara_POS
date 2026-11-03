@@ -20,10 +20,10 @@ jobs:
       QT_QPA_PLATFORM: offscreen   # widget tests without a desktop
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5           # v5+: Node 24 (Node 20 actions are deprecated)
 
       - name: Install Qt 5.15.2 and MinGW 8.1 (32-bit)
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@v4   # Node 24 since v4.3.1
         with:
           version: '5.15.2'
           host: windows
@@ -59,7 +59,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6     # v6+: Node 24
         with:
           name: test-results
           path: |

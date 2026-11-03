@@ -29,11 +29,15 @@ private:
 
     void loadTable();
     void setUpKeyboard();
+    void fitColumns();
+    bool eventFilter(QObject *watched, QEvent *event) override;
     QString selectedCode() const;
 
 private slots:
     void focusSearch();
     void onSearchEntered();
+    void updateSummary();
+    void updateActions();
     void onItemAddPressed();
     void onItemAddedEdited(QString id);
     void onItemEditPressed();

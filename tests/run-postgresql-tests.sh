@@ -24,7 +24,13 @@ set -u
 BUILD_DIR="${BUILD_DIR:-build}"
 PG_PORT="${PG_PORT:-54321}"
 WORK_DIR="${WORK_DIR:-$BUILD_DIR/pgtest}"
-TEST_COMMAND="${TEST_COMMAND:-bash $(dirname "$0")/run-tests.sh $BUILD_DIR}"
+
+# absolute paths: the tests get the data folder and pg_ctl, and run from tests/bin
+mkdir -p "$WORK_DIR"
+BUILD_DIR="$(cd "$BUILD_DIR" && pwd)" || { echo "no build folder $BUILD_DIR"; exit 1; }
+WORK_DIR="$(cd "$WORK_DIR" && pwd)"
+PG_BIN="$(cd "$PG_BIN" && pwd)" || { echo "no folder $PG_BIN"; exit 1; }
+TEST_COMMAND="${TEST_COMMAND:-bash $(cd "$(dirname "$0")" && pwd)/run-tests.sh $BUILD_DIR}"
 
 exe() { if [ -x "$PG_BIN/$1.exe" ]; then echo "$PG_BIN/$1.exe"; else echo "$PG_BIN/$1"; fi; }
 INITDB="$(exe initdb)"; PG_CTL="$(exe pg_ctl)"; PSQL="$(exe psql)"

@@ -1,7 +1,10 @@
 #include "modifytabledialog.h"
 #include "ui_modifytabledialog.h"
 
+#include <aguarastyle.h>
+
 #include <QAbstractProxyModel>
+#include <QDialogButtonBox>
 #include <QCompleter>
 #include <QHeaderView>
 #include <QMessageBox>
@@ -16,30 +19,37 @@ modifyTableDialog::modifyTableDialog(ProductService *products, List list, QWidge
     list(list)
 {
     // Window configuration
-    setWindowFlag(Qt::FramelessWindowHint);
     setAttribute(Qt::WA_DeleteOnClose);
-    parent->setEnabled(false);
-    setEnabled(true);
-
     ui->setupUi(this);
+    setWindowModality(Qt::WindowModal);     // over the article dialog
+
+    AguaraStyle::searchField(ui->lineEdit_search);
+    ui->button_add->setIcon(AguaraStyle::icon(QStringLiteral("plus")));
+    ui->button_remove->setIcon(AguaraStyle::icon(QStringLiteral("trash"), AguaraStyle::color(AguaraStyle::Color::Danger)));
+    ui->buttonBox->button(QDialogButtonBox::Close)->setText(tr("Cerrar"));
+    connect(ui->lineEdit_add, &QLineEdit::returnPressed, this, &modifyTableDialog::onAddItem);
 
     // Make line edits write in all caps
     QObject::connect(ui->lineEdit_search, &QLineEdit::textEdited, this, [this](const QString &text){ui->lineEdit_search->setText(text.toUpper());});
     QObject::connect(ui->lineEdit_add, &QLineEdit::textEdited, this, [this](const QString &text){ui->lineEdit_add->setText(text.toUpper());});
 
     if (list == Brands) {
-        ui->label_title->setText(tr("Actualizar Tabla de Marcas"));
+        ui->label_title->setText(tr("Marcas"));
+        ui->label_subtitle->setText(tr("Los artículos que ya tienen una marca la conservan aunque se quite de la lista."));
+        setWindowTitle(tr("Marcas"));
         model->setHorizontalHeaderLabels({ tr("Marcas") });
     }
     else {
-        ui->label_title->setText(tr("Actualizar Tabla de Rubros"));
+        ui->label_title->setText(tr("Rubros"));
+        ui->label_subtitle->setText(tr("Los artículos que ya tienen un rubro lo conservan aunque se quite de la lista."));
+        setWindowTitle(tr("Rubros"));
         model->setHorizontalHeaderLabels({ tr("Rubros") });
     }
     reload();
 
     ui->tableView->setModel(model);
     ui->tableView->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    ui->tableView->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    ui->tableView->verticalHeader()->setDefaultSectionSize(32);
 
     // Search completer
     searchCompleter = new QCompleter(model, this);
@@ -50,13 +60,12 @@ modifyTableDialog::modifyTableDialog(ProductService *products, List list, QWidge
     connect(searchCompleter, QOverload<const QModelIndex &>::of(&QCompleter::highlighted), this, &modifyTableDialog::onCompleterAccepted);
 
     // Connect add and remove buttons
-    QObject::connect(ui->button_add, &QToolButton::clicked, this, &modifyTableDialog::onAddItem);
-    QObject::connect(ui->button_remove, &QToolButton::clicked, this, &modifyTableDialog::onRemoveItem);
+    QObject::connect(ui->button_add, &QAbstractButton::clicked, this, &modifyTableDialog::onAddItem);
+    QObject::connect(ui->button_remove, &QAbstractButton::clicked, this, &modifyTableDialog::onRemoveItem);
 }
 
 modifyTableDialog::~modifyTableDialog()
 {
-    this->parentWidget()->setEnabled(true);
     delete ui;
 }
 
@@ -103,9 +112,9 @@ void modifyTableDialog::onRemoveItem()
 
     const QModelIndex indx = ui->tableView->currentIndex();
     const qint64 id = model->data(indx, Qt::UserRole).toLongLong();
-    QString warningTitle = tr("ATENCION");
+    QString warningTitle = tr("Quitar de la lista");
     QString warningBody = tr("¿Quitar \"%1\" de la lista?\n"
-                             "Los articulos que ya la tienen la conservan.").arg(model->data(indx).toString());
+                             "Los artículos que ya la tienen la conservan.").arg(model->data(indx).toString());
     QMessageBox::StandardButton btn = QMessageBox::warning(this, warningTitle, warningBody, QMessageBox::Ok|QMessageBox::Cancel, QMessageBox::Cancel);
     if (btn != QMessageBox::Ok)
         return;

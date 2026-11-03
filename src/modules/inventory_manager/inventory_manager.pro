@@ -13,5 +13,4 @@ HEADERS   += inventorywidget.h \
 FORMS     += inventorywidget.ui \
              additemdialog.ui \
              modifytabledialog.ui
-RESOURCES += resources.qrc
 DISTFILES += inventory_module.json

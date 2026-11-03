@@ -3,7 +3,10 @@
 #include "logging.h"
 #include "connectionmonitor.h"
 
+#include <aguarastyle.h>
+
 #include <QDate>
+#include <QFont>
 #include <QDebug>
 #include <QSqlDatabase>
 #include <QSqlDriver>
@@ -68,6 +71,25 @@ QVariant ProductTableModel::data(const QModelIndex &item, int role) const
 
     if (role == Qt::TextAlignmentRole && numeric)
         return int(Qt::AlignRight | Qt::AlignVCenter);
+    if (role == Qt::TextAlignmentRole && column == ProductColumn::Vat)
+        return int(Qt::AlignCenter);
+
+    // at or below the minimum: the stock shows in red, and pages can count them
+    if (role == ProductLowStockRole || ((role == Qt::ForegroundRole || role == Qt::FontRole)
+                                        && column == ProductColumn::Stock)) {
+        const int stock = QSqlQueryModel::data(index(item.row(), int(ProductColumn::Stock))).toInt();
+        const int minimum = QSqlQueryModel::data(index(item.row(), int(ProductColumn::StockMin))).toInt();
+        const bool low = minimum > 0 && stock <= minimum;
+        if (role == ProductLowStockRole)
+            return low;
+        if (!low)
+            return QVariant();
+        if (role == Qt::ForegroundRole)
+            return AguaraStyle::color(AguaraStyle::Color::Danger);
+        QFont bold;
+        bold.setBold(true);
+        return bold;
+    }
 
     if (role != Qt::DisplayRole)
         return QSqlQueryModel::data(item, role);
@@ -91,21 +113,30 @@ QVariant ProductTableModel::data(const QModelIndex &item, int role) const
 
 QVariant ProductTableModel::headerData(int section, Qt::Orientation orientation, int role) const
 {
+    const auto column = static_cast<ProductColumn>(section);
+    if (orientation == Qt::Horizontal && role == Qt::TextAlignmentRole) {
+        if (column == ProductColumn::Price || column == ProductColumn::Cost
+            || column == ProductColumn::Stock || column == ProductColumn::StockMin)
+            return int(Qt::AlignRight | Qt::AlignVCenter);
+        if (column == ProductColumn::Vat)
+            return int(Qt::AlignCenter);
+        return int(Qt::AlignLeft | Qt::AlignVCenter);
+    }
     if (orientation != Qt::Horizontal || role != Qt::DisplayRole)
         return QSqlQueryModel::headerData(section, orientation, role);
 
-    switch (static_cast<ProductColumn>(section)) {
-    case ProductColumn::Code:        return tr("Codigo");
-    case ProductColumn::Description: return tr("Descripcion");
+    switch (column) {
+    case ProductColumn::Code:        return tr("Código");
+    case ProductColumn::Description: return tr("Descripción");
     case ProductColumn::Brand:       return tr("Marca");
     case ProductColumn::Category:    return tr("Rubro");
-    case ProductColumn::Price:       return tr("Precio Venta");
+    case ProductColumn::Price:       return tr("Precio");
     case ProductColumn::Cost:        return tr("Costo");
     case ProductColumn::Vat:         return tr("IVA");
     case ProductColumn::Stock:       return tr("Stock");
-    case ProductColumn::StockMin:    return tr("Stock Min");
-    case ProductColumn::Purchased:   return tr("Fecha de Compra");
-    case ProductColumn::Modified:    return tr("Fecha de Modificacion");
+    case ProductColumn::StockMin:    return tr("Mínimo");
+    case ProductColumn::Purchased:   return tr("Compra");
+    case ProductColumn::Modified:    return tr("Modificado");
     default:                         return QVariant();
     }
 }

@@ -5,6 +5,7 @@
 #include "notificationdialog.h"
 #include "pagecero.h"
 
+#include <QAbstractButton>
 #include <QAction>
 #include <QGridLayout>
 #include <QLabel>
@@ -13,6 +14,7 @@
 #include <QRegularExpression>
 #include <QStatusBar>
 #include <QTabWidget>
+#include <QVBoxLayout>
 #include <QtTest>
 
 class tst_MainWindow : public QObject
@@ -24,9 +26,13 @@ private slots:
     void cleanup();
 
     void sameSenderAndIdUpdatesTheCard();
-    void priorityColor();
-    void dismissDeletesAndRepacks();
+    void priorityLevel_data();
+    void priorityLevel();
+    void newestFirstAndDismissCloses();
     void lifetimeExpires();
+    void badgeCountsNotifications();
+    void emptyStateAndDismissAll();
+    void sidebarMarksTheCurrentPage();
     void clockIs24Hour();
     void fileMenuActionsHaveWorkingShortcuts();
 
@@ -91,44 +97,53 @@ void tst_MainWindow::sameSenderAndIdUpdatesTheCard()
 
     notify(ModuleMsg("Inv", "a", "First (updated)", "uno"));
     QCOMPARE(cards().size(), m_initial + 3);
-    NotificationDialog *updated = card(QStringLiteral("Inv - First (updated)"));
+    NotificationDialog *updated = card(QStringLiteral("First (updated)"));
     QVERIFY(updated);
     QCOMPARE(updated->findChild<QLabel *>(QStringLiteral("message"))->text(), QStringLiteral("uno"));
-    QVERIFY(!card(QStringLiteral("Inv - First")));
+    QVERIFY(updated->findChild<QLabel *>(QStringLiteral("meta"))->text().startsWith(QStringLiteral("Inv · ")));
+    QVERIFY(!card(QStringLiteral("First")));
 }
 
-void tst_MainWindow::priorityColor()
+void tst_MainWindow::priorityLevel_data()
 {
-    notify(ModuleMsg("Inv", "b", "Urgent", "two", MsgPriority::PriorityVeryHigh));
-    NotificationDialog *c = card(QStringLiteral("Inv - Urgent"));
-    QVERIFY(c);
-    QVERIFY2(c->styleSheet().contains(QStringLiteral("rgb(255, 0, 0)")), qPrintable(c->styleSheet()));
+    QTest::addColumn<int>("priority");
+    QTest::addColumn<QString>("level");
+    QTest::newRow("very high") << int(PriorityVeryHigh) << "danger";
+    QTest::newRow("high")      << int(PriorityHigh)     << "warning";
+    QTest::newRow("normal")    << int(PriorityNormal)   << "info";
+    QTest::newRow("low")       << int(PriorityLow)      << "success";
+    QTest::newRow("very low")  << int(PriorityVeryLow)  << "neutral";
 }
 
-void tst_MainWindow::dismissDeletesAndRepacks()
+void tst_MainWindow::priorityLevel()
+{
+    QFETCH(int, priority);
+    QFETCH(QString, level);
+    notify(ModuleMsg("Inv", "p", "Prioridad", "x", MsgPriority(priority)));
+    NotificationDialog *c = card(QStringLiteral("Prioridad"));
+    QVERIFY(c);
+    QCOMPARE(c->property("level").toString(), level);       // drives the stripe and icon color
+    QVERIFY(!c->findChild<QLabel *>(QStringLiteral("levelIcon"))->pixmap(Qt::ReturnByValue).isNull());
+}
+
+void tst_MainWindow::newestFirstAndDismissCloses()
 {
     notify(ModuleMsg("A", "1", "One", "x"));
     notify(ModuleMsg("A", "2", "Two", "x"));
     notify(ModuleMsg("A", "3", "Three", "x"));
-    QPointer<NotificationDialog> two = card(QStringLiteral("A - Two"));
+    auto layout = m_page->findChild<QVBoxLayout *>(QStringLiteral("cardsLayout"));
+    QVERIFY(layout);
+    QCOMPARE(layout->indexOf(card(QStringLiteral("Three"))), 0);     // newest on top
+    QCOMPARE(layout->indexOf(card(QStringLiteral("One"))), 2);
+
+    QPointer<NotificationDialog> two = card(QStringLiteral("Two"));
     QVERIFY(two);
-    two->findChild<QPushButton *>(QStringLiteral("pushButton"))->click();
+    two->findChild<QAbstractButton *>(QStringLiteral("dismissButton"))->click();
     pump(100);
     QVERIFY(two.isNull());
     QCOMPARE(cards().size(), m_initial + 2);
-
-    // the remaining cards fill grid positions 0..n-1 without a hole
-    auto grid = m_page->findChild<QGridLayout *>(QStringLiteral("gridLayoutMain"));
-    QVERIFY(grid);
-    QList<int> positions;
-    for (NotificationDialog *c : cards()) {
-        int r, col, rs, cs;
-        grid->getItemPosition(grid->indexOf(c), &r, &col, &rs, &cs);
-        positions << r * 3 + col;
-    }
-    std::sort(positions.begin(), positions.end());
-    for (int i = 0; i < positions.size(); ++i)
-        QCOMPARE(positions.at(i), i);
+    QCOMPARE(layout->indexOf(card(QStringLiteral("Three"))), 0);     // no gap left behind
+    QCOMPARE(layout->indexOf(card(QStringLiteral("One"))), 1);
 }
 
 void tst_MainWindow::lifetimeExpires()
@@ -137,6 +152,42 @@ void tst_MainWindow::lifetimeExpires()
     QCOMPARE(cards().size(), m_initial + 1);
     pump(800);
     QCOMPARE(cards().size(), m_initial);
+}
+
+void tst_MainWindow::badgeCountsNotifications()
+{
+    auto badge = m_window->findChild<QLabel *>(QStringLiteral("notificationsBadge"));
+    QVERIFY(badge);
+    notify(ModuleMsg("B", "1", "Uno", "x"));
+    notify(ModuleMsg("B", "2", "Dos", "x"));
+    QVERIFY(badge->isVisible());
+    QCOMPARE(badge->text(), QString::number(m_initial + 2));
+    card(QStringLiteral("Uno"))->close();
+    pump(100);
+    QCOMPARE(badge->text(), QString::number(m_initial + 1));
+}
+
+void tst_MainWindow::emptyStateAndDismissAll()
+{
+    auto empty = m_page->findChild<QWidget *>(QStringLiteral("emptyState"));
+    auto dismissAll = m_page->findChild<QPushButton *>(QStringLiteral("dismissAllButton"));
+    QVERIFY(empty && dismissAll);
+    notify(ModuleMsg("C", "1", "Uno", "x"));
+    notify(ModuleMsg("C", "2", "Dos", "x"));
+    QVERIFY(!empty->isVisible());
+    dismissAll->click();
+    pump(100);
+    QCOMPARE(cards().size(), 0);
+    QVERIFY(empty->isVisible());
+    QVERIFY(!dismissAll->isEnabled());
+    QVERIFY(!m_window->findChild<QLabel *>(QStringLiteral("notificationsBadge"))->isVisible());
+}
+
+void tst_MainWindow::sidebarMarksTheCurrentPage()
+{
+    auto avisos = m_window->findChild<QPushButton *>(QStringLiteral("notificationsButton"));
+    QVERIFY(avisos);
+    QVERIFY(avisos->isChecked());           // the notifications page is the start page
 }
 
 void tst_MainWindow::clockIs24Hour()

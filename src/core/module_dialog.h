@@ -4,16 +4,13 @@
 #include "loadedmodule.h"
 
 #include <QDialog>
-#include <QIcon>
 
 QT_BEGIN_NAMESPACE
-class QLabel;
-class QPushButton;
-class QTreeWidget;
-class QTreeWidgetItem;
+class QVBoxLayout;
 QT_END_NAMESPACE
 
-/// "About modules": lists the modules the core loaded and what each provides.
+/// "Módulos instalados": one card per module the core loaded, with what it
+/// provides and the file it came from.
 class ModuleDialog : public QDialog
 {
     Q_OBJECT
@@ -23,15 +20,7 @@ public:
                  QWidget *parent = nullptr);
 
 private:
-    void populateTreeWidget(const LoadedModule &module);
-    void addItems(QTreeWidgetItem *pluginItem, const QString &interfaceName,
-                  const QStringList &features);
-
-    QLabel *label = nullptr;
-    QTreeWidget *treeWidget = nullptr;
-    QPushButton *okButton = nullptr;
-    QIcon interfaceIcon;
-    QIcon featureIcon;
+    QWidget *moduleCard(const LoadedModule &module) const;
 };
 
 #endif // MODULE_DIALOG_H

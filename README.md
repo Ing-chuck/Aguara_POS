@@ -68,6 +68,44 @@ datos no se puede abrir). La eleccion se guarda en `%APPDATA%\Aguara\AguaraPOS\a
 * **Montos** en guaranies enteros (ISO 4217: PYG no tiene decimales), con IVA incluido.
   Ver `src/interfaces/money.h`.
 
+# Apariencia
+El tema esta en `aguara_interfaces.dll` (`src/interfaces/aguarastyle.h`), asi que el core y todos
+los modulos se ven igual:
+* Estilo Fusion, que se ve igual en Windows 7, 10 y 11.
+* Fuente Segoe UI.
+* Fondo claro, barra lateral oscura y un solo color de acento (oxido, el del aguara guazu) para la
+  accion principal, la seleccion y el foco.
+* Contraste de texto de al menos 4,5:1.
+
+Los colores salen de `AguaraStyle::color()`; el estilo esta en
+`src/interfaces/theme/style/aguara.qss`.
+
+Un modulo **no define colores propios**: le da un *rol* a cada widget con
+`AguaraStyle::setRole(widget, AguaraStyle::Primary)`, o en Qt Designer con una propiedad dinamica
+`role` de tipo texto.
+
+| Rol | Para |
+|---|---|
+| `primary` | la accion principal de la pagina o del dialogo (una sola) |
+| `danger` | acciones que borran o dan de baja |
+| `flat` | botones sin borde (iconos) |
+| `title` / `subtitle` / `muted` / `section` | textos |
+| `error` / `warning` / `info` / `success` | carteles de aviso |
+| `pageHeader` (en un `QFrame`) | la franja blanca de arriba de cada pagina, con titulo y acciones |
+| `card` (en un `QFrame`) | una caja blanca con borde |
+
+* El boton por defecto de un dialogo ya se ve como `primary`.
+* `AguaraStyle::searchField(lineEdit)` arma una caja de busqueda.
+* `AguaraStyle::icon("box", color)` da los iconos del tema. Estan en
+  `src/interfaces/theme/icons`, son de linea y se pintan del color pedido.
+* En `moduleInfo()`, `info.iconName = "box"` hace que el core dibuje el icono del modulo con el
+  color de cada lugar: barra lateral, pestañas, dialogos. `"aguara"` (la cabeza del zorro) es el
+  icono generico que usan los modulos nuevos del wizard.
+* El inventario (`src/modules/inventory_manager`) sirve de ejemplo de pagina completa.
+
+Para instalar: ademas de las DLL de Qt habituales, el programa usa **Qt5Svg** y los plugins
+`imageformats/qsvg` e `iconengines/qsvgicon`, que `windeployqt` copia solo.
+
 # Registro y errores
 * El usuario ve mensajes cortos en español (`src/core/errors.h`).
 * El detalle tecnico, como errores de SQL, del driver o de los modulos, queda en el registro
@@ -114,4 +152,5 @@ Para utilizarlo, simplemente se debe extraer el contenido del rar dentro de una 
 Reiniciar Qt Creator. Luego, en el arbol del proyecto, clic derecho sobre el proyecto `modules` >
 **New Subproject...** > **AguaraPOS Module**: crea el modulo en `src/modules` y lo agrega a
 `modules.pro`. El wizard permite elegir si el modulo admite varias paginas abiertas a la vez y si
-usa productos (`ProductService`).
+usa productos (`ProductService`). La pagina generada ya trae el encabezado estandar (titulo,
+subtitulo y boton principal) y el icono generico del tema, sin imagenes propias.

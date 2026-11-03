@@ -39,6 +39,8 @@ private:
     static void fillNamedCombo(QComboBox *combo, const QList<NamedItem> &items);
     static void selectNamed(QComboBox *combo, qint64 id, const QString &name);
     void showModal();
+    void clearForm();
+    void updateMargin();
     bool readInput(Product *product);
 
     void reject() override;

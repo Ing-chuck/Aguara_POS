@@ -60,9 +60,9 @@ ModuleInfo ImportModule::moduleInfo() const {
     ModuleInfo info;
     info.id          = "import";
     info.name        = "Importar";
-    info.description = "Importa articulos desde archivos CSV";
+    info.description = "Importa artículos desde archivos CSV (por ejemplo, exportados de Excel)";
     info.version     = VERSION_STRING;
-    info.icon        = QIcon(":/import_module/images/icon.png");
+    info.iconName    = "import";    // theme icon (AguaraStyle::icon)
     return info;
 }
 
@@ -95,7 +95,7 @@ bool ImportModule::importFrom(const QString &filename)
 {
     QFile csv(filename);
     if (!csv.open(QIODevice::ReadOnly)) {
-        report(tr("Importacion fallida"), tr("No se pudo abrir %1").arg(filename), MsgPriority::PriorityHigh);
+        report(tr("Importación fallida"), tr("No se pudo abrir %1").arg(filename), MsgPriority::PriorityHigh);
         return false;
     }
     const QString text = Csv::decode(csv.readAll());
@@ -163,10 +163,10 @@ bool ImportModule::importFrom(const QString &filename)
             case Field::Ignored:     break;
             }
             if (!ok)
-                problems << tr("linea %1: valor invalido \"%2\"").arg(lineNumber).arg(value);
+                problems << tr("línea %1: valor inválido \"%2\"").arg(lineNumber).arg(value);
         }
         if (ok && (p.code.isEmpty() || p.description.isEmpty())) {
-            problems << tr("linea %1: falta codigo o descripcion").arg(lineNumber);
+            problems << tr("línea %1: falta código o descripción").arg(lineNumber);
             ok = false;
         }
         if (ok)
@@ -175,19 +175,19 @@ bool ImportModule::importFrom(const QString &filename)
 
     int saved = 0;
     if (!products->importProducts(parsed, &saved)) {
-        report(tr("Importacion fallida"),
-               tr("%1\nNo se importo ningun articulo.").arg(products->lastError()),
+        report(tr("Importación fallida"),
+               tr("%1\nNo se importó ningún artículo.").arg(products->lastError()),
                MsgPriority::PriorityHigh);
         return false;
     }
 
-    QString summary = tr("%1 articulos importados desde %2.").arg(saved).arg(QFileInfo(filename).fileName());
+    QString summary = tr("%1 artículos importados desde %2.").arg(saved).arg(QFileInfo(filename).fileName());
     if (!problems.isEmpty()) {
-        summary += tr("\n%1 lineas omitidas:\n").arg(problems.size())
+        summary += tr("\n%1 líneas omitidas:\n").arg(problems.size())
                  + QStringList(problems.mid(0, 5)).join('\n')
                  + (problems.size() > 5 ? QStringLiteral("\n...") : QString());
     }
-    report(tr("Importacion terminada"), summary,
+    report(tr("Importación terminada"), summary,
            problems.isEmpty() ? MsgPriority::PriorityNormal : MsgPriority::PriorityHigh);
     return true;
 }

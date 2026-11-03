@@ -1,5 +1,0 @@
-<RCC>
-    <qresource prefix="/sales_module">
-        <file>images/icon.png</file>
-    </qresource>
-</RCC>

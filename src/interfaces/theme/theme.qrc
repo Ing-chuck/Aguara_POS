@@ -1,0 +1,34 @@
+<RCC>
+    <qresource prefix="/aguara">
+        <file>style/aguara.qss</file>
+        <file>icons/aguara.svg</file>
+        <file>icons/backup.svg</file>
+        <file>icons/bell.svg</file>
+        <file>icons/box.svg</file>
+        <file>icons/calendar.svg</file>
+        <file>icons/cart.svg</file>
+        <file>icons/chevron-down.svg</file>
+        <file>icons/chevron-up.svg</file>
+        <file>icons/close.svg</file>
+        <file>icons/danger.svg</file>
+        <file>icons/database.svg</file>
+        <file>icons/edit.svg</file>
+        <file>icons/help.svg</file>
+        <file>icons/import.svg</file>
+        <file>icons/info.svg</file>
+        <file>icons/logo.svg</file>
+        <file>icons/logout.svg</file>
+        <file>icons/neutral.svg</file>
+        <file>icons/plus.svg</file>
+        <file>icons/puzzle.svg</file>
+        <file>icons/search.svg</file>
+        <file>icons/settings.svg</file>
+        <file>icons/success.svg</file>
+        <file>icons/trash.svg</file>
+        <file>icons/user.svg</file>
+        <file>icons/warning.svg</file>
+        <file>qss/chevron-down.svg</file>
+        <file>qss/chevron-up.svg</file>
+        <file>qss/close.svg</file>
+    </qresource>
+</RCC>

@@ -7,6 +7,7 @@
 #include <QList>
 #include <QString>
 #include <QtPlugin>
+#include <qnamespace.h>
 
 #include <optional>
 
@@ -49,6 +50,10 @@ struct Product {
     QDate   modified;       ///< set by the service on every save
     bool    active = true;
 };
+
+/// Data role of the product list: true when the article's stock is at or
+/// below its minimum (shown in red in the Stock column).
+constexpr int ProductLowStockRole = Qt::UserRole + 1;
 
 /// Column layout of the model returned by createProductTableModel().
 enum class ProductColumn : int {

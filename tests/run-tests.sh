@@ -18,6 +18,9 @@ BUILD="$(to_unix "${1:?usage: run-tests.sh <build dir> [results dir]}")"
 OUT="$(to_unix "${2:-$BUILD/test-results}")"
 QT_BIN="${QT_BIN:-$(dirname "$(command -v qmake)")}"
 mkdir -p "$OUT"
+# absolute paths: the suites run from tests/bin, so relative ones would point nowhere
+BUILD="$(cd "$BUILD" && pwd)" || { echo "no build folder $1"; exit 1; }
+OUT="$(cd "$OUT" && pwd)"
 # the suites need aguara_interfaces.dll (and libpq.dll) from bin/, and Qt's DLLs
 export PATH="$BUILD/bin:$(to_unix "$QT_BIN"):$PATH"
 

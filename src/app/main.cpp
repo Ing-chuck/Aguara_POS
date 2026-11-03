@@ -6,15 +6,24 @@
 #include "logging.h"
 #include "mainwindow.h"
 #include "sqlproductservice.h"
+#include <aguarastyle.h>
 #include <version.h>
 
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QDir>
+#include <QLibraryInfo>
+#include <QLocale>
 #include <QSysInfo>
+#include <QTranslator>
 
 int main(int argc, char *argv[])
 {
+    // Sharp text and icons at 125 % / 150 % Windows scaling
+    QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+
     QApplication a(argc, argv);
     // Determines the data folder: %APPDATA%\Aguara\AguaraPOS
     QCoreApplication::setOrganizationName(QStringLiteral("Aguara"));
@@ -30,6 +39,20 @@ int main(int argc, char *argv[])
     AguaraLog::install(AguaraLog::defaultDirectory(), debugLog);
     qCInfo(lcApp).noquote() << "AguaraPOS" << VERSION_STRING << "starting | Qt" << qVersion()
                             << "|" << QSysInfo::prettyProductName() << QSysInfo::currentCpuArchitecture();
+
+    // Spanish everywhere: Qt's own texts (Sí/No/Cancelar, file dialogs, the
+    // calendar) and number/date formats, whatever the Windows language.
+    QLocale::setDefault(QLocale(QLocale::Spanish, QLocale::Paraguay));
+    QTranslator qtTranslator;
+    const QString qtTranslations = QLibraryInfo::location(QLibraryInfo::TranslationsPath);
+    if (qtTranslator.load(QStringLiteral("qtbase_es"), qtTranslations)
+        || qtTranslator.load(QStringLiteral("qtbase_es"), QCoreApplication::applicationDirPath() + QStringLiteral("/translations")))
+        a.installTranslator(&qtTranslator);
+    else
+        qCWarning(lcApp) << "Qt Spanish translation (qtbase_es.qm) not found: standard buttons stay in English";
+
+    // The look: before any window (including the database settings dialog)
+    AguaraStyle::apply(&a);
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("AguaraPOS"));
@@ -107,6 +130,11 @@ int main(int argc, char *argv[])
     const bool backedUp = backup.automatic(Backup::defaultDirectory(), 14, 24 * 3600);
 
     MainWindow w(&host, &backup);
+    const bool server = database.backend() == DatabaseSettings::PostgreSQL;
+    w.setDataSource(server ? QCoreApplication::translate("main", "Servidor %1").arg(settings.host)
+                           : QCoreApplication::translate("main", "Datos en este equipo"), server);
+    QObject::connect(&connection, &ConnectionMonitor::connectionLost, &w, [&w]() { w.setConnected(false); });
+    QObject::connect(&connection, &ConnectionMonitor::reconnected, &w, [&w]() { w.setConnected(true); });
     w.show();
 
     if (!backedUp) {    // after the window exists: it shows the notification

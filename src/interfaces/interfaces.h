@@ -3,6 +3,7 @@
 
 #include "aguara_global.h"
 #include "aguarahost.h"
+#include "aguarastyle.h"
 #include "messages.h"
 #include "money.h"
 #include "productservice.h"
@@ -51,7 +52,11 @@ struct ModuleInfo {
     QString name;         ///< user-visible name
     QString description;  ///< one line shown in "About modules"
     QString version;      ///< the module's own version, for display
-    QIcon   icon;
+    QIcon   icon;         ///< used when iconName is empty
+    /// A theme icon (AguaraStyle::icon(), e.g. "box"). Preferred over `icon`:
+    /// the core draws it in the right color for each place (dark sidebar,
+    /// light tabs and dialogs).
+    QString iconName;
 };
 
 /// Implemented by every module. The core rejects plugins that don't.
@@ -104,7 +109,7 @@ signals:
     void notify(const ModuleMsg &msg);
 };
 
-#define AguaraModuleInterface_iid    "org.AguaraPOS.ModuleInterface/1.0"
+#define AguaraModuleInterface_iid    "org.AguaraPOS.ModuleInterface/1.1"   // 1.1: ModuleInfo::iconName
 #define WidgetModuleInterface_iid    "org.AguaraPOS.WidgetModuleInterface/1.0"
 #define ImportArticlesInterface_iid  "org.AguaraPOS.ImportArticlesInterface/1.0"
 

@@ -6,5 +6,4 @@ HEADERS    = import_module.h \
              csvreader.h
 SOURCES    = import_module.cpp \
              csvreader.cpp
-RESOURCES += resources.qrc
 DISTFILES += import_module.json

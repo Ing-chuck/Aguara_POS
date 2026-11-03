@@ -1,12 +1,25 @@
 #include "notificationdialog.h"
 #include "ui_notificationdialog.h"
 
+#include <aguarastyle.h>
+
+#include <QHash>
+#include <QStyle>
+#include <QTime>
+
+using AguaraStyle::Color;
+
 NotificationDialog::NotificationDialog(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::NotificationDialog)
 {
     ui->setupUi(this);
     setAttribute(Qt::WA_DeleteOnClose);     // Dismiss (wired to close() in the .ui) deletes the card
+    setWindowFlags(Qt::Widget);             // a card inside the page, not a window
+
+    ui->dismissButton->setIcon(AguaraStyle::icon(QStringLiteral("close"), AguaraStyle::color(Color::TextMuted)));
+    ui->dismissButton->setIconSize(QSize(16, 16));
+    ui->dismissButton->setCursor(Qt::PointingHandCursor);
 
     lifetimeTimer.setSingleShot(true);
     connect(&lifetimeTimer, &QTimer::timeout, this, &QWidget::close);
@@ -21,11 +34,12 @@ NotificationDialog::~NotificationDialog()
 
 void NotificationDialog::setMessage(const ModuleMsg &msg)
 {
-    setTitle(msg.senderName.isEmpty() ? msg.title
-                                      : QStringLiteral("%1 - %2").arg(msg.senderName, msg.title));
+    sender = msg.senderName;
+    setTitle(msg.title);
     setMsg(msg.message);
     setPriority(msg.priority);
     setLifetime(msg.lifetime_seconds);
+    updateMeta();
 }
 
 void NotificationDialog::setTitle(QString title) {
@@ -34,11 +48,34 @@ void NotificationDialog::setTitle(QString title) {
 
 void NotificationDialog::setMsg(QString msg) {
     ui->message->setText(msg);
+    ui->message->setVisible(!msg.isEmpty());
+}
+
+QString NotificationDialog::levelFor(MsgPriority priority)
+{
+    switch (priority) {
+    case PriorityVeryHigh: return QStringLiteral("danger");
+    case PriorityHigh:     return QStringLiteral("warning");
+    case PriorityNormal:   return QStringLiteral("info");
+    case PriorityLow:      return QStringLiteral("success");
+    case PriorityVeryLow:  return QStringLiteral("neutral");
+    }
+    return QStringLiteral("neutral");
 }
 
 void NotificationDialog::setPriority(MsgPriority pri) {
     priority = pri;
-    changeColor();
+    const QString level = levelFor(pri);
+    static const QHash<QString, Color> colors = {
+        { QStringLiteral("danger"), Color::Danger },   { QStringLiteral("warning"), Color::Warning },
+        { QStringLiteral("info"), Color::Info },       { QStringLiteral("success"), Color::Success },
+        { QStringLiteral("neutral"), Color::Neutral },
+    };
+    ui->levelIcon->setPixmap(AguaraStyle::icon(level, AguaraStyle::color(colors.value(level))).pixmap(22, 22));
+    setProperty("level", level);
+    style()->unpolish(this);
+    style()->polish(this);
+    update();
 }
 
 void NotificationDialog::setLifetime(double seconds) {
@@ -48,15 +85,9 @@ void NotificationDialog::setLifetime(double seconds) {
         lifetimeTimer.stop();
 }
 
-void NotificationDialog::changeColor() {
-    // Scoped to the card itself, so the button and labels keep their own style
-    QString color;
-    switch (priority) {
-    case PriorityVeryLow:  color = "rgb(170, 170, 170)"; break;  // Grey
-    case PriorityLow:      color = "rgb(0, 150, 0)";     break;  // Green
-    case PriorityNormal:   color = "rgb(255, 150, 0)";   break;  // Orange
-    case PriorityHigh:     color = "rgb(255, 255, 0)";   break;  // Yellow
-    case PriorityVeryHigh: color = "rgb(255, 0, 0)";     break;  // Red
-    }
-    this->setStyleSheet(QStringLiteral("NotificationDialog { background: %1; }").arg(color));
+/// "Inventario · 15:42": who sent it and when it last changed
+void NotificationDialog::updateMeta()
+{
+    const QString time = QTime::currentTime().toString(QStringLiteral("HH:mm"));
+    ui->meta->setText(sender.isEmpty() ? time : QStringLiteral("%1 · %2").arg(sender, time));
 }

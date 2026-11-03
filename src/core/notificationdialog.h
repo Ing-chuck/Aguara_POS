@@ -10,7 +10,8 @@ namespace Ui {
 class NotificationDialog;
 }
 
-/// One notification card on the notifications page.
+/// One notification card on the notifications page: an icon and a colored
+/// stripe for the priority, title, sender and time, and the message.
 /// Deletes itself when dismissed or when its lifetime runs out.
 class NotificationDialog : public QDialog
 {
@@ -20,7 +21,8 @@ public:
     explicit NotificationDialog(QWidget *parent = nullptr);
     ~NotificationDialog();
 
-    /// Show this message (title, text, priority colour, lifetime).
+    /// Show this message (title, text, priority, lifetime). Calling it again
+    /// (same sender+id) updates the card and its time.
     void setMessage(const ModuleMsg &msg);
 
     void setTitle(QString title);
@@ -29,12 +31,16 @@ public:
     /// Close after this many seconds; negative = until dismissed.
     void setLifetime(double seconds);
 
+    /// "danger", "warning", "info", "success" or "neutral"
+    static QString levelFor(MsgPriority priority);
+
 private:
-    MsgPriority priority;
+    MsgPriority priority = PriorityNormal;
+    QString sender;
     Ui::NotificationDialog *ui;
     QTimer lifetimeTimer;
 
-    void changeColor();
+    void updateMeta();
 };
 
 #endif // NOTIFICATIONDIALOG_H

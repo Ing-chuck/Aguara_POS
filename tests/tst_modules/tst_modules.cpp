@@ -101,8 +101,8 @@ void tst_Modules::importMergesWithExistingArticles()
         "2002;YERBA 500G;KURUPI;12.000;5\n"
         "3003;SIN PRECIO;;abc;10\n").toUtf8());
     QVERIFY(importer->importFrom(csv));
-    QVERIFY2(m_lastNote.contains(QStringLiteral("2 articulos importados")), qPrintable(m_lastNote));
-    QVERIFY2(m_lastNote.contains(QStringLiteral("linea 4")), qPrintable(m_lastNote));     // the bad row is reported
+    QVERIFY2(m_lastNote.contains(QString::fromUtf8("2 artículos importados")), qPrintable(m_lastNote));
+    QVERIFY2(m_lastNote.contains(QString::fromUtf8("línea 4")), qPrintable(m_lastNote));     // the bad row is reported
 
     const auto updated = m_core.products->product(QStringLiteral("777"));
     QCOMPARE(updated->price, Money(16500));

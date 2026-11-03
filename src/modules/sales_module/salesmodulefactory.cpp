@@ -14,7 +14,7 @@ ModuleInfo SalesModuleFactory::moduleInfo() const
     info.name        = "Ventas";
     info.description = "Registro de ventas";
     info.version     = VERSION_STRING;
-    info.icon        = QIcon(":/sales_module/images/icon.png");
+    info.iconName    = "cart";      // theme icon (AguaraStyle::icon)
     return info;
 }
 

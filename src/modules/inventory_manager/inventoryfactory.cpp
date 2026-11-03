@@ -11,10 +11,10 @@ ModuleInfo InventoryFactory::moduleInfo() const
 {
     ModuleInfo info;
     info.id          = "inventory";
-    info.name        = "Inventory Manager";
-    info.description = "Alta, baja y modificacion de articulos";
+    info.name        = "Inventario";
+    info.description = "Alta, baja y modificación de artículos, precios y stock";
     info.version     = VERSION_STRING;
-    info.icon        = QIcon(":/inventory_manager/images/icon.png");
+    info.iconName    = "box";       // theme icon (AguaraStyle::icon)
     return info;
 }
 

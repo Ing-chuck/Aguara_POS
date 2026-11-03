@@ -3,7 +3,6 @@
 #include "backup.h"
 #include "corehost.h"
 #include "logging.h"
-#include "ui_pagecero.h"
 #include "module_dialog.h"
 #include "notificationdialog.h"
 #include <version.h>
@@ -11,24 +10,45 @@
 #include <QAction>
 #include <QApplication>
 #include <QDateTime>
-#include <QDebug>
+#include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFileInfo>
-#include <QLibrary>
-#include <QPluginLoader>
+#include <QFormLayout>
+#include <QHBoxLayout>
 #include <QKeySequence>
+#include <QLibrary>
+#include <QLocale>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
-#include <QTableView>
-#include <QTabWidget>
-#include <QTimer>
-#include <QToolButton>
-#include <QScreen>
+#include <QPluginLoader>
+#include <QPushButton>
 #include <QShortcut>
 #include <QStandardPaths>
+#include <QTabBar>
+#include <QTabWidget>
+#include <QVBoxLayout>
 
+using AguaraStyle::Color;
 
+namespace {
+
+/// An icon for the dark sidebar: light when idle, white when selected.
+QIcon sidebarIcon(const QString &name)
+{
+    const QIcon idle = AguaraStyle::icon(name, AguaraStyle::color(Color::SidebarText));
+    const QIcon active = AguaraStyle::icon(name, QColor(Qt::white));
+    QIcon result;
+    for (int size : { 16, 20, 24, 32, 40 }) {
+        result.addPixmap(idle.pixmap(size, size), QIcon::Normal, QIcon::Off);
+        result.addPixmap(active.pixmap(size, size), QIcon::Normal, QIcon::On);
+        result.addPixmap(active.pixmap(size, size), QIcon::Active, QIcon::Off);
+        result.addPixmap(active.pixmap(size, size), QIcon::Active, QIcon::On);
+    }
+    return result;
+}
+
+} // namespace
 
 MainWindow::MainWindow(CoreHost *host, Backup *backup, QWidget *parent)
     : QMainWindow(parent)
@@ -37,12 +57,14 @@ MainWindow::MainWindow(CoreHost *host, Backup *backup, QWidget *parent)
     , backup(backup)
 {
     ui->setupUi(this);
-    ui->dockWidget->setTitleBarWidget(new QWidget);
 
     prepareWindow();
+    buildSidebar();
+    buildStatusBar();
     setUpPageCero();
 
-    connect(ui->tabWidget, SIGNAL(tabCloseRequested(int)), this, SLOT(onTabCloseRequested(int)));
+    connect(ui->tabWidget, &QTabWidget::tabCloseRequested, this, &MainWindow::onTabCloseRequested);
+    connect(ui->tabWidget, &QTabWidget::currentChanged, this, &MainWindow::syncNavigation);
 
     createActions();
     createMenus();
@@ -51,9 +73,7 @@ MainWindow::MainWindow(CoreHost *host, Backup *backup, QWidget *parent)
     // modules without a page (e.g. importers) notify through the host
     connect(host, &CoreHost::notificationRequested, this, &MainWindow::onModuleNotification);
     loadPlugins();
-    //loadTable();
-
-    //QTimer::singleShot(500, this, &MainWindow::aboutModules);
+    syncNavigation();
 }
 
 MainWindow::~MainWindow()
@@ -67,41 +87,159 @@ MainWindow::~MainWindow()
         disconnect(page, nullptr, this, nullptr);
         delete page;
     }
+    disconnect(&pageCero, nullptr, this, nullptr);
     delete ui;
 }
 
-// setup all window flags and other properties
-void MainWindow::prepareWindow() {
-    setWindowTitle("AguaraPOS " VERSION_STRING);
-
-    // set window flags
-    //this->setWindowFlags(Qt::FramelessWindowHint);
-
-    // make window fullscreen
-    QMainWindow::showMaximized();
-    ui->centralwidget->showMaximized();
-    ui->statusbar->setSizeGripEnabled(false);
-    //ui->sideBar->setHidden(true);
-
-    // set status bar labels
-    userLabel.setText("user: x");
-
-    // add labels to status bar
-    ui->statusbar->addWidget(&blankLabel);
-    ui->statusbar->addWidget(&userLabel);
-    ui->statusbar->addPermanentWidget(&timeLabel);
-    ui->statusbar->addPermanentWidget(&dateLabel);
-    dateTimeUpdate();
-
-    //set the timer to update the date and time
-    dateTimeTimer.start(1000); //Send the signal of timeout every 1000ms
-    connect(&dateTimeTimer, SIGNAL(timeout()),this,SLOT(dateTimeUpdate()));
+void MainWindow::prepareWindow()
+{
+    setWindowTitle(QStringLiteral("AguaraPOS"));
+    setMinimumSize(1024, 640);      // the smallest common POS screen is 1024x768
+    showMaximized();
 }
 
-void MainWindow::setUpPageCero() {
-    addTab(&pageCero, QIcon(), tr("Avisos"));
-    ui->tabWidget->tabBar()->setTabButton(0, QTabBar::RightSide, 0);
-    ui->tabWidget->tabBar()->setTabButton(0, QTabBar::LeftSide, 0);
+/// Brand, the modules' buttons (added by makeButton), then Avisos and Módulos.
+void MainWindow::buildSidebar()
+{
+    auto layout = qobject_cast<QVBoxLayout *>(ui->sideBar->layout());
+    ui->sideBar->setAttribute(Qt::WA_StyledBackground);
+
+    auto brand = new QWidget;
+    auto brandLayout = new QHBoxLayout(brand);
+    brandLayout->setContentsMargins(18, 18, 14, 18);
+    brandLayout->setSpacing(10);
+    auto logo = new QLabel;
+    logo->setPixmap(AguaraStyle::logo().pixmap(36, 36));
+    brandLayout->addWidget(logo);
+    auto names = new QVBoxLayout;
+    names->setSpacing(0);
+    auto brandName = new QLabel(QStringLiteral("AguaraPOS"));
+    brandName->setObjectName(QStringLiteral("brandName"));
+    auto tagline = new QLabel(tr("Punto de venta"));
+    tagline->setObjectName(QStringLiteral("brandTagline"));
+    names->addWidget(brandName);
+    names->addWidget(tagline);
+    brandLayout->addLayout(names);
+    brandLayout->addStretch();
+    layout->addWidget(brand);
+
+    auto section = new QLabel(tr("MÓDULOS"));
+    AguaraStyle::setRole(section, "navSection");
+    layout->addWidget(section);
+
+    moduleNav = new QVBoxLayout;
+    moduleNav->setSpacing(1);
+    layout->addLayout(moduleNav);
+    noModulesLabel = new QLabel(tr("Ningún módulo con página instalado."));
+    noModulesLabel->setWordWrap(true);
+    noModulesLabel->setContentsMargins(18, 4, 18, 4);
+    noModulesLabel->setStyleSheet(QStringLiteral("color: %1;").arg(AguaraStyle::color(Color::SidebarMuted).name()));
+    moduleNav->addWidget(noModulesLabel);
+
+    layout->addStretch();
+
+    notificationsButton = makeNavButton(sidebarIcon(QStringLiteral("bell")), tr("Avisos"));
+    notificationsButton->setObjectName(QStringLiteral("notificationsButton"));
+    notificationsButton->setToolTip(tr("Avisos (F1)"));
+    auto badgeLayout = new QHBoxLayout(notificationsButton);
+    badgeLayout->setContentsMargins(0, 0, 14, 0);
+    badgeLayout->addStretch();
+    notificationsBadge = new QLabel;
+    notificationsBadge->setObjectName(QStringLiteral("notificationsBadge"));
+    notificationsBadge->setAlignment(Qt::AlignCenter);
+    notificationsBadge->setFixedHeight(18);
+    notificationsBadge->setAttribute(Qt::WA_TransparentForMouseEvents);
+    AguaraStyle::setRole(notificationsBadge, "badge");
+    notificationsBadge->hide();
+    badgeLayout->addWidget(notificationsBadge);
+    connect(notificationsButton, &QPushButton::clicked, this, [this]() { addTab(&pageCero); syncNavigation(); });
+    layout->addWidget(notificationsButton);
+
+    auto modulesButton = makeNavButton(sidebarIcon(QStringLiteral("puzzle")), tr("Módulos instalados"));
+    modulesButton->setCheckable(false);
+    connect(modulesButton, &QPushButton::clicked, this, &MainWindow::aboutModules);
+    layout->addWidget(modulesButton);
+
+    connect(&pageCero, &PageCero::countChanged, this, [this](int count) {
+        notificationsBadge->setVisible(count > 0);
+        notificationsBadge->setText(count > 99 ? QStringLiteral("99+") : QString::number(count));
+    });
+}
+
+QPushButton *MainWindow::makeNavButton(const QIcon &icon, const QString &text)
+{
+    auto button = new QPushButton(icon, text, ui->sideBar);
+    AguaraStyle::setRole(button, "nav");
+    button->setCheckable(true);
+    button->setIconSize(QSize(20, 20));
+    button->setCursor(Qt::PointingHandCursor);
+    button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    button->setMinimumHeight(40);
+    button->setFocusPolicy(Qt::TabFocus);
+    return button;
+}
+
+void MainWindow::buildStatusBar()
+{
+    auto data = new QWidget;
+    auto dataLayout = new QHBoxLayout(data);
+    dataLayout->setContentsMargins(8, 0, 0, 0);
+    dataLayout->setSpacing(0);
+    dataIcon = new QLabel;
+    dataIcon->setPixmap(AguaraStyle::icon(QStringLiteral("database"), AguaraStyle::color(Color::TextMuted)).pixmap(16, 16));
+    dataLabel = new QLabel(tr("Sin datos"));
+    connectionLabel = new QLabel;
+    connectionLabel->setObjectName(QStringLiteral("connectionLabel"));
+    connectionLabel->hide();
+    dataLayout->addWidget(dataIcon);
+    dataLayout->addWidget(dataLabel);
+    dataLayout->addWidget(connectionLabel);
+    ui->statusbar->addWidget(data);
+
+    // The signed-in user arrives with phase 1 (users and permissions)
+    auto user = new QWidget;
+    auto userLayout = new QHBoxLayout(user);
+    userLayout->setContentsMargins(0, 0, 0, 0);
+    userLayout->setSpacing(0);
+    auto userIcon = new QLabel;
+    userIcon->setPixmap(AguaraStyle::icon(QStringLiteral("user"), AguaraStyle::color(Color::TextMuted)).pixmap(16, 16));
+    userLabel = new QLabel(tr("Sin sesión"));
+    userLayout->addWidget(userIcon);
+    userLayout->addWidget(userLabel);
+    ui->statusbar->addPermanentWidget(user);
+
+    timeLabel.setObjectName(QStringLiteral("clock"));
+    timeLabel.setStyleSheet(QStringLiteral("font-weight: 600; color: %1;").arg(AguaraStyle::color(Color::Text).name()));
+    ui->statusbar->addPermanentWidget(&dateLabel);
+    ui->statusbar->addPermanentWidget(&timeLabel);
+    dateTimeUpdate();
+    connect(&dateTimeTimer, &QTimer::timeout, this, &MainWindow::dateTimeUpdate);
+    dateTimeTimer.start(1000);
+}
+
+void MainWindow::setDataSource(const QString &description, bool server)
+{
+    dataDescription = description;
+    dataLabel->setText(description);
+    dataLabel->setToolTip(description);
+    connectionLabel->setVisible(server);
+    if (server)
+        setConnected(true);
+}
+
+void MainWindow::setConnected(bool connected)
+{
+    const QColor c = AguaraStyle::color(connected ? Color::Success : Color::Danger);
+    connectionLabel->setText(QStringLiteral("<span style='color:%1'>&#9679;</span> %2")
+                                 .arg(c.name(), connected ? tr("Conectado") : tr("Sin conexión")));
+}
+
+void MainWindow::setUpPageCero()
+{
+    addTab(&pageCero, AguaraStyle::icon(QStringLiteral("bell"), AguaraStyle::color(Color::TextMuted)), tr("Avisos"));
+    ui->tabWidget->tabBar()->setTabButton(0, QTabBar::RightSide, nullptr);
+    ui->tabWidget->tabBar()->setTabButton(0, QTabBar::LeftSide, nullptr);
+    ui->tabWidget->setTabBarAutoHide(true);     // only Avisos open: no tab bar
 }
 
 /// Import articles from a file. With `only` set, offer only that module's
@@ -170,11 +308,53 @@ void MainWindow::backupNow()
 
 void MainWindow::about()
 {
-    QMessageBox::about(this, tr("Acerca de AguaraPOS"),
-        tr("<b>AguaraPOS %1</b><br>Sistema de punto de venta.<br><br>"
-           "Registro del programa:<br>%2")
-            .arg(QStringLiteral(VERSION_STRING),
-                 QDir::toNativeSeparators(AguaraLog::filePath()).toHtmlEscaped()));
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Acerca de AguaraPOS"));
+    auto layout = new QVBoxLayout(&dialog);
+    layout->setContentsMargins(28, 24, 28, 20);
+    layout->setSpacing(16);
+
+    auto top = new QHBoxLayout;
+    top->setSpacing(16);
+    auto logo = new QLabel;
+    logo->setPixmap(AguaraStyle::logo().pixmap(64, 64));
+    top->addWidget(logo, 0, Qt::AlignTop);
+    auto names = new QVBoxLayout;
+    names->setSpacing(2);
+    auto title = new QLabel(QStringLiteral("AguaraPOS"));
+    AguaraStyle::setRole(title, AguaraStyle::Title);
+    auto subtitle = new QLabel(tr("Sistema de punto de venta · versión %1").arg(QStringLiteral(VERSION_STRING)));
+    AguaraStyle::setRole(subtitle, AguaraStyle::Subtitle);
+    names->addWidget(title);
+    names->addWidget(subtitle);
+    names->addStretch();
+    top->addLayout(names, 1);
+    layout->addLayout(top);
+
+    auto details = new QFormLayout;
+    details->setHorizontalSpacing(14);
+    details->setVerticalSpacing(6);
+    auto detail = [&](const QString &label, const QString &value) {
+        auto l = new QLabel(label);
+        AguaraStyle::setRole(l, AguaraStyle::Muted);
+        auto v = new QLabel(value);
+        v->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        v->setWordWrap(true);
+        details->addRow(l, v);
+    };
+    detail(tr("Datos"), dataDescription.isEmpty() ? tr("(sin datos)") : dataDescription);
+    detail(tr("Registro"), QDir::toNativeSeparators(AguaraLog::filePath()));
+    detail(tr("Módulos"), QString::number(modules.size()));
+    detail(tr("Qt"), QString::fromLatin1(qVersion()));
+    layout->addLayout(details);
+
+    auto buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+    buttons->button(QDialogButtonBox::Close)->setText(tr("Cerrar"));
+    buttons->button(QDialogButtonBox::Close)->setDefault(true);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    dialog.setMinimumWidth(520);
+    dialog.exec();
 }
 
 void MainWindow::aboutModules()
@@ -186,24 +366,24 @@ void MainWindow::aboutModules()
 void MainWindow::createActions()
 {
     // Ctrl+I, not Ctrl+N: "new" belongs to the open page (e.g. a new article).
-    importAct = new QAction(tr("&Importar artículos..."), this);
+    importAct = new QAction(AguaraStyle::icon(QStringLiteral("import")), tr("&Importar artículos..."), this);
     importAct->setObjectName(QStringLiteral("importAction"));
     importAct->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_I));
     importAct->setEnabled(false);               // until an import module loads
     connect(importAct, &QAction::triggered, this, [this]() { Import(); });
 
-    backupAct = new QAction(tr("&Copia de seguridad..."), this);
+    backupAct = new QAction(AguaraStyle::icon(QStringLiteral("backup")), tr("&Copia de seguridad..."), this);
     backupAct->setObjectName(QStringLiteral("backupAction"));
     connect(backupAct, &QAction::triggered, this, &MainWindow::backupNow);
 
-    quitAct = new QAction(tr("&Salir"), this);
+    quitAct = new QAction(AguaraStyle::icon(QStringLiteral("logout")), tr("&Salir"), this);
     quitAct->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Q));
     connect(quitAct, &QAction::triggered, this, &QWidget::close);
 
-    aboutAct = new QAction(tr("&Acerca de AguaraPOS"), this);
+    aboutAct = new QAction(AguaraStyle::icon(QStringLiteral("info")), tr("&Acerca de AguaraPOS"), this);
     connect(aboutAct, &QAction::triggered, this, &MainWindow::about);
 
-    aboutModulesAct = new QAction(tr("&Módulos instalados..."), this);
+    aboutModulesAct = new QAction(AguaraStyle::icon(QStringLiteral("puzzle")), tr("&Módulos instalados..."), this);
     connect(aboutModulesAct, &QAction::triggered, this, &MainWindow::aboutModules);
 }
 
@@ -217,8 +397,9 @@ void MainWindow::createMenus()
     fileMenu->addAction(quitAct);
 
     helpMenu = menuBar()->addMenu(tr("A&yuda"));
-    helpMenu->addAction(aboutAct);
     helpMenu->addAction(aboutModulesAct);
+    helpMenu->addSeparator();
+    helpMenu->addAction(aboutAct);
 }
 
 /// Keyboard: Ctrl+1..9 open the modules in sidebar order, Ctrl+W closes the
@@ -311,6 +492,7 @@ void MainWindow::loadPlugins()
         loaded.widgets  = qobject_cast<WidgetModuleInterface *>(plugin);
         loaded.importer = qobject_cast<ImportArticlesInterface *>(plugin);
         modules.append(loaded);
+        moduleButtons.append(nullptr);
         qCInfo(lcModules) << "Loaded module" << fileName << loaded.info.id << loaded.info.version;
 
         if (loaded.importer)
@@ -320,7 +502,18 @@ void MainWindow::loadPlugins()
     }
 }
 
-/// Add an "Import from" menu entry for a module that can import articles.
+/// The module's theme icon in `color`, or its own icon.
+QIcon MainWindow::moduleIcon(const LoadedModule &module, const QColor &color) const
+{
+    if (!module.info.iconName.isEmpty()) {
+        const QIcon themed = AguaraStyle::icon(module.info.iconName, color);
+        if (!themed.isNull())
+            return themed;
+    }
+    return module.info.icon;
+}
+
+/// Add an "Importar desde" menu entry for a module that can import articles.
 void MainWindow::addImportMenuEntry(const LoadedModule &module)
 {
     importAct->setEnabled(true);
@@ -328,12 +521,13 @@ void MainWindow::addImportMenuEntry(const LoadedModule &module)
     // if this is the first import module, add the submenu
     if (importMenu == nullptr) {
         importMenu = new QMenu(tr("Importar &desde"), this);
+        importMenu->setIcon(AguaraStyle::icon(QStringLiteral("import")));
         fileMenu->insertMenu(backupAct, importMenu);
     }
 
     const QString text = QString("%1 (%2)").arg(module.info.name,
                                                 module.importer->fileTypes().join(", "));
-    auto action = new QAction(module.info.icon, text, this);
+    auto action = new QAction(moduleIcon(module, AguaraStyle::color(Color::Text)), text, this);
     ImportArticlesInterface *importer = module.importer;
     connect(action, &QAction::triggered, this, [this, importer]() { Import(importer); });
     importMenu->addAction(action);
@@ -367,36 +561,53 @@ void MainWindow::onModuleNotification(ModuleMsg msg) {
 void MainWindow::makeButton(int moduleIndex) {
     const LoadedModule &module = modules.at(moduleIndex);
 
-    QToolButton *button = new QToolButton(ui->sideBar);
-    QAction *act = new QAction(module.info.icon, module.info.name, button);
-    act->setIconVisibleInMenu(false);
-    button->setDefaultAction(act);
-    button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-    moduleButtonList.append(button);
-    if (moduleButtonList.size() <= 9)
-        button->setToolTip(tr("%1 (Ctrl+%2)").arg(module.info.name).arg(moduleButtonList.size()));
-    addToSidebar(button);
+    QIcon icon = module.info.icon;
+    if (!module.info.iconName.isEmpty())
+        icon = sidebarIcon(module.info.iconName);
+    QPushButton *button = makeNavButton(icon, module.info.name);
+    moduleButtons[moduleIndex] = button;
 
-    connect(act, &QAction::triggered, this, [this, moduleIndex]() { openModulePage(moduleIndex); });
+    int position = 0;
+    for (QPushButton *b : qAsConst(moduleButtons))
+        position += b ? 1 : 0;
+    button->setToolTip(position <= 9 ? tr("%1 (Ctrl+%2)").arg(module.info.name).arg(position)
+                                     : module.info.name);
+    noModulesLabel->hide();
+    moduleNav->addWidget(button);
+
+    connect(button, &QPushButton::clicked, this, [this, moduleIndex]() {
+        openModulePage(moduleIndex);
+        syncNavigation();
+    });
 }
 
-void MainWindow::addToSidebar(QToolButton *button) {
-    ui->sideBar->layout()->addWidget(button);
+/// The sidebar marks the module whose page is shown (or Avisos).
+void MainWindow::syncNavigation()
+{
+    QWidget *current = ui->tabWidget->currentWidget();
+    const int module = pageModule.value(current, -1);
+    for (int i = 0; i < moduleButtons.size(); ++i) {
+        if (moduleButtons.at(i))
+            moduleButtons.at(i)->setChecked(i == module);
+    }
+    if (notificationsButton)
+        notificationsButton->setChecked(current == &pageCero);
 }
 
 void MainWindow::dateTimeUpdate() {
-    QDateTime current_time = QDateTime::currentDateTime();
-    QString datestr = current_time.toString( "dd/MM/yyyy"); //Set the format of the display
+    const QDateTime now = QDateTime::currentDateTime();
     // 24-hour "21:05": two-digit minutes, and no AM/PM text, which comes from
     // the system locale and is empty on some Spanish Windows installs
-    QString timestr = current_time.toString( "HH:mm");
-    dateLabel.setText(datestr); //Set the text content of the label as time
-    timeLabel.setText(timestr);
+    timeLabel.setText(now.toString(QStringLiteral("HH:mm")));
+    // "lunes 3 nov." in Spanish, whatever the Windows language
+    dateLabel.setText(QLocale(QLocale::Spanish, QLocale::Paraguay).toString(now.date(), QStringLiteral("dddd d MMM")));
 }
 
 /// Show a module's page: re-focus the open one for single-instance modules,
 /// otherwise create a new page. The tab widget owns the page from here on.
 void MainWindow::openModulePage(int moduleIndex) {
+    if (moduleIndex < 0 || moduleIndex >= modules.size() || !modules.at(moduleIndex).widgets)
+        return;                     // not a module with a page
     LoadedModule &module = modules[moduleIndex];
     const bool multi = module.widgets->allowsMultipleInstances();
 
@@ -420,7 +631,9 @@ void MainWindow::openModulePage(int moduleIndex) {
 
     if (!multi)
         module.openPage = page;
-    addTab(page, module.info.icon, module.info.name);
+    pageModule.insert(page, moduleIndex);
+    addTab(page, moduleIcon(module, AguaraStyle::color(Color::TextMuted)), module.info.name);
+    page->setFocus();       // pages put the cursor where work starts (e.g. search)
 }
 
 void MainWindow::addTab(QWidget* widget, QIcon ico, QString label) {
@@ -448,7 +661,7 @@ void MainWindow::addTab(QWidget* widget, QIcon ico, QString label) {
 
 void MainWindow::onTabCloseRequested(int indx) {
     QWidget* page = ui->tabWidget->widget(indx);
-    if (page == &pageCero)      // the notifications page is permanent
+    if (!page || page == &pageCero)      // the notifications page is permanent
         return;
 
     ui->tabWidget->removeTab(indx);
@@ -456,5 +669,7 @@ void MainWindow::onTabCloseRequested(int indx) {
         if (module.openPage == page)
             module.openPage = nullptr;  // don't hand out a page about to be deleted
     }
+    pageModule.remove(page);
     page->deleteLater();
+    syncNavigation();
 }

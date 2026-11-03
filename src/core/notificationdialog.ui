@@ -6,84 +6,103 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>490</width>
-    <height>307</height>
+    <width>640</width>
+    <height>90</height>
    </rect>
   </property>
-  <property name="windowTitle">
-   <string>Dialog</string>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
   </property>
-  <property name="styleSheet">
-   <string notr="true">background:  rgb(255, 255, 0);</string>
-  </property>
-  <layout class="QVBoxLayout" name="verticalLayout">
-   <item>
-    <widget class="QWidget" name="topBar" native="true">
-     <layout class="QHBoxLayout" name="horizontalLayout">
-      <item>
-       <widget class="QLabel" name="title">
-        <property name="text">
-         <string>TextLabel</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <spacer name="horizontalSpacer">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>40</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pushButton">
-        <property name="text">
-         <string>Dismiss</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item>
-    <widget class="Line" name="line">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
+  <layout class="QHBoxLayout" name="cardLayout">
+   <property name="spacing">
+    <number>12</number>
+   </property>
+   <property name="leftMargin">
+    <number>14</number>
+   </property>
+   <property name="topMargin">
+    <number>12</number>
+   </property>
+   <property name="rightMargin">
+    <number>10</number>
+   </property>
+   <property name="bottomMargin">
+    <number>12</number>
+   </property>
+   <item alignment="Qt::AlignTop">
+    <widget class="QLabel" name="levelIcon">
+     <property name="minimumSize">
+      <size>
+       <width>22</width>
+       <height>22</height>
+      </size>
      </property>
     </widget>
    </item>
    <item>
-    <widget class="QScrollArea" name="scrollArea">
-     <property name="widgetResizable">
-      <bool>true</bool>
+    <layout class="QVBoxLayout" name="textLayout">
+     <property name="spacing">
+      <number>4</number>
      </property>
-     <widget class="QWidget" name="scrollAreaWidgetContents">
-      <property name="geometry">
-       <rect>
-        <x>0</x>
-        <y>0</y>
-        <width>470</width>
-        <height>231</height>
-       </rect>
-      </property>
-      <layout class="QVBoxLayout" name="verticalLayout_2">
+     <item>
+      <layout class="QHBoxLayout" name="headLayout">
+       <property name="spacing">
+        <number>10</number>
+       </property>
        <item>
-        <widget class="QLabel" name="message">
-         <property name="text">
-          <string>TextLabel</string>
+        <widget class="QLabel" name="title">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+           <horstretch>1</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
          </property>
-         <property name="scaledContents">
-          <bool>false</bool>
+         <property name="text">
+          <string notr="true">Title</string>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="meta">
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTop|Qt::AlignTrailing</set>
+         </property>
+         <property name="text">
+          <string notr="true">Aguara · 00:00</string>
          </property>
         </widget>
        </item>
       </layout>
-     </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="message">
+       <property name="text">
+        <string notr="true">Message</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+       <property name="textInteractionFlags">
+        <set>Qt::TextSelectableByMouse</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item alignment="Qt::AlignTop">
+    <widget class="QToolButton" name="dismissButton">
+     <property name="toolTip">
+      <string>Descartar</string>
+     </property>
+     <property name="role" stdset="0">
+      <string notr="true">flat</string>
+     </property>
     </widget>
    </item>
   </layout>
@@ -91,20 +110,10 @@
  <resources/>
  <connections>
   <connection>
-   <sender>pushButton</sender>
+   <sender>dismissButton</sender>
    <signal>clicked()</signal>
    <receiver>NotificationDialog</receiver>
    <slot>close()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>434</x>
-     <y>29</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>244</x>
-     <y>153</y>
-    </hint>
-   </hints>
   </connection>
  </connections>
 </ui>

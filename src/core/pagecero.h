@@ -9,7 +9,8 @@ namespace Ui {
 class PageCero;
 }
 
-/// The permanent "Notifications" tab: notification cards in a grid.
+/// The permanent "Avisos" (notifications) page: a column of cards, newest
+/// first, or an empty state when there are none.
 class PageCero : public QWidget
 {
     Q_OBJECT
@@ -17,16 +18,22 @@ public:
     explicit PageCero(QWidget *parent = nullptr);
     ~PageCero();
 
-    /// Add a card. When it is deleted (dismissed/expired) the grid closes the gap.
+    /// Add a card at the top. When it is deleted (dismissed, expired) the
+    /// list closes the gap.
     void addWidget(QWidget* widget);
 
+    int count() const;
+
+signals:
+    void countChanged(int count);
+
+public slots:
+    void dismissAll();
+
 private:
-    void relayout();
+    void refresh();
 
     Ui::PageCero *ui;
-    int cols = 3;
-    int w;
-    int h;
     QList<QPointer<QWidget>> items;
 };
 

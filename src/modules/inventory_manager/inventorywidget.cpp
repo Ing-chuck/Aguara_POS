@@ -3,11 +3,13 @@
 #include "additemdialog.h"
 
 #include <QAbstractProxyModel>
+#include <QEvent>
 #include <QApplication>
 #include <QCompleter>
 #include <QHeaderView>
 #include <QKeySequence>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QShortcut>
 
 inventoryWidget::inventoryWidget(ProductService *products, QWidget *parent)
@@ -41,7 +43,49 @@ inventoryWidget::inventoryWidget(ProductService *products, QWidget *parent)
     // Conect remove button to onItemRemovePressed
     QObject::connect(ui->itemRemoveButton, &QPushButton::clicked, this, &inventoryWidget::onItemRemovePressed);
 
+    // Theme: icons on the actions, a search box with a magnifier
+    using AguaraStyle::Color;
+    ui->itemAddButton->setIcon(AguaraStyle::icon(QStringLiteral("plus"), AguaraStyle::color(Color::OnAccent)));
+    ui->itemEditButton->setIcon(AguaraStyle::icon(QStringLiteral("edit")));
+    ui->itemRemoveButton->setIcon(AguaraStyle::icon(QStringLiteral("trash"), AguaraStyle::color(Color::Danger)));
+    AguaraStyle::searchField(ui->itemSearch);
+
+    // Header line ("14 artículos · 3 con stock bajo") and buttons that need a selection
+    connect(model, &QAbstractItemModel::modelReset, this, &inventoryWidget::updateSummary);
+    connect(model, &QAbstractItemModel::rowsInserted, this, &inventoryWidget::updateSummary);
+    connect(model, &QAbstractItemModel::rowsRemoved, this, &inventoryWidget::updateSummary);
+    connect(ui->tableView->selectionModel(), &QItemSelectionModel::selectionChanged,
+            this, &inventoryWidget::updateActions);
+    connect(model, &QAbstractItemModel::modelReset, this, &inventoryWidget::updateActions);
+    updateSummary();
+    updateActions();
+
     setUpKeyboard();
+}
+
+void inventoryWidget::updateSummary()
+{
+    const int count = model->rowCount();
+    int low = 0;
+    for (int row = 0; row < count; ++row)
+        low += model->index(row, int(ProductColumn::Stock)).data(ProductLowStockRole).toBool() ? 1 : 0;
+
+    ui->summary->setText(count == 1 ? tr("1 artículo") : tr("%1 artículos").arg(count));
+    if (low > 0) {
+        ui->lowStock->setText(low == 1 ? tr("1 artículo con stock bajo") : tr("%1 artículos con stock bajo").arg(low));
+        AguaraStyle::setRole(ui->lowStock, AguaraStyle::Warning);
+    } else {
+        ui->lowStock->clear();
+        AguaraStyle::setRole(ui->lowStock, AguaraStyle::Muted);
+    }
+    ui->lowStock->setVisible(low > 0);
+}
+
+void inventoryWidget::updateActions()
+{
+    const bool selected = ui->tableView->selectionModel()->hasSelection();
+    ui->itemEditButton->setEnabled(selected);
+    ui->itemRemoveButton->setEnabled(selected);
 }
 
 /// Everything works without the mouse, and with a barcode scanner (which
@@ -69,14 +113,10 @@ void inventoryWidget::setUpKeyboard()
 
     connect(ui->tableView, &QAbstractItemView::activated, this, &inventoryWidget::onItemEditPressed);
     connect(ui->itemSearch, &QLineEdit::returnPressed, this, &inventoryWidget::onSearchEntered);
-    connect(ui->itemSearchButton, &QToolButton::clicked, this, &inventoryWidget::onSearchEntered);
-    ui->itemSearch->setClearButtonEnabled(true);
-    ui->itemSearch->setPlaceholderText(tr("Buscar por código o descripción (Ctrl+F)"));
 
     ui->itemAddButton->setToolTip(tr("Nuevo artículo (Ins)"));
     ui->itemEditButton->setToolTip(tr("Editar el artículo seleccionado (F2 o Enter)"));
     ui->itemRemoveButton->setToolTip(tr("Dar de baja el artículo seleccionado (Supr)"));
-    ui->itemSearchButton->setToolTip(tr("Buscar (Enter)"));
 
     setFocusProxy(ui->itemSearch);      // opening the page puts the cursor in the search box
 }
@@ -135,9 +175,36 @@ void inventoryWidget::loadTable()
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setSelectionMode(QAbstractItemView::SingleSelection);
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);  // edit through the dialog
-    table->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    table->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+
+    // fixed, comfortable rows; the description takes the free width
+    table->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    table->verticalHeader()->setDefaultSectionSize(34);
+    QHeaderView *header = table->horizontalHeader();
+    header->setSectionResizeMode(QHeaderView::Interactive);
+    header->setStretchLastSection(false);
+    header->setMinimumSectionSize(60);
     table->resizeColumnsToContents();
+    header->setSectionResizeMode(int(ProductColumn::Description), QHeaderView::Stretch);
+    // the purchase date says more than the last-modified one; keep the latter out of the way
+    table->setColumnHidden(int(ProductColumn::Modified), true);
+    table->viewport()->installEventFilter(this);
+    fitColumns();
+}
+
+/// Narrow screens (1024 px): drop the least needed columns instead of
+/// scrolling sideways. Price, cost, IVA and stock always stay.
+void inventoryWidget::fitColumns()
+{
+    const int width = ui->tableView->viewport()->width();
+    ui->tableView->setColumnHidden(int(ProductColumn::Purchased), width < 980);
+    ui->tableView->setColumnHidden(int(ProductColumn::Brand), width < 860);
+}
+
+bool inventoryWidget::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == ui->tableView->viewport() && event->type() == QEvent::Resize)
+        fitColumns();
+    return AguaraWidget::eventFilter(watched, event);
 }
 
 /// Code of the selected product, or an empty string
@@ -176,12 +243,17 @@ void inventoryWidget::onItemRemovePressed()
 
     const int row = ui->tableView->currentIndex().row();
     const QString name = model->index(row, int(ProductColumn::Description)).data().toString();
-    QString warningTitle = tr("ATENCION");
-    QString warningBody = tr("¿Esta seguro que desea dar de baja el articulo\n\"%1\"?\n\n"
-                             "Dejara de aparecer en el inventario.").arg(name);
-    QMessageBox::StandardButton btn = QMessageBox::warning(this, warningTitle, warningBody, QMessageBox::Ok|QMessageBox::Cancel, QMessageBox::Cancel);
-    if (btn == QMessageBox::Ok && !products->deactivateProduct(code))
-        QMessageBox::warning(this, tr("Error"), products->lastError());
+    QMessageBox box(QMessageBox::Warning, tr("Dar de baja"),
+                    tr("¿Dar de baja \"%1\"?").arg(name), QMessageBox::NoButton, this);
+    box.setInformativeText(tr("Deja de aparecer en el inventario. Si vuelve a cargarlo con el mismo "
+                              "código, se reactiva."));
+    QPushButton *confirm = box.addButton(tr("Dar de baja"), QMessageBox::DestructiveRole);
+    AguaraStyle::setRole(confirm, AguaraStyle::Danger);
+    QPushButton *cancel = box.addButton(tr("Cancelar"), QMessageBox::RejectRole);
+    box.setDefaultButton(cancel);           // Enter must not delete by accident
+    box.exec();
+    if (box.clickedButton() == confirm && !products->deactivateProduct(code))
+        QMessageBox::warning(this, tr("No se pudo dar de baja"), products->lastError());
 }
 
 void inventoryWidget::onCompleterAccepted(const QModelIndex &index)

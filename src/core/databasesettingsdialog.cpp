@@ -1,5 +1,7 @@
 #include "databasesettingsdialog.h"
 
+#include <aguarastyle.h>
+
 #include <QApplication>
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -17,7 +19,7 @@
 DatabaseSettingsDialog::DatabaseSettingsDialog(const DatabaseSettings &s, const QString &error, QWidget *parent)
     : QDialog(parent)
 {
-    setWindowTitle(tr("Base de datos - AguaraPOS"));
+    setWindowTitle(tr("Conexión a los datos - AguaraPOS"));
 
     backend = new QComboBox;
     backend->addItem(tr("Este equipo (un solo puesto)"), int(DatabaseSettings::SQLite));
@@ -60,20 +62,51 @@ DatabaseSettingsDialog::DatabaseSettingsDialog(const DatabaseSettings &s, const 
     status = new QLabel;
     status->setWordWrap(true);
     status->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    status->hide();
     if (!error.isEmpty())
-        status->setText(tr("No se pudo abrir la base de datos:\n%1").arg(error));
+        showStatus(error, AguaraStyle::Error);
 
     auto buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    auto test = buttons->addButton(tr("Probar conexion"), QDialogButtonBox::ActionRole);
+    buttons->button(QDialogButtonBox::Ok)->setText(tr("Conectar"));
+    buttons->button(QDialogButtonBox::Ok)->setDefault(true);
+    buttons->button(QDialogButtonBox::Cancel)->setText(tr("Cancelar"));
+    auto test = new QPushButton(AguaraStyle::icon(QStringLiteral("database")), tr("Probar conexión"));
+    test->setAutoDefault(false);
+    browse->setAutoDefault(false);
+
+    auto title = new QLabel(tr("¿Dónde están los datos?"));
+    AguaraStyle::setRole(title, AguaraStyle::Title);
+    auto subtitle = new QLabel(tr("Un solo puesto guarda los datos en este equipo. Para que varias cajas "
+                                  "compartan los datos, use un servidor en la red."));
+    subtitle->setWordWrap(true);
+    AguaraStyle::setRole(subtitle, AguaraStyle::Subtitle);
 
     auto layout = new QVBoxLayout(this);
+    layout->setContentsMargins(24, 20, 24, 18);
+    layout->setSpacing(12);
+    layout->addWidget(title);
+    layout->addWidget(subtitle);
+    layout->addSpacing(4);
     auto top = new QFormLayout;
+    top->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
     top->addRow(tr("Datos en:"), backend);
     layout->addLayout(top);
     layout->addWidget(pages);
     layout->addWidget(status);
     layout->addStretch();
-    layout->addWidget(buttons);
+    auto buttonRow = new QHBoxLayout;
+    buttonRow->addWidget(test);         // checks, doesn't close: apart from Conectar / Cancelar
+    buttonRow->addStretch();
+    buttonRow->addWidget(buttons);
+    layout->addLayout(buttonRow);
+    for (QFormLayout *form : { top, sqliteForm, pgForm }) {
+        form->setHorizontalSpacing(12);
+        form->setVerticalSpacing(10);
+        form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    }
+    // the labels of the three forms line up
+    sqliteForm->setContentsMargins(0, 0, 0, 0);
+    pgForm->setContentsMargins(0, 0, 0, 0);
 
     connect(backend, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &DatabaseSettingsDialog::onBackendChanged);
     connect(browse, &QPushButton::clicked, this, &DatabaseSettingsDialog::onBrowse);
@@ -83,7 +116,7 @@ DatabaseSettingsDialog::DatabaseSettingsDialog(const DatabaseSettings &s, const 
 
     backend->setCurrentIndex(backend->findData(int(s.backend)));
     onBackendChanged(backend->currentIndex());
-    resize(480, sizeHint().height());
+    resize(540, sizeHint().height());
 }
 
 DatabaseSettings DatabaseSettingsDialog::settings() const
@@ -117,14 +150,26 @@ void DatabaseSettingsDialog::onBrowse()
 
 void DatabaseSettingsDialog::onTest()
 {
-    status->setText(tr("Conectando..."));
+    showStatus(tr("Conectando..."), AguaraStyle::Info);
+    status->repaint();
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    QString result;
+    bool ok;
+    QString error;
     {
         Database probe(QStringLiteral("aguara-settings-test"));
-        result = probe.open(settings()) ? tr("Conexion correcta.")
-                                        : tr("Error:\n%1").arg(probe.lastError());
+        ok = probe.open(settings());
+        error = probe.lastError();
     }
     QApplication::restoreOverrideCursor();
-    status->setText(result);
+    if (ok)
+        showStatus(tr("Conexión correcta."), AguaraStyle::Success);
+    else
+        showStatus(error, AguaraStyle::Error);
+}
+
+void DatabaseSettingsDialog::showStatus(const QString &text, const char *role)
+{
+    status->setText(text);
+    AguaraStyle::setRole(status, role);
+    status->show();
 }
