@@ -238,8 +238,8 @@ QString DifferenceDialog::reason() const
 
 // --- SessionsDialog ----------------------------------------------------------
 
-SessionsDialog::SessionsDialog(CashService *cash, QWidget *parent)
-    : QDialog(parent), cash(cash)
+SessionsDialog::SessionsDialog(CashService *cash, PrintService *print, QWidget *parent)
+    : QDialog(parent), cash(cash), print(print)
 {
     QVBoxLayout *layout = dialogHeader(this, tr("Sesiones de caja"), tr("Elija una sesión cerrada para ver o reimprimir su planilla."));
     // closed ones only: the figures of an open session would give the count away
@@ -279,11 +279,14 @@ void SessionsDialog::printSelected()
     if (row < 0 || row >= list.size())
         return;
     if (const std::optional<CashSessionReport> report = cash->sessionReport(list.at(row).id))
-        previewClosingSheet(*report, this);
+        printClosingSheet(*report, print, this);
 }
 
-void previewClosingSheet(const CashSessionReport &report, QWidget *parent)
+void printClosingSheet(const CashSessionReport &report, PrintService *print, QWidget *parent)
 {
+    if (print->printerSettings().kind == PrinterKind::Thermal && print->printReceipt(ClosingSheet::receipt(report)))
+        return;
+
     QPrinter printer(QPrinter::HighResolution);
     printer.setPageSize(QPageSize(QPageSize::A4));
     QPrintPreviewDialog preview(&printer, parent);

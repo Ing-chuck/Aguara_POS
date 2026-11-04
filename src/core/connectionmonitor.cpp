@@ -128,12 +128,24 @@ bool ConnectionMonitor::reopen()
     if (db.open()) {
         m_serverStart = readServerStart();
         qCInfo(lcDatabase) << "Reconnected to the server" << m_connectionName;
+        ++m_generation;
         setConnected(true);
         emit reconnected();
         return true;
     }
     setConnected(false, db.lastError().text());
     return false;
+}
+
+void ConnectionMonitor::simulateOutage(bool down)
+{
+    if (down) {
+        setConnected(false, QStringLiteral("simulated"));
+    } else {
+        ++m_generation;
+        setConnected(true);
+        emit reconnected();
+    }
 }
 
 QString ConnectionMonitor::readServerStart() const

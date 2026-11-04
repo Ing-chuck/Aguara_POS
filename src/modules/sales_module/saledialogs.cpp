@@ -2,6 +2,7 @@
 
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QFileDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -577,10 +578,53 @@ qint64 HeldSalesDialog::heldId() const
     return row >= 0 && row < held.size() ? held.at(row).id : 0;
 }
 
+// --- PendingSalesDialog ------------------------------------------------------
+
+PendingSalesDialog::PendingSalesDialog(SalesService *sales, QWidget *parent)
+    : QDialog(parent), sales(sales)
+{
+    QVBoxLayout *layout = dialogHeader(this, tr("Ventas por subir"),
+        tr("Están guardadas en este equipo y se suben solas al volver la conexión. La caja no cierra hasta que lleguen."));
+    table = makeSalesTable({ tr("Número"), tr("Hora"), tr("Usuario"), tr("Total"), tr("Estado") });
+    table->setObjectName(QStringLiteral("pendingTable"));
+    table->setColumnWidth(0, 120);
+    table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
+    layout->addWidget(table, 1);
+
+    auto buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+    buttons->button(QDialogButtonBox::Close)->setText(tr("Cerrar"));
+    auto retry = buttons->addButton(tr("Reintentar ahora"), QDialogButtonBox::ActionRole);
+    retry->setObjectName(QStringLiteral("pendingRetry"));
+    retry->setAutoDefault(false);
+    connect(retry, &QPushButton::clicked, this, [this, sales]() {
+        sales->flushPending();
+        reload();
+    });
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    layout->addWidget(buttons);
+    resize(680, 380);
+    reload();
+}
+
+void PendingSalesDialog::reload()
+{
+    const QList<PendingSale> list = sales->pendingSales();
+    table->setRowCount(list.size());
+    for (int row = 0; row < list.size(); ++row) {
+        const PendingSale &p = list.at(row);
+        table->setItem(row, 0, new QTableWidgetItem(AguaraSale::formatNumber(p.registerId, p.number)));
+        table->setItem(row, 1, new QTableWidgetItem(p.when.toString(QStringLiteral("dd/MM HH:mm"))));
+        table->setItem(row, 2, new QTableWidgetItem(p.user));
+        table->setItem(row, 3, rightItem(AguaraMoney::format(p.total)));
+        table->setItem(row, 4, new QTableWidgetItem(p.error.isEmpty() ? tr("Esperando conexión") : p.error));
+    }
+}
+
 // --- SessionSalesDialog ------------------------------------------------------
 
-SessionSalesDialog::SessionSalesDialog(SalesService *sales, UserService *users, qint64 sessionId, QWidget *parent)
-    : QDialog(parent), sales(sales), users(users), sessionId(sessionId)
+SessionSalesDialog::SessionSalesDialog(SalesService *sales, UserService *users, PrintService *print, qint64 sessionId,
+                                       QWidget *parent)
+    : QDialog(parent), sales(sales), users(users), print(print), sessionId(sessionId)
 {
     QVBoxLayout *layout = dialogHeader(this, tr("Ventas de la sesión"));
     table = makeSalesTable({ tr("Número"), tr("Hora"), tr("Usuario"), tr("Total"), tr("Estado") });
@@ -596,15 +640,25 @@ SessionSalesDialog::SessionSalesDialog(SalesService *sales, UserService *users, 
     voidButton->setAutoDefault(false);
     AguaraStyle::setRole(voidButton, AguaraStyle::Danger);
     row->addWidget(voidButton);
+    auto printButton = new QPushButton(tr("Imprimir ticket"));
+    printButton->setObjectName(QStringLiteral("printSaleButton"));
+    printButton->setAutoDefault(false);
+    row->addWidget(printButton);
+    auto pdfButton = new QPushButton(tr("Guardar PDF"));
+    pdfButton->setObjectName(QStringLiteral("saleToPdfButton"));
+    pdfButton->setAutoDefault(false);
+    row->addWidget(pdfButton);
     row->addStretch();
     auto buttons = new QDialogButtonBox(QDialogButtonBox::Close);
     buttons->button(QDialogButtonBox::Close)->setText(tr("Cerrar"));
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     row->addWidget(buttons);
     layout->addLayout(row);
-    resize(640, 440);
+    resize(720, 440);
 
     connect(voidButton, &QPushButton::clicked, this, &SessionSalesDialog::voidSelected);
+    connect(printButton, &QPushButton::clicked, this, &SessionSalesDialog::printSelected);
+    connect(pdfButton, &QPushButton::clicked, this, &SessionSalesDialog::saveSelected);
     reload();
 }
 
@@ -654,16 +708,58 @@ void SessionSalesDialog::voidSelected()
     if (reason.isEmpty())
         return;
     if (!sales->voidSale(record.id, reason)) {
-        QLabel *problem = findChild<QLabel *>(QStringLiteral("voidProblem"));
-        if (!problem) {
-            problem = new QLabel;
-            problem->setObjectName(QStringLiteral("voidProblem"));
-            problem->setWordWrap(true);
-            AguaraStyle::setRole(problem, AguaraStyle::Error);
-            static_cast<QVBoxLayout *>(layout())->insertWidget(1, problem);
-        }
-        problem->setText(sales->lastError());
+        showProblem(sales->lastError());
         return;
     }
+    reload();
+}
+
+void SessionSalesDialog::showProblem(const QString &text)
+{
+    QLabel *problem = findChild<QLabel *>(QStringLiteral("voidProblem"));
+    if (!problem) {
+        problem = new QLabel;
+        problem->setObjectName(QStringLiteral("voidProblem"));
+        problem->setWordWrap(true);
+        AguaraStyle::setRole(problem, AguaraStyle::Error);
+        static_cast<QVBoxLayout *>(layout())->insertWidget(1, problem);
+    }
+    problem->setText(text);
+}
+
+/// The first ticket of a sale is its original, also if the printer failed at
+/// the till. From then on it's a copy.
+bool SessionSalesDialog::mayCopy(const SaleRecord &record)
+{
+    return record.printCount == 0
+           || users->authorize(QStringLiteral("ventas.reimprimir"),
+                               tr("Reimprimir la venta %1").arg(AguaraSale::formatNumber(record.registerId, record.number)), this);
+}
+
+void SessionSalesDialog::printSelected()
+{
+    const int row = table->currentRow();
+    if (row < 0 || row >= list.size() || !mayCopy(list.at(row)))
+        return;
+    if (!print->printSale(list.at(row).id))
+        showProblem(print->lastError());
+    reload();
+}
+
+void SessionSalesDialog::saveSelected()
+{
+    const int row = table->currentRow();
+    if (row < 0 || row >= list.size())
+        return;
+    const SaleRecord record = list.at(row);
+    if (!mayCopy(record))
+        return;
+    const QString number = AguaraSale::formatNumber(record.registerId, record.number);
+    const QString file = QFileDialog::getSaveFileName(this, tr("Guardar el ticket"), tr("ticket-%1.pdf").arg(number),
+                                                      tr("Documento PDF (*.pdf)"));
+    if (file.isEmpty())
+        return;
+    if (!print->saveSalePdf(record.id, file))
+        showProblem(print->lastError());
     reload();
 }

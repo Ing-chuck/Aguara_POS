@@ -5,7 +5,7 @@ include($$AGUARA_SRC_ROOT/aguara.pri)
 TEMPLATE = lib
 CONFIG  += staticlib
 TARGET   = aguara_core
-QT      += sql widgets network    # network: QPasswordDigestor
+QT      += sql widgets network printsupport    # network: QPasswordDigestor
 
 DESTDIR  = $$AGUARA_LIB_DIR
 
@@ -15,6 +15,10 @@ SOURCES      +=     \
     corehost.cpp    \
     database.cpp    \
     databasesettingsdialog.cpp \
+    escpos.cpp \
+    printersettingsdialog.cpp \
+    saleoutbox.cpp \
+    sqlprintservice.cpp \
     errors.cpp      \
     inactivitywatcher.cpp \
     logging.cpp     \
@@ -37,6 +41,10 @@ HEADERS      +=     \
     corehost.h      \
     database.h      \
     databasesettingsdialog.h \
+    escpos.h \
+    printersettingsdialog.h \
+    saleoutbox.h \
+    sqlprintservice.h \
     errors.h        \
     inactivitywatcher.h \
     loadedmodule.h  \

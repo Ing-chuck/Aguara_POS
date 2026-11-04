@@ -67,6 +67,13 @@ public:
     /// true if the connection is known to be broken (PostgreSQL only)
     bool connectionBroken() const;
 
+    /// Grows with every new connection: a transaction begun under another
+    /// generation died with that connection, even if this one works.
+    int generation() const { return m_generation; }
+
+    /// As if the server went away and came back, for tests on SQLite.
+    void simulateOutage(bool down);
+
     /// Background check period while connected (default 15000; 0 disables).
     /// While disconnected it retries more often (at most every 3 s).
     void setHealthCheckInterval(int ms);
@@ -96,6 +103,7 @@ private:
     bool    m_connected = true;
     bool    m_probePending = false;
     int     m_interval = 0;
+    int     m_generation = 0;
     QTimer  m_healthTimer;
     QTimer  m_notificationTimer;
     QThread m_probeThread;

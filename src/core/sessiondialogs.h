@@ -22,12 +22,17 @@ public:
     enum Mode { Start, Locked, Switch };
     LoginDialog(SqlUserService *users, Mode mode, QWidget *parent = nullptr);
 
+    /// Locked: the program can't be left from here, and `reason` says why.
+    /// Whoever locked is still signed in, and nobody has proved to be them.
+    void forbidExit(const QString &reason);
+
     void accept() override;
     void reject() override;
 
 private:
     SqlUserService *users;
     Mode mode;
+    bool exitForbidden = false;
     QLineEdit *username;
     QLineEdit *password;
     QLabel *error;

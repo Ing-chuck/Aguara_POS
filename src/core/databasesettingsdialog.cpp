@@ -22,12 +22,14 @@ DatabaseSettingsDialog::DatabaseSettingsDialog(const DatabaseSettings &s, const 
     setWindowTitle(tr("Conexión a los datos - AguaraPOS"));
 
     backend = new QComboBox;
+    backend->setObjectName(QStringLiteral("databaseBackend"));
     backend->addItem(tr("Este equipo (un solo puesto)"), int(DatabaseSettings::SQLite));
     backend->addItem(tr("Servidor en la red (varios puestos)"), int(DatabaseSettings::PostgreSQL));
 
     // SQLite page
     sqlitePath = new QLineEdit(QDir::toNativeSeparators(
         s.sqlitePath.isEmpty() ? DatabaseSettings::defaultSqlitePath() : s.sqlitePath));
+    sqlitePath->setObjectName(QStringLiteral("databaseFile"));
     auto browse = new QPushButton(tr("Examinar..."));
     auto pathRow = new QHBoxLayout;
     pathRow->setContentsMargins(0, 0, 0, 0);
@@ -39,6 +41,7 @@ DatabaseSettingsDialog::DatabaseSettingsDialog(const DatabaseSettings &s, const 
 
     // PostgreSQL page
     host = new QLineEdit(s.host);
+    host->setObjectName(QStringLiteral("databaseHost"));
     host->setPlaceholderText(tr("ej. 192.168.1.10 o nombre del equipo"));
     port = new QSpinBox;
     port->setRange(1, 65535);
@@ -59,7 +62,14 @@ DatabaseSettingsDialog::DatabaseSettingsDialog(const DatabaseSettings &s, const 
     pages->addWidget(sqlitePage);
     pages->addWidget(pgPage);
 
+    notice = new QLabel;
+    notice->setObjectName(QStringLiteral("databaseNotice"));
+    notice->setWordWrap(true);
+    AguaraStyle::setRole(notice, AguaraStyle::Warning);
+    notice->hide();
+
     status = new QLabel;
+    status->setObjectName(QStringLiteral("databaseStatus"));
     status->setWordWrap(true);
     status->setTextInteractionFlags(Qt::TextSelectableByMouse);
     status->hide();
@@ -67,8 +77,9 @@ DatabaseSettingsDialog::DatabaseSettingsDialog(const DatabaseSettings &s, const 
         showStatus(error, AguaraStyle::Error);
 
     auto buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    buttons->button(QDialogButtonBox::Ok)->setText(tr("Conectar"));
-    buttons->button(QDialogButtonBox::Ok)->setDefault(true);
+    okButton = buttons->button(QDialogButtonBox::Ok);
+    okButton->setText(tr("Conectar"));
+    okButton->setDefault(true);
     buttons->button(QDialogButtonBox::Cancel)->setText(tr("Cancelar"));
     auto test = new QPushButton(AguaraStyle::icon(QStringLiteral("database")), tr("Probar conexión"));
     test->setAutoDefault(false);
@@ -92,6 +103,7 @@ DatabaseSettingsDialog::DatabaseSettingsDialog(const DatabaseSettings &s, const 
     top->addRow(tr("Datos en:"), backend);
     layout->addLayout(top);
     layout->addWidget(pages);
+    layout->addWidget(notice);
     layout->addWidget(status);
     layout->addStretch();
     auto buttonRow = new QHBoxLayout;
@@ -148,7 +160,26 @@ void DatabaseSettingsDialog::onBrowse()
         sqlitePath->setText(QDir::toNativeSeparators(file));
 }
 
+void DatabaseSettingsDialog::setChangingRunningProgram(const QString &text)
+{
+    mustConnect = true;
+    okButton->setText(tr("Guardar"));
+    notice->setText(text);
+    notice->show();
+}
+
+void DatabaseSettingsDialog::accept()
+{
+    if (!mustConnect || tryConnection())
+        QDialog::accept();
+}
+
 void DatabaseSettingsDialog::onTest()
+{
+    tryConnection();
+}
+
+bool DatabaseSettingsDialog::tryConnection()
 {
     showStatus(tr("Conectando..."), AguaraStyle::Info);
     status->repaint();
@@ -165,6 +196,7 @@ void DatabaseSettingsDialog::onTest()
         showStatus(tr("Conexión correcta."), AguaraStyle::Success);
     else
         showStatus(error, AguaraStyle::Error);
+    return ok;
 }
 
 void DatabaseSettingsDialog::showStatus(const QString &text, const char *role)

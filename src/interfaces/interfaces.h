@@ -9,6 +9,7 @@
 #include "inventoryservice.h"
 #include "messages.h"
 #include "money.h"
+#include "printservice.h"
 #include "productservice.h"
 #include "salesservice.h"
 #include "userservice.h"
@@ -89,6 +90,13 @@ public:
     /// false: the core keeps at most one page open and re-focuses it.
     /// true: every click on the module's button opens a new page.
     virtual bool allowsMultipleInstances() const { return false; }
+
+    /// true: right now the module's page has to stay open. The core opens it
+    /// as soon as someone who may use it signs in, puts it first and doesn't
+    /// let it be closed, and it survives a change of user: the page must not
+    /// depend on who was signed in when it was built. A page that derives from
+    /// AguaraWidget emits keepOpenChanged() when the answer changes.
+    virtual bool keepPageOpen() const { return false; }
 };
 
 /// Capability: the module can import articles from files.
@@ -120,10 +128,14 @@ signals:
     /// Signals emitted from the constructor are lost: nothing is connected
     /// yet. Defer them, e.g. QTimer::singleShot(0, this, ...).
     void notify(const ModuleMsg &msg);
+
+    /// WidgetModuleInterface::keepPageOpen() now answers something else.
+    void keepOpenChanged();
 };
 
-#define AguaraModuleInterface_iid    "org.AguaraPOS.ModuleInterface/1.1"   // 1.1: ModuleInfo::iconName
-#define WidgetModuleInterface_iid    "org.AguaraPOS.WidgetModuleInterface/1.0"
+// 1.1: ModuleInfo::iconName. 1.2: WidgetModuleInterface::keepPageOpen()
+#define AguaraModuleInterface_iid    "org.AguaraPOS.ModuleInterface/1.2"
+#define WidgetModuleInterface_iid    "org.AguaraPOS.WidgetModuleInterface/1.1"
 #define ImportArticlesInterface_iid  "org.AguaraPOS.ImportArticlesInterface/1.0"
 #define PermissionProvider_iid       "org.AguaraPOS.PermissionProvider/1.0"
 

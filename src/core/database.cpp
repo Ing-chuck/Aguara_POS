@@ -878,5 +878,21 @@ QList<Migration> coreMigrations()
         QStringLiteral("CREATE INDEX ventas_pagos_referencia ON ventas_pagos (referencia)"),
     };
 
-    return { v1, v2, v3, v4, v5 };
+    Migration v6;
+    v6.version = 6;
+    v6.description = QStringLiteral("settings shared by the registers, printed copies of a sale");
+    v6.sqlite = v6.postgresql = QStringList {
+        QStringLiteral("CREATE TABLE configuracion (clave TEXT PRIMARY KEY, valor TEXT NOT NULL)"),
+        QStringLiteral("ALTER TABLE ventas ADD COLUMN impresiones INTEGER NOT NULL DEFAULT 0"),
+    };
+
+    Migration v7;
+    v7.version = 7;
+    v7.description = QStringLiteral("a sale's identity, so that pushing it twice saves it once");
+    v7.sqlite = v7.postgresql = QStringList {
+        QStringLiteral("ALTER TABLE ventas ADD COLUMN uuid TEXT"),
+        QStringLiteral("CREATE UNIQUE INDEX ventas_uuid ON ventas (uuid)"),
+    };
+
+    return { v1, v2, v3, v4, v5, v6, v7 };
 }

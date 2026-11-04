@@ -139,8 +139,21 @@ void LoginDialog::accept()
     QDialog::accept();
 }
 
+void LoginDialog::forbidExit(const QString &reason)
+{
+    exitForbidden = true;
+    auto box = findChild<QDialogButtonBox *>();
+    for (QAbstractButton *button : box->buttons()) {
+        if (box->buttonRole(button) == QDialogButtonBox::RejectRole)
+            button->hide();
+    }
+    showError(error, reason);
+}
+
 void LoginDialog::reject()
 {
+    if (exitForbidden)
+        return;
     if (mode == Locked && !qobject_cast<QDialogButtonBox *>(sender()))
         return;                 // Esc doesn't get past a locked session
     QDialog::reject();

@@ -2,15 +2,18 @@
 #include "ui_mainwindow.h"
 #include "backup.h"
 #include "corehost.h"
+#include "databasesettingsdialog.h"
 #include "logging.h"
 #include "module_dialog.h"
 #include "notificationdialog.h"
+#include "printersettingsdialog.h"
 #include "sessiondialogs.h"
 #include "sqluserservice.h"
 #include <version.h>
 
 #include <QAction>
 #include <QApplication>
+#include <QCloseEvent>
 #include <QDateTime>
 #include <QDialogButtonBox>
 #include <QFileDialog>
@@ -27,6 +30,7 @@
 #include <QPushButton>
 #include <QShortcut>
 #include <QStandardPaths>
+#include <QStyle>
 #include <QTabBar>
 #include <QTabWidget>
 #include <QToolButton>
@@ -90,6 +94,9 @@ void MainWindow::setUsers(SqlUserService *service, int lockMinutes)
     QList<PermissionInfo> permissions = {
         { QStringLiteral("articulos.importar"), tr("Importar artículos desde archivos"), tr("Inventario") },
         { QStringLiteral("datos.respaldar"), tr("Hacer copias de seguridad"), tr("Sistema") },
+        { QStringLiteral("datos.conexion"), tr("Cambiar la conexión a los datos"), tr("Sistema"), false },
+        { QStringLiteral("sistema.impresion"), tr("Configurar la impresora y los datos del comercio"), tr("Sistema") },
+        { QStringLiteral("caja.salir_abierta"), tr("Salir del programa con la caja abierta"), tr("Caja") },
     };
     for (const LoadedModule &module : qAsConst(modules)) {
         if (auto provider = qobject_cast<PermissionProvider *>(module.instance))
@@ -112,9 +119,95 @@ void MainWindow::setUsers(SqlUserService *service, int lockMinutes)
     applySession();
 }
 
+void MainWindow::setConnectionEditable(bool editable)
+{
+    connectionAct->setEnabled(editable);
+}
+
 bool MainWindow::canOpen(int moduleIndex) const
 {
     return !users || users->can(modulePermission(modules.at(moduleIndex).info.id));
+}
+
+bool MainWindow::mustStayOpen(int moduleIndex) const
+{
+    const LoadedModule &module = modules.at(moduleIndex);
+    return module.widgets && module.widgets->keepPageOpen();
+}
+
+/// A page must stay open, for anybody: the session belongs to this computer.
+bool MainWindow::mustKeepRunning() const
+{
+    for (int i = 0; i < modules.size(); ++i) {
+        if (mustStayOpen(i))
+            return true;
+    }
+    return false;
+}
+
+void MainWindow::closeForRestart()
+{
+    leaving = true;
+    close();
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    if (mayLeave())
+        event->accept();
+    else
+        event->ignore();
+}
+
+/// With the till open the program stays, unless someone authorizes it.
+bool MainWindow::mayLeave()
+{
+    if (leaving || !users || !mustKeepRunning())
+        return true;
+
+    // Windows is shutting down. Saying no would only hang it until it kills
+    // the program: the session and the sales queue are safe on disk, and the
+    // till comes back as it was. It stays on record.
+    if (qApp->isSavingSession()) {
+        users->audit(QStringLiteral("caja.salida_windows"), QStringLiteral("caja"), QString());
+        return true;
+    }
+
+    if (!users->authorize(QStringLiteral("caja.salir_abierta"),
+                          tr("La caja está abierta. Ciérrela antes de salir, o pida autorización."), this))
+        return false;
+    users->audit(QStringLiteral("caja.salir_abierta"), QStringLiteral("caja"), QString(), QString(),
+                 tr("Autorizó %1").arg(users->lastAuthorizer()));
+    return true;
+}
+
+/// Open what has to be open for whoever just signed in.
+void MainWindow::openKeptPages()
+{
+    for (int i = 0; i < modules.size(); ++i) {
+        if (!pageModule.key(i, nullptr) && canOpen(i) && mustStayOpen(i))
+            openModulePage(i);
+    }
+}
+
+/// A page that must stay open loses its X and goes first; it gets the X back,
+/// and keeps its place, when it no longer has to.
+void MainWindow::updateKeptPages()
+{
+    QTabBar *bar = ui->tabWidget->tabBar();
+    const auto side = QTabBar::ButtonPosition(style()->styleHint(QStyle::SH_TabBar_CloseButtonPosition, nullptr, bar));
+    const QList<QWidget *> pages = pageModule.keys();
+    for (QWidget *page : pages) {
+        const int index = ui->tabWidget->indexOf(page);
+        const bool keep = mustStayOpen(pageModule.value(page));
+        if (keep && !closeButtons.contains(page)) {
+            closeButtons.insert(page, bar->tabButton(index, side));
+            bar->setTabButton(index, side, nullptr);
+            bar->moveTab(index, 0);
+        } else if (!keep && closeButtons.contains(page)) {
+            bar->setTabButton(index, side, closeButtons.take(page));
+        }
+    }
 }
 
 /// Show the signed-in user and only what they may open.
@@ -133,15 +226,17 @@ void MainWindow::applySession()
     noModulesLabel->setVisible(!anyModule);
 
     // Pages were built for whoever opened them (which tabs, which actions):
-    // a different user starts clean.
+    // a different user starts clean, except on a page that must stay open,
+    // such as a sale half rung up when the cashier hands over.
     const auto user = users->currentUser();
     const qint64 userId = user ? user->id : 0;
     for (int i = ui->tabWidget->count() - 1; i >= 0; --i) {
         const int module = pageModule.value(ui->tabWidget->widget(i), -1);
-        if (module >= 0 && (userId != sessionUserId || !canOpen(module)))
-            onTabCloseRequested(i);
+        if (module >= 0 && (!canOpen(module) || (userId != sessionUserId && !mustStayOpen(module))))
+            closePage(i);
     }
     sessionUserId = userId;
+    openKeptPages();
 
     const QString name = user ? user->fullName : tr("Sin sesión");
     userLabel->setText(name);
@@ -168,6 +263,8 @@ void MainWindow::lockSession()
     cover.raise();
 
     LoginDialog dialog(users, LoginDialog::Locked, this);
+    if (mustKeepRunning())
+        dialog.forbidExit(tr("La caja está abierta: ingrese para poder salir."));
     const int result = dialog.exec();
     locked = false;
     if (result != QDialog::Accepted) {
@@ -195,6 +292,10 @@ void MainWindow::changeOwnPassword()
 
 MainWindow::~MainWindow()
 {
+    // pageCero is a member: it leaves the tab widget after `ui` is gone, and
+    // the tab widget must not call back then.
+    disconnect(ui->tabWidget, nullptr, this, nullptr);
+
     // Delete module pages while the window is still fully alive, and stop
     // listening to them first: their destructors may still emit notify().
     for (int i = ui->tabWidget->count() - 1; i >= 0; --i) {
@@ -375,6 +476,12 @@ void MainWindow::setDataSource(const QString &description, bool server)
 
 void MainWindow::setConnected(bool connected)
 {
+    // Signing in needs the server: locking now would stop the sale in progress
+    if (!connected)
+        idleWatcher.pause();
+    else if (!locked)
+        idleWatcher.resume();
+
     const QColor c = AguaraStyle::color(connected ? Color::Success : Color::Danger);
     connectionLabel->setText(QStringLiteral("<span style='color:%1'>&#9679;</span> %2")
                                  .arg(c.name(), connected ? tr("Conectado") : tr("Sin conexión")));
@@ -457,6 +564,71 @@ void MainWindow::backupNow()
         QMessageBox::warning(this, tr("Copia de seguridad"), backup->lastError());
 }
 
+/// Preferencias > Conexión a los datos. Everything running hangs on the open
+/// connection (the services, the signed-in user, the open pages), so a change
+/// takes effect on restarting.
+void MainWindow::configureConnection()
+{
+    if (users && !users->authorize(QStringLiteral("datos.conexion"), tr("Cambiar la conexión a los datos"), this))
+        return;
+
+    QString notice = tr("Se aplica al reiniciar el programa. Los datos no se copian de una base a otra.");
+    auto cash = host->service<CashService>();
+    if (cash && cash->currentSession())
+        notice += QLatin1Char(' ') + tr("La caja de este equipo está abierta: ciérrela antes de pasar a otra base.");
+    auto sales = host->service<SalesService>();
+    const int pending = sales ? sales->pendingSales().size() : 0;
+    if (pending > 0)
+        notice += QLatin1Char(' ') + tr("Hay %1 ventas sin subir: se enviarán a la base que elija aquí.").arg(pending);
+
+    const DatabaseSettings current = DatabaseSettings::load();
+    DatabaseSettingsDialog dialog(current, QString(), this);
+    dialog.setChangingRunningProgram(notice);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+    const DatabaseSettings chosen = dialog.settings();
+    if (chosen.backend == current.backend && chosen.sqlitePath == current.sqlitePath && chosen.host == current.host
+        && chosen.port == current.port && chosen.name == current.name && chosen.user == current.user
+        && chosen.password == current.password)
+        return;
+    chosen.save();
+    qCInfo(lcDatabase).noquote() << "Connection settings changed to" << chosen.describe();
+
+    QDialog ask(this);
+    ask.setWindowTitle(tr("Conexión a los datos"));
+    auto layout = new QVBoxLayout(&ask);
+    layout->setContentsMargins(24, 20, 24, 18);
+    layout->setSpacing(12);
+    auto title = new QLabel(tr("Conexión guardada"));
+    AguaraStyle::setRole(title, AguaraStyle::Title);
+    layout->addWidget(title);
+    auto text = new QLabel(tr("El programa usará estos datos desde el próximo inicio: %1").arg(chosen.describe()));
+    text->setWordWrap(true);
+    layout->addWidget(text);
+    auto buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    buttons->button(QDialogButtonBox::Ok)->setText(tr("Reiniciar ahora"));
+    buttons->button(QDialogButtonBox::Ok)->setDefault(true);
+    AguaraStyle::setRole(buttons->button(QDialogButtonBox::Ok), AguaraStyle::Primary);
+    buttons->button(QDialogButtonBox::Cancel)->setText(tr("Más tarde"));
+    connect(buttons, &QDialogButtonBox::accepted, &ask, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &ask, &QDialog::reject);
+    layout->addWidget(buttons);
+    ask.setMinimumWidth(420);
+    if (ask.exec() == QDialog::Accepted)
+        emit restartRequested();
+}
+
+/// Preferencias > Impresora y comercio
+void MainWindow::configurePrinter()
+{
+    auto print = host->service<PrintService>();
+    if (!print)
+        return;
+    if (users && !users->authorize(QStringLiteral("sistema.impresion"), tr("Configurar la impresora"), this))
+        return;
+    PrinterSettingsDialog(print, this).exec();
+}
+
 void MainWindow::about()
 {
     QDialog dialog(this);
@@ -527,6 +699,14 @@ void MainWindow::createActions()
     backupAct->setObjectName(QStringLiteral("backupAction"));
     connect(backupAct, &QAction::triggered, this, &MainWindow::backupNow);
 
+    connectionAct = new QAction(AguaraStyle::icon(QStringLiteral("database")), tr("&Conexión a los datos..."), this);
+    connectionAct->setObjectName(QStringLiteral("connectionAction"));
+    connect(connectionAct, &QAction::triggered, this, &MainWindow::configureConnection);
+
+    printerAct = new QAction(tr("&Impresora y comercio..."), this);
+    printerAct->setObjectName(QStringLiteral("printerAction"));
+    connect(printerAct, &QAction::triggered, this, &MainWindow::configurePrinter);
+
     quitAct = new QAction(AguaraStyle::icon(QStringLiteral("logout")), tr("&Salir"), this);
     quitAct->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Q));
     connect(quitAct, &QAction::triggered, this, &QWidget::close);
@@ -556,6 +736,10 @@ void MainWindow::createMenus()
     sessionMenu->addAction(AguaraStyle::icon(QStringLiteral("key")), tr("Cambiar &contraseña..."),
                            this, &MainWindow::changeOwnPassword);
     sessionMenu->menuAction()->setVisible(false);       // until setUsers()
+
+    preferencesMenu = menuBar()->addMenu(tr("&Preferencias"));
+    preferencesMenu->addAction(connectionAct);
+    preferencesMenu->addAction(printerAct);
 
     helpMenu = menuBar()->addMenu(tr("A&yuda"));
     helpMenu->addAction(aboutModulesAct);
@@ -791,12 +975,14 @@ void MainWindow::openModulePage(int moduleIndex) {
                 msg.senderName = sender;
             onModuleNotification(msg);
         });
+        connect(ag, &AguaraWidget::keepOpenChanged, this, &MainWindow::updateKeptPages);
     }
 
     if (!multi)
         module.openPage = page;
     pageModule.insert(page, moduleIndex);
     addTab(page, moduleIcon(module, AguaraStyle::color(Color::TextMuted)), module.info.name);
+    updateKeptPages();
     page->setFocus();       // pages put the cursor where work starts (e.g. search)
 }
 
@@ -827,6 +1013,19 @@ void MainWindow::onTabCloseRequested(int indx) {
     QWidget* page = ui->tabWidget->widget(indx);
     if (!page || page == &pageCero)      // the notifications page is permanent
         return;
+    const int module = pageModule.value(page, -1);
+    if (module >= 0 && mustStayOpen(module))
+        return;                          // Ctrl+W: such a tab has no X
+    closePage(indx);
+}
+
+void MainWindow::closePage(int indx) {
+    QWidget* page = ui->tabWidget->widget(indx);
+    if (closeButtons.contains(page)) {   // back on the tab, which deletes it
+        QTabBar *bar = ui->tabWidget->tabBar();
+        bar->setTabButton(indx, QTabBar::ButtonPosition(style()->styleHint(QStyle::SH_TabBar_CloseButtonPosition, nullptr, bar)),
+                          closeButtons.take(page));
+    }
 
     ui->tabWidget->removeTab(indx);
     for (LoadedModule &module : modules) {

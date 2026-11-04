@@ -30,6 +30,7 @@ private slots:
     void idleTillRecoversAndListensAgain();
     void outageIsReportedAndFailsFast();
     void recoversWhenServerIsBack();
+    void saleSurvivesARealOutage();
 
 private:
     bool pgctl(const QStringList &args);
@@ -185,6 +186,49 @@ void tst_Reconnect::recoversWhenServerIsBack()
     QVERIFY(till2Shows(++m_rows));                                                         // still listening
     m_till1.monitor->setHealthCheckInterval(0);
     m_monitor2->setHealthCheckInterval(0);
+}
+
+/// The server really stops, with the sale already on the screen and without
+/// the monitor knowing: the statement of the sale is what finds out.
+void tst_Reconnect::saleSurvivesARealOutage()
+{
+    DenominationCount note;
+    note.denomination = 100000;
+    note.count = 1;
+    QVERIFY2(m_till1.cash->openSession({ note }), qPrintable(m_till1.cash->lastError()));
+    Product p;
+    p.code = QStringLiteral("9009");
+    p.description = QStringLiteral("SAL");
+    p.price = 5000;
+    p.stock = AguaraQuantity::whole(10);
+    QVERIFY(m_till1.products->saveProduct(p));
+    ++m_rows;
+    SaleLine line;
+    line.code = p.code;
+    line.description = p.description;
+    line.unit = QStringLiteral("un");
+    line.unitPrice = p.price;
+    SaleDraft draft;
+    draft.lines << line;
+    QVERIFY(m_till1.sales->checkout(draft, { TestSupport::inCash(5000) }) > 0);
+
+    QVERIFY(pgctl({ QStringLiteral("stop") }));
+    const qint64 id = m_till1.sales->checkout(draft, { TestSupport::inCash(5000) });
+    QVERIFY2(id < 0, qPrintable(QStringLiteral("%1: %2").arg(id).arg(m_till1.sales->lastError())));
+    QVERIFY(!m_till1.sales->online());
+    QCOMPARE(m_till1.sales->sale(id)->number, qint64(2));
+    QVERIFY(m_till1.cash->currentSession().has_value());
+    QCOMPARE(m_till1.sales->pendingSales().size(), 1);
+
+    m_till1.monitor->setHealthCheckInterval(200);
+    QVERIFY(startServer());
+    QVERIFY(waitFor([&] { return m_till1.monitor->isConnected(); }, 30000));
+    QVERIFY(waitFor([&] { return m_till1.sales->pendingSales().isEmpty(); }, 10000));
+    m_till1.monitor->setHealthCheckInterval(0);
+
+    QCOMPARE(m_till1.sales->sessionSales(m_till1.cash->currentSession()->id).size(), 2);
+    QCOMPARE(m_till1.products->product(p.code)->stock, AguaraQuantity::whole(8));
+    QCOMPARE(m_till1.sales->sessionSales(m_till1.cash->currentSession()->id).first().number, qint64(2));
 }
 
 QTEST_GUILESS_MAIN(tst_Reconnect)

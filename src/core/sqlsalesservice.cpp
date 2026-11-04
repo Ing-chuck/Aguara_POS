@@ -1,6 +1,7 @@
 #include "sqlsalesservice.h"
 #include "connectionmonitor.h"
 #include "errors.h"
+#include "logging.h"
 #include "sqlcashservice.h"
 #include "sqlproductservice.h"
 #include "stockledger.h"
@@ -9,68 +10,29 @@
 #include <userservice.h>
 
 #include <QHash>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QSet>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QUuid>
 #include <QVariant>
-
-namespace {
-
-/// Money and quantities go as text: JSON numbers are doubles.
-QByteArray draftToJson(const SaleDraft &draft)
-{
-    QJsonArray lines;
-    for (const SaleLine &l : draft.lines) {
-        QJsonObject o;
-        o[QStringLiteral("code")] = l.code;
-        o[QStringLiteral("description")] = l.description;
-        o[QStringLiteral("unit")] = l.unit;
-        o[QStringLiteral("decimals")] = l.decimals;
-        o[QStringLiteral("quantity")] = QString::number(l.quantity);
-        o[QStringLiteral("unitPrice")] = QString::number(l.unitPrice);
-        o[QStringLiteral("fixedAmount")] = QString::number(l.fixedAmount);
-        o[QStringLiteral("discount")] = QString::number(l.discount);
-        o[QStringLiteral("vatRate")] = l.vatRate;
-        lines.append(o);
-    }
-    QJsonObject root;
-    root[QStringLiteral("lines")] = lines;
-    root[QStringLiteral("totalDiscount")] = QString::number(draft.totalDiscount);
-    return QJsonDocument(root).toJson(QJsonDocument::Compact);
-}
-
-SaleDraft draftFromJson(const QByteArray &json)
-{
-    SaleDraft draft;
-    const QJsonObject root = QJsonDocument::fromJson(json).object();
-    draft.totalDiscount = root.value(QStringLiteral("totalDiscount")).toString().toLongLong();
-    for (const QJsonValue &value : root.value(QStringLiteral("lines")).toArray()) {
-        const QJsonObject o = value.toObject();
-        SaleLine l;
-        l.code = o.value(QStringLiteral("code")).toString();
-        l.description = o.value(QStringLiteral("description")).toString();
-        l.unit = o.value(QStringLiteral("unit")).toString();
-        l.decimals = o.value(QStringLiteral("decimals")).toInt();
-        l.quantity = o.value(QStringLiteral("quantity")).toString().toLongLong();
-        l.unitPrice = o.value(QStringLiteral("unitPrice")).toString().toLongLong();
-        l.fixedAmount = o.value(QStringLiteral("fixedAmount")).toString().toLongLong();
-        l.discount = o.value(QStringLiteral("discount")).toString().toLongLong();
-        l.vatRate = o.value(QStringLiteral("vatRate")).toInt();
-        draft.lines << l;
-    }
-    return draft;
-}
-
-} // namespace
 
 SqlSalesService::SqlSalesService(ConnectionMonitor *monitor, SqlProductService *products, SqlCashService *cash,
                                  QObject *parent)
     : QObject(parent), m_monitor(monitor), m_products(products), m_cash(cash)
     , m_connectionName(monitor->connectionName())
+    , m_outbox(monitor->connectionName())
 {
+    m_cash->setPendingSales([this]() { return m_outbox.open() ? m_outbox.count() : 0; });
+
+    // As soon as the server is back, and every so often for what it refused
+    connect(monitor, &ConnectionMonitor::reconnected, this, &SqlSalesService::flushPending, Qt::QueuedConnection);
+    connect(&m_retry, &QTimer::timeout, this, &SqlSalesService::flushPending);
+    m_retry.start(30000);
+}
+
+SqlSalesService::~SqlSalesService()
+{
+    m_cash->setPendingSales({});
 }
 
 QSqlDatabase SqlSalesService::db() const
@@ -127,6 +89,19 @@ QString SqlSalesService::userName() const
     return user ? user->username : QString();
 }
 
+/// That the articles exist: this one asks the database, so it waits for push().
+bool SqlSalesService::validateArticles(const SaleDraft &draft) const
+{
+    for (const SaleLine &line : draft.lines) {
+        if (!m_products->product(line.code)) {
+            m_lastError = tr("El artículo %1 no existe.").arg(line.code);
+            return false;
+        }
+    }
+    return true;
+}
+
+/// Everything that can be checked with no server.
 bool SqlSalesService::validate(const SaleDraft &draft, const SaleTotals &totals) const
 {
     if (draft.lines.isEmpty()) {
@@ -135,11 +110,6 @@ bool SqlSalesService::validate(const SaleDraft &draft, const SaleTotals &totals)
     }
     Money afterLineDiscounts = 0;
     for (const SaleLine &line : draft.lines) {
-        const std::optional<Product> p = m_products->product(line.code);
-        if (!p) {
-            m_lastError = tr("El artículo %1 no existe.").arg(line.code);
-            return false;
-        }
         const Money gross = AguaraSale::lineGross(line);
         if (line.quantity <= 0 || line.unitPrice < 0) {
             m_lastError = tr("Revise la cantidad y el precio de %1.").arg(line.description);
@@ -266,36 +236,167 @@ qint64 SqlSalesService::checkout(const SaleDraft &draft, const QList<SalePayment
     if (!settle(payments, &totals, &settled))
         return 0;
 
-    // Read before the transaction: costs and how much stock is left
-    QHash<QString, Product> articles;
-    for (const SaleLine &line : draft.lines)
-        articles.insert(line.code, *m_products->product(line.code));
+    // What came before goes first, and keeps its place in the numbering
+    if (online())
+        flushPending();
+    const bool nothingBefore = online() && m_outbox.open() && m_outbox.count() == 0;
 
-    if (!begin())
-        return 0;
-    const qint64 number = nextNumber(session->registerId);
-    if (number == 0) {
-        rollback();
+    // First on this computer's disk. Only then the server.
+    if (!m_outbox.open()) {
+        m_lastError = m_outbox.lastError();
         return 0;
     }
-    const QString printed = AguaraSale::formatNumber(session->registerId, number);
-    const QString user = userName();
+    OutboxEntry entry;
+    entry.uuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    entry.when = QDateTime::currentDateTime();
+    entry.user = userName();
+    entry.registerId = session->registerId;
+    entry.sessionId = session->id;
+    entry.draft = draft;
+    entry.payments = payments;
+    entry.id = m_outbox.add(entry);
+    if (entry.id == 0) {
+        m_lastError = m_outbox.lastError();
+        return 0;
+    }
+
+    if (nothingBefore) {
+        qint64 saleId = 0;
+        switch (push(entry, &saleId)) {
+        case Push::Saved:
+            m_outbox.remove(entry.id);
+            return saleId;
+        case Push::Refused: {
+            const QString reason = m_lastError;     // the screen keeps the sale: it was never charged
+            m_outbox.remove(entry.id);
+            m_lastError = reason;
+            return 0;
+        }
+        case Push::NoServer:
+            break;
+        }
+    }
+
+    // It stays in the queue. The customer leaves with this number on the ticket.
+    m_outbox.setNumber(entry.id, localNumber(entry.registerId));
+    qCInfo(lcDatabase) << "Sale" << entry.uuid << "stays in the queue";
+    QTimer::singleShot(0, this, [this]() { flushPending(); });
+    return -entry.id;
+}
+
+/// One past everything known: the server's last answer and the queue. This
+/// computer is the only one that numbers this register.
+qint64 SqlSalesService::localNumber(qint64 registerId)
+{
+    return qMax(m_cash->lastNumber(), m_outbox.lastNumber(registerId)) + 1;
+}
+
+bool SqlSalesService::online() const
+{
+    return m_monitor->isConnected() && !m_monitor->connectionBroken();
+}
+
+/// Why a push failed. A connection that was replaced took the transaction with
+/// it, even if the new one works.
+SqlSalesService::Push SqlSalesService::failure(int generation)
+{
+    return generation != m_monitor->generation() || !online() ? Push::NoServer : Push::Refused;
+}
+
+/// The number the sale was promised, or the next one if the database gave it
+/// to someone else meanwhile: a second copy of the program on this computer.
+qint64 SqlSalesService::claimNumber(qint64 registerId, qint64 number)
+{
+    QSqlQuery taken(db());
+    taken.prepare(QStringLiteral("SELECT id FROM ventas WHERE caja_id = ? AND numero = ?"));
+    taken.addBindValue(registerId);
+    taken.addBindValue(number);
+    if (!exec(taken))
+        return 0;
+    if (taken.next()) {
+        qCWarning(lcDatabase) << "Number" << number << "was taken: the queued sale gets another one";
+        taken.finish();
+        return nextNumber(registerId);
+    }
+    taken.finish();
+    QSqlQuery update(db());
+    update.prepare(QStringLiteral("UPDATE cajas SET ultimo_numero = CASE WHEN ultimo_numero < ? THEN ? ELSE ultimo_numero END"
+                                  " WHERE id = ?"));
+    update.addBindValue(number);
+    update.addBindValue(number);
+    update.addBindValue(registerId);
+    return exec(update) ? number : 0;
+}
+
+/// One sale into the database, in one transaction. Safe to repeat: if the
+/// connection died during a COMMIT that did reach the server, the sale's uuid
+/// finds it.
+SqlSalesService::Push SqlSalesService::push(const OutboxEntry &entry, qint64 *saleId)
+{
+    const int generation = m_monitor->generation();
+
+    QSqlQuery existing(db());
+    existing.prepare(QStringLiteral("SELECT id FROM ventas WHERE uuid = ?"));
+    existing.addBindValue(entry.uuid);
+    if (!exec(existing))
+        return failure(generation);
+    if (existing.next()) {
+        *saleId = existing.value(0).toLongLong();
+        return Push::Saved;
+    }
+    existing.finish();
+
+    SaleTotals totals = AguaraSale::totals(entry.draft);
+    QList<SalePayment> settled;
+    if (!settle(entry.payments, &totals, &settled))
+        return Push::Refused;
+    if (!validateArticles(entry.draft))
+        return failure(generation);
+
+    // Read before the transaction: costs and how much stock is left
+    QHash<QString, Product> articles;
+    for (const SaleLine &line : entry.draft.lines)
+        articles.insert(line.code, *m_products->product(line.code));
+
+    // Charged without a server, nobody could check its vouchers then
+    QStringList repeated;
+    for (const SalePayment &p : settled) {
+        if (entry.number == 0 || !AguaraSale::isElectronic(p.method))
+            continue;
+        const QString usedBy = referenceUsedBy(p.reference);
+        if (!usedBy.isEmpty())
+            repeated << tr("Comprobante %1, ya usado en la venta %2").arg(p.reference, usedBy);
+    }
+
+    if (!begin())
+        return failure(generation);
+    const qint64 number = entry.number > 0 ? claimNumber(entry.registerId, entry.number)
+                                           : nextNumber(entry.registerId);
+    if (number == 0) {
+        rollback();
+        return failure(generation);
+    }
+    const QString printed = AguaraSale::formatNumber(entry.registerId, number);
 
     QSqlQuery head(db());
     head.prepare(QStringLiteral(
-        "INSERT INTO ventas (caja_id, sesion_id, numero, usuario, estado, bruto, descuento, neto, redondeo, total,"
-        " gravado10, iva10, gravado5, iva5, exento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
-    head.addBindValue(session->registerId);
-    head.addBindValue(session->id);
+        "INSERT INTO ventas (uuid, caja_id, sesion_id, numero, fecha, usuario, estado, impresiones, bruto, descuento,"
+        " neto, redondeo, total, gravado10, iva10, gravado5, iva5, exento)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+    head.addBindValue(entry.uuid);
+    head.addBindValue(entry.registerId);
+    head.addBindValue(entry.sessionId);
     head.addBindValue(number);
-    head.addBindValue(user);
+    head.addBindValue(entry.when);
+    head.addBindValue(entry.user);
     head.addBindValue(QString::fromLatin1(SaleState::Paid));
+    head.addBindValue(entry.printCount);
     for (Money value : { totals.gross, totals.discount, totals.net, totals.rounding, totals.total,
                          totals.taxed10, totals.vat10, totals.taxed5, totals.vat5, totals.exempt })
         head.addBindValue(value);
     if (!exec(head)) {
         rollback();
-        return 0;
+        return failure(generation);
     }
     const qint64 id = head.lastInsertId().toLongLong();
 
@@ -326,7 +427,7 @@ qint64 SqlSalesService::checkout(const SaleDraft &draft, const QList<SalePayment
         if (!exec(line) || !ledger.move(item.code, StockMovementType::Sale, -item.quantity, cost, QString(),
                                         tr("Venta %1").arg(printed))) {
             rollback();
-            return 0;
+            return failure(generation);
         }
         sold[item.code] += item.quantity;
     }
@@ -342,11 +443,14 @@ qint64 SqlSalesService::checkout(const SaleDraft &draft, const QList<SalePayment
         payment.addBindValue(p.reference.isEmpty() ? QVariant(QVariant::String) : QVariant(p.reference));
         if (!exec(payment)) {
             rollback();
-            return 0;
+            return failure(generation);
         }
     }
     if (!commit())
-        return 0;
+        return failure(generation);
+
+    *saleId = id;
+    m_cash->noteNumber(number);
 
     // Allowed on purpose, and on record: late purchases must not stop a sale
     for (auto it = sold.cbegin(); it != sold.cend(); ++it) {
@@ -355,8 +459,84 @@ qint64 SqlSalesService::checkout(const SaleDraft &draft, const QList<SalePayment
             audit(QStringLiteral("venta.stock_negativo"), printed,
                   tr("%1: queda %2").arg(p.description, AguaraQuantity::format(p.stock - it.value(), p.unit.decimals)));
     }
+    if (entry.number > 0)
+        audit(QStringLiteral("venta.diferida"), printed, tr("Cobrada el %1, cajero %2")
+              .arg(entry.when.toString(QStringLiteral("dd/MM/yyyy HH:mm")), entry.user));
+    for (const QString &text : qAsConst(repeated))
+        audit(QStringLiteral("venta.comprobante_repetido"), printed, text);
     m_products->refreshAfterChange();
-    return id;
+    return Push::Saved;
+}
+
+bool SqlSalesService::flushPending()
+{
+    if (m_flushing || !m_outbox.open())
+        return false;
+    if (m_outbox.count() == 0)
+        return true;
+    if (!online())
+        return false;
+
+    m_flushing = true;
+    for (const OutboxEntry &entry : m_outbox.entries()) {
+        qint64 saleId = 0;
+        const Push result = push(entry, &saleId);
+        if (result == Push::NoServer)
+            break;                      // it all waits for the next connection
+        if (result == Push::Saved) {
+            m_outbox.remove(entry.id);
+            qCInfo(lcDatabase) << "Queued sale" << entry.uuid << "reached the database";
+        } else {                        // the others go on: this one stays, and shows
+            qCCritical(lcDatabase).noquote() << "Queued sale" << entry.uuid << "refused:" << m_lastError;
+            m_outbox.setError(entry.id, m_lastError);
+        }
+    }
+    m_flushing = false;
+    return m_outbox.count() == 0;
+}
+
+QList<PendingSale> SqlSalesService::pendingSales() const
+{
+    QList<PendingSale> result;
+    if (!m_outbox.isOpen())
+        return result;
+    for (const OutboxEntry &entry : m_outbox.entries()) {
+        SaleTotals totals = AguaraSale::totals(entry.draft);
+        QList<SalePayment> settled;
+        settle(entry.payments, &totals, &settled);
+        PendingSale p;
+        p.registerId = entry.registerId;
+        p.number = entry.number;
+        p.when = entry.when;
+        p.user = entry.user;
+        p.total = totals.total;
+        p.error = entry.error;
+        result << p;
+    }
+    return result;
+}
+
+/// A sale still in the queue, as sale() gives one from the database.
+std::optional<SaleRecord> SqlSalesService::queuedSale(qint64 id) const
+{
+    const std::optional<OutboxEntry> entry = m_outbox.entry(id);
+    if (!entry) {
+        m_lastError = tr("La venta no existe.");
+        return std::nullopt;
+    }
+    SaleRecord record;
+    record.id = -entry->id;
+    record.registerId = entry->registerId;
+    record.sessionId = entry->sessionId;
+    record.number = entry->number;
+    record.when = entry->when;
+    record.user = entry->user;
+    record.state = QString::fromLatin1(SaleState::Paid);
+    record.printCount = entry->printCount;
+    record.totals = AguaraSale::totals(entry->draft);
+    if (!settle(entry->payments, &record.totals, &record.payments))
+        return std::nullopt;
+    return record;
 }
 
 QString SqlSalesService::referenceUsedBy(const QString &reference) const
@@ -378,7 +558,8 @@ QList<SaleRecord> SqlSalesService::readSales(const QString &where, const QVarian
     QSqlQuery q(db());
     q.prepare(QStringLiteral(
         "SELECT id, caja_id, sesion_id, numero, fecha, usuario, estado, bruto, descuento, neto, redondeo, total,"
-        " gravado10, iva10, gravado5, iva5, exento, anulada_por, anulada_fecha, motivo FROM ventas ") + where);
+        " gravado10, iva10, gravado5, iva5, exento, anulada_por, anulada_fecha, motivo, impresiones"
+        " FROM ventas ") + where);
     for (const QVariant &value : values)
         q.addBindValue(value);
     if (!exec(q))
@@ -405,6 +586,7 @@ QList<SaleRecord> SqlSalesService::readSales(const QString &where, const QVarian
         s.voidedBy = q.value(17).toString();
         s.voidedAt = q.value(18).toDateTime();
         s.voidReason = q.value(19).toString();
+        s.printCount = q.value(20).toInt();
         result << s;
     }
     return result;
@@ -412,6 +594,8 @@ QList<SaleRecord> SqlSalesService::readSales(const QString &where, const QVarian
 
 std::optional<SaleRecord> SqlSalesService::sale(qint64 id) const
 {
+    if (id < 0)
+        return queuedSale(-id);
     const QList<SaleRecord> found = readSales(QStringLiteral("WHERE id = ?"), { id });
     if (found.isEmpty()) {
         m_lastError = tr("La venta no existe.");
@@ -465,6 +649,10 @@ QList<SaleRecord> SqlSalesService::sessionSales(qint64 sessionId) const
 
 bool SqlSalesService::voidSale(qint64 id, const QString &reason)
 {
+    if (id < 0) {
+        m_lastError = tr("La venta todavía no llegó al servidor: se anula cuando llegue.");
+        return false;
+    }
     if (reason.trimmed().isEmpty()) {
         m_lastError = tr("Indique el motivo de la anulación.");
         return false;
@@ -520,6 +708,16 @@ bool SqlSalesService::voidSale(qint64 id, const QString &reason)
     return true;
 }
 
+bool SqlSalesService::recordPrint(qint64 id)
+{
+    if (id < 0)
+        return m_outbox.addPrint(-id);
+    QSqlQuery q(db());
+    q.prepare(QStringLiteral("UPDATE ventas SET impresiones = impresiones + 1 WHERE id = ?"));
+    q.addBindValue(id);
+    return exec(q);
+}
+
 qint64 SqlSalesService::holdSale(const SaleDraft &draft)
 {
     if (draft.lines.isEmpty()) {
@@ -533,7 +731,7 @@ qint64 SqlSalesService::holdSale(const SaleDraft &draft)
     q.prepare(QStringLiteral("INSERT INTO ventas_espera (caja_id, usuario, datos) VALUES (?, ?, ?)"));
     q.addBindValue(cashRegister.id);
     q.addBindValue(userName());
-    q.addBindValue(QString::fromUtf8(draftToJson(draft)));
+    q.addBindValue(QString::fromUtf8(SaleJson::fromDraft(draft)));
     if (!exec(q))
         return 0;
     return q.lastInsertId().toLongLong();
@@ -553,7 +751,7 @@ QList<HeldSale> SqlSalesService::heldSales() const
         h.id = q.value(0).toLongLong();
         h.when = q.value(1).toDateTime();
         h.user = q.value(2).toString();
-        h.draft = draftFromJson(q.value(3).toString().toUtf8());
+        h.draft = SaleJson::toDraft(q.value(3).toString().toUtf8());
         result << h;
     }
     return result;

@@ -4,10 +4,10 @@
 
 INCLUDEPATH += $$AGUARA_SRC_ROOT/src/core
 DEPENDPATH  += $$AGUARA_SRC_ROOT/src/core
-QT          += sql widgets network
+QT          += sql widgets network printsupport
 
 LIBS += -L$$AGUARA_LIB_DIR -laguara_core -laguara_interfaces
-win32: LIBS += -lcrypt32                # DPAPI: CryptProtectData (database.cpp)
+win32: LIBS += -lcrypt32 -lwinspool     # DPAPI (database.cpp), raw printing (sqlprintservice.cpp)
 win32-g++: PRE_TARGETDEPS += $$AGUARA_LIB_DIR/libaguara_core.a \
                              $$AGUARA_LIB_DIR/libaguara_interfaces.a
 

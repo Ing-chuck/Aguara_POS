@@ -73,6 +73,12 @@ private slots:
     void cancellingWarnsAboutVouchers();
     void repeatedVoucherNeedsASupervisor();
     void voidingACardSaysToReverseIt();
+    void outageOnlyFinishesTheSaleInProgress();
+    void chargingPrintsAndOpensTheDrawer();
+    void printerFailureDoesNotStopTheSale();
+    void copyNeedsASupervisor();
+    void drawerByHandNeedsPermission();
+    void closingSheetGoesToTheThermalPrinter();
     void holdAndRecall();
     void forgottenSessionNeedsASupervisor();
     void searchByDescription();
@@ -430,7 +436,9 @@ void tst_Modules::aDayAtTheTill()
 {
     QVERIFY(showSales());
     QCOMPARE(label("closedTitle")->text(), QStringLiteral("La caja está cerrada"));
+    QSignalSpy keepOpen(m_page, SIGNAL(keepOpenChanged()));
     QVERIFY(openTill(1));
+    QCOMPARE(keepOpen.count(), 1);                      // the window hears that it must stay open
 
     scan(QStringLiteral("7840001"));
     scan(QStringLiteral("7840002"));
@@ -856,6 +864,170 @@ void tst_Modules::voidingACardSaysToReverseIt()
 
     QVERIFY2(shown.contains(QStringLiteral("Tarjeta de crédito C9")), qPrintable(shown));
     QVERIFY2(!shown.contains(QStringLiteral("de la caja")), qPrintable(shown));     // no cash leaves
+}
+
+void tst_Modules::outageOnlyFinishesTheSaleInProgress()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    scan(QStringLiteral("7840001"));
+    QCOMPARE(saleLines()->rowCount(), 1);
+
+    m_core.monitor->simulateOutage(true);
+    QVERIFY(TestSupport::waitFor([&] { return !label("saleConnection")->isHidden(); }, 2500));
+    QVERIFY(label("saleConnection")->text().contains(QStringLiteral("Sin conexión")));
+
+    // nothing more goes in
+    scan(QStringLiteral("7840002"));
+    QCOMPARE(saleLines()->rowCount(), 1);
+    QVERIFY(label("saleMessage")->text().contains(QStringLiteral("cobre la venta en curso")));
+
+    // the sale on the screen is finished
+    whenDialogOpens([](QDialog *payment) {
+        auto tendered = payment->findChild<QLineEdit *>(QStringLiteral("paymentTendered"));
+        QTest::keyClicks(tendered, QStringLiteral("20.000"));
+        QTest::keyClick(tendered, Qt::Key_Return);
+    });
+    press(Qt::Key_F12);
+    QCOMPARE(saleLines()->rowCount(), 0);
+    QCOMPARE(label("lastChange")->text(), QStringLiteral("Vuelto: Gs. 9.000"));
+    QCOMPARE(label("saleMessage")->text(), QStringLiteral("Venta 001-000001 cobrada."));
+    QCOMPARE(label("closedTitle")->isVisible(), false);         // the till doesn't look closed
+
+    // and no new one starts
+    scan(QStringLiteral("7840001"));
+    QCOMPARE(saleLines()->rowCount(), 0);
+    QVERIFY(label("saleMessage")->text().contains(QStringLiteral("no se pueden iniciar")));
+
+    // the list says what waits
+    whenDialogOpens([](QDialog *list) {
+        QCOMPARE(list->findChild<QTableWidget *>(QStringLiteral("pendingTable"))->rowCount(), 1);
+        list->reject();
+    });
+    trigger("actionPending");
+
+    m_core.monitor->simulateOutage(false);
+    QVERIFY(TestSupport::waitFor([&] { return m_core.sales->pendingSales().isEmpty(); }));
+    QVERIFY(TestSupport::waitFor([&] { return label("saleConnection")->isHidden(); }, 2500));
+    QCOMPARE(m_core.sales->sessionSales(m_core.cash->currentSession()->id).size(), 1);
+    scan(QStringLiteral("7840001"));
+    QCOMPARE(saleLines()->rowCount(), 1);               // selling again
+}
+
+static PrinterSettings thermal()
+{
+    PrinterSettings s;
+    s.kind = PrinterKind::Thermal;
+    s.name = QStringLiteral("TERMICA");
+    return s;
+}
+
+void tst_Modules::chargingPrintsAndOpensTheDrawer()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    m_core.print->savePrinterSettings(thermal());
+    scan(QStringLiteral("7840001"));
+    whenDialogOpens([](QDialog *payment) { payment->accept(); });
+    press(Qt::Key_F12);
+
+    QCOMPARE(m_core.printed.size(), 1);
+    QVERIFY(m_core.printed.first().contains("ARTICULO 7840001"));
+    QVERIFY(m_core.printed.first().contains(QByteArray("\x1B\x70\x00\x19\xFA", 5)));
+    QCOMPARE(label("saleMessage")->text(), QStringLiteral("Venta 001-000001 cobrada."));
+}
+
+void tst_Modules::printerFailureDoesNotStopTheSale()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    m_core.print->savePrinterSettings(thermal());
+    m_core.printerFails = true;
+    scan(QStringLiteral("7840001"));
+    whenDialogOpens([](QDialog *payment) { payment->accept(); });
+    press(Qt::Key_F12);
+
+    QCOMPARE(saleLines()->rowCount(), 0);               // charged all the same
+    QCOMPARE(m_core.sales->sessionSales(m_core.cash->currentSession()->id).size(), 1);
+    QVERIFY(label("saleMessage")->text().contains(QStringLiteral("sin ticket")));
+    QVERIFY(label("saleMessage")->text().contains(QStringLiteral("no responde")));
+}
+
+void tst_Modules::copyNeedsASupervisor()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    m_core.print->savePrinterSettings(thermal());
+    int asked = 0;
+    m_users->setSupervisorPrompt([&](const QString &, const QString &, const QString &, QWidget *,
+                                     QString *username, QString *password) {
+        if (++asked == 1)
+            return false;
+        *username = QStringLiteral("encargado");
+        *password = QStringLiteral("clave123");
+        return true;
+    });
+    scan(QStringLiteral("7840001"));
+    whenDialogOpens([](QDialog *payment) { payment->accept(); });
+    press(Qt::Key_F12);
+    QCOMPARE(m_core.printed.size(), 1);
+
+    whenDialogOpens([](QDialog *list) {
+        auto reprint = list->findChild<QPushButton *>(QStringLiteral("printSaleButton"));
+        reprint->click();                               // refused
+        reprint->click();                               // authorized
+        list->reject();
+    });
+    trigger("actionSessionSales");
+
+    QCOMPARE(asked, 2);
+    QCOMPARE(m_core.printed.size(), 2);
+    QCOMPARE(m_core.printed.at(1).count("COPIA"), 2);
+}
+
+void tst_Modules::drawerByHandNeedsPermission()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    m_core.print->savePrinterSettings(thermal());
+    int asked = 0;
+    m_users->setSupervisorPrompt([&](const QString &, const QString &, const QString &, QWidget *,
+                                     QString *username, QString *password) {
+        if (++asked == 1)
+            return false;
+        *username = QStringLiteral("encargado");
+        *password = QStringLiteral("clave123");
+        return true;
+    });
+    trigger("actionOpenDrawer");                        // the cashier, refused
+    QVERIFY(m_core.printed.isEmpty());
+    trigger("actionOpenDrawer");
+    QCOMPARE(m_core.printed.size(), 1);
+    QCOMPARE(asked, 2);
+}
+
+void tst_Modules::closingSheetGoesToTheThermalPrinter()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    m_core.print->savePrinterSettings(thermal());
+    QVERIFY(m_core.cash->addMovement(CashMovementType::In, 5000, QStringLiteral("Cambio")));
+
+    // through the screen: the count, then "print the sheet?", and no preview
+    whenDialogOpens([](QDialog *count) {
+        count->findChild<QSpinBox *>(QStringLiteral("countSpin_100000"))->setValue(1);
+        count->findChild<QSpinBox *>(QStringLiteral("countSpin_5000"))->setValue(1);
+        whenDialogOpens([](QDialog *ask) { ask->accept(); });
+        count->accept();
+    });
+    trigger("actionCloseRegister");
+
+    QCOMPARE(m_core.printed.size(), 1);
+    const QByteArray job = m_core.printed.first();
+    QVERIFY(job.contains("Planilla"));
+    QVERIFY(job.contains("Cambio"));
+    QVERIFY(job.contains("Gs. 105.000"));               // expected
+    QVERIFY(!job.contains(QByteArray("\x1B\x70", 2))); // a sheet doesn't open the drawer
 }
 
 void tst_Modules::holdAndRecall()

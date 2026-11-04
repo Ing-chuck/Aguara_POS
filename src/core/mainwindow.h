@@ -53,6 +53,21 @@ public:
     /// Without it (tests) nothing is restricted.
     void setUsers(SqlUserService *users, int lockMinutes);
 
+    /// false: the data comes from the command line, not from aguara.ini, so
+    /// Preferencias > Conexión a los datos would have no effect.
+    void setConnectionEditable(bool editable);
+
+    /// Close to start again: whoever changed the connection was authorized.
+    void closeForRestart();
+
+signals:
+    /// The user saved other connection settings and wants them now.
+    void restartRequested();
+
+protected:
+    /// With a cash session open, leaving takes caja.salir_abierta.
+    void closeEvent(QCloseEvent *event) override;
+
 public slots:
     /// Status bar: where the data lives ("Este equipo", "Servidor 192.168.1.10").
     /// `server`: show the connection state too.
@@ -63,6 +78,8 @@ public slots:
 private slots:
     void Import(ImportArticlesInterface *only = nullptr);
     void backupNow();
+    void configureConnection();
+    void configurePrinter();
     void about();
     void aboutModules();
 
@@ -70,6 +87,7 @@ private slots:
     void openModulePage(int moduleIndex);
     void addTab(QWidget* widget = nullptr, QIcon ico = QIcon(), QString label = "");
     void onTabCloseRequested(int indx);
+    void updateKeptPages();
     void onModuleNotification(ModuleMsg msg);
     void syncNavigation();
     void lockSession();
@@ -79,6 +97,11 @@ private slots:
 private:
     void applySession();
     bool canOpen(int moduleIndex) const;
+    bool mustStayOpen(int moduleIndex) const;
+    bool mustKeepRunning() const;
+    bool mayLeave();
+    void openKeptPages();
+    void closePage(int index);
     void prepareWindow();
     void buildSidebar();
     void buildStatusBar();
@@ -104,11 +127,13 @@ private:
     SqlUserService *users = nullptr;
     InactivityWatcher idleWatcher;
     bool locked = false;
+    bool leaving = false;
     qint64 sessionUserId = 0;
 
     QList<LoadedModule> modules;
     QList<QPushButton *> moduleButtons;     // index = module index (nullptr: no page)
     QHash<QWidget *, int> pageModule;       // open page -> module index
+    QHash<QWidget *, QWidget *> closeButtons;   // page that must stay open -> its tab's hidden X
     QList<QPointer<NotificationDialog>> notificationWidgets;
 
     // sidebar
@@ -132,9 +157,12 @@ private:
     QMenu* fileMenu = nullptr;
     QMenu* importMenu = nullptr;
     QMenu* sessionMenu = nullptr;
+    QMenu* preferencesMenu = nullptr;
     QMenu* helpMenu = nullptr;
     QAction* importAct = nullptr;
     QAction* backupAct = nullptr;
+    QAction* connectionAct = nullptr;
+    QAction* printerAct = nullptr;
     QAction* quitAct = nullptr;
     QAction* aboutAct = nullptr;
     QAction* aboutModulesAct = nullptr;

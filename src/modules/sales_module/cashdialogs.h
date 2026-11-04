@@ -73,17 +73,19 @@ class SessionsDialog : public QDialog
 {
     Q_OBJECT
 public:
-    SessionsDialog(CashService *cash, QWidget *parent);
+    SessionsDialog(CashService *cash, PrintService *print, QWidget *parent);
 
 private:
     void printSelected();
 
     CashService *cash;
+    PrintService *print;
     QTableWidget *table;
     QList<CashSession> list;
 };
 
-/// Print preview of a session's closing sheet.
-void previewClosingSheet(const CashSessionReport &report, QWidget *parent);
+/// A session's closing sheet: straight to a thermal printer, otherwise a page
+/// in a print preview. Also when the thermal printer fails: it can't be lost.
+void printClosingSheet(const CashSessionReport &report, PrintService *print, QWidget *parent);
 
 #endif // CASHDIALOGS_H

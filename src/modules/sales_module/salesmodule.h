@@ -18,7 +18,7 @@ class SalesModule : public AguaraWidget
 
 public:
     SalesModule(ProductService *products, InventoryService *inventory, UserService *users,
-                CashService *cash, SalesService *sales, QWidget *parent = nullptr);
+                CashService *cash, SalesService *sales, PrintService *print, QWidget *parent = nullptr);
 
 protected:
     void showEvent(QShowEvent *event) override;
@@ -32,6 +32,8 @@ private:
 
     void refreshSession();
     void renderSale();
+    void refreshConnection();
+    bool mayStartSomething();
     void say(const char *role, const QString &text);
     void complain(const QString &text);
     int currentLine() const;
@@ -54,8 +56,10 @@ private:
     void openRegister();
     void closeRegister();
     void cashMovement();
+    void openDrawer();
     void showSessionSales();
     void showSessions();
+    void showPending();
     void renameRegister();
 
     ProductService *products;
@@ -63,8 +67,10 @@ private:
     UserService *users;
     CashService *cash;
     SalesService *sales;
+    PrintService *print;
 
     SaleDraft draft;
+    bool sessionOpen = false;
 
     QLabel *subtitle = nullptr;
     QPushButton *cashButton = nullptr;
@@ -75,6 +81,7 @@ private:
     QLineEdit *entry = nullptr;
     QTableWidget *table = nullptr;
     QLabel *message = nullptr;
+    QLabel *connectionBanner = nullptr;
     QLabel *totalLabel = nullptr;
     QLabel *subtotalLabel = nullptr;
     QLabel *discountLabel = nullptr;

@@ -10,7 +10,10 @@
 
 #include <QAbstractButton>
 #include <QAction>
+#include <QComboBox>
 #include <QDialog>
+#include <QDialogButtonBox>
+#include <QFile>
 #include <QLineEdit>
 #include <QTimer>
 #include <QGridLayout>
@@ -18,8 +21,11 @@
 #include <QMenuBar>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QStandardPaths>
 #include <QStatusBar>
+#include <QTabBar>
 #include <QTabWidget>
+#include <QTableWidget>
 #include <QVBoxLayout>
 #include <QtTest>
 
@@ -28,6 +34,7 @@ class tst_MainWindow : public QObject
     Q_OBJECT
 
 private slots:
+    void initTestCase();
     void init();
     void cleanup();
 
@@ -43,6 +50,20 @@ private slots:
     void fileMenuActionsHaveWorkingShortcuts();
     void cashierSeesOnlyWhatTheyMayOpen();
     void lockedSessionCanBeTakenOverByAnotherUser();
+    void openRegisterKeepsSalesOpen();
+    void closedRegisterOpensNothing();
+    void saleSurvivesAChangeOfUser();
+    void userWhoCantSellDoesNotInheritThePage();
+    void connectionComesFromTheMenu();
+    void connectionNeedsPermission();
+    void aConnectionThatFailsIsNotSaved();
+    void printerAndStoreFromTheMenu();
+    void cashierCantLeaveWithTheTillOpen();
+    void closedTillLeavesFreely();
+    void whoMayLeaveLeaves();
+    void lockScreenCantLeaveWithTheTillOpen();
+    void lockScreenLeavesWithTheTillClosed();
+    void restartAfterAConnectionChangeIsNotStopped();
 
 private:
     struct Session;
@@ -57,6 +78,14 @@ private:
     PageCero *m_page = nullptr;
     int m_initial = 0;
 };
+
+void tst_MainWindow::initTestCase()
+{
+    QStandardPaths::setTestModeEnabled(true);   // never touch the real aguara.ini
+    QCoreApplication::setOrganizationName(QStringLiteral("AguaraTest"));
+    QCoreApplication::setApplicationName(QStringLiteral("tst_mainwindow"));
+    QFile::remove(DatabaseSettings::settingsPath());
+}
 
 void tst_MainWindow::init()
 {
@@ -331,6 +360,382 @@ void tst_MainWindow::lockedSessionCanBeTakenOverByAnotherUser()
     QCOMPARE(s.users->currentUser()->username, QStringLiteral("maria"));
     QCOMPARE(tabs->count(), base);              // the administrator's page is gone
     QVERIFY(navButton(s.window.get(), QStringLiteral("Inventario"))->isHidden());
+}
+
+static CashCount oneNote()
+{
+    DenominationCount note;
+    note.denomination = 100000;
+    note.count = 1;
+    return { note };
+}
+
+static const auto closeButtonSide = QTabBar::RightSide;
+
+void tst_MainWindow::openRegisterKeepsSalesOpen()
+{
+    Session s;
+    QVERIFY(s.ok);
+    QVERIFY(s.core.cash->openSession(oneNote()));
+    s.window->setUsers(s.users.get(), 0);       // signing in with the till open
+    s.window->show();
+
+    auto tabs = s.window->findChild<QTabWidget *>();
+    QCOMPARE(tabs->count(), 2);
+    QCOMPARE(tabs->tabText(0), QStringLiteral("Ventas"));       // first, and in front
+    QCOMPARE(tabs->currentIndex(), 0);
+    QWidget *sales = tabs->widget(0);
+    QVERIFY(!tabs->tabBar()->tabButton(0, closeButtonSide));
+
+    QMetaObject::invokeMethod(tabs, "tabCloseRequested", Q_ARG(int, 0));
+    QTest::keyClick(s.window.get(), Qt::Key_W, Qt::ControlModifier);
+    QTest::qWait(0);
+    QCOMPARE(tabs->count(), 2);
+    QCOMPARE(tabs->widget(0), sales);
+
+    // other pages can still be used, and closed
+    QVERIFY(s.users->login(QStringLiteral("admin"), QStringLiteral("secreto1")));
+    s.window->setUsers(s.users.get(), 0);
+    navButton(s.window.get(), QStringLiteral("Inventario"))->click();
+    QCOMPARE(tabs->count(), 3);
+    QCOMPARE(tabs->currentIndex(), 2);
+    QVERIFY(tabs->tabBar()->tabButton(2, closeButtonSide));
+
+    // closing the till gives the X back, and the page can go
+    QCOMPARE(s.core.cash->closeSession(oneNote()), CloseResult::Closed);
+    emit qobject_cast<AguaraWidget *>(sales)->keepOpenChanged();
+    QVERIFY(tabs->tabBar()->tabButton(0, closeButtonSide));
+    QMetaObject::invokeMethod(tabs, "tabCloseRequested", Q_ARG(int, 0));
+    QCOMPARE(tabs->count(), 2);
+}
+
+void tst_MainWindow::closedRegisterOpensNothing()
+{
+    Session s;
+    QVERIFY(s.ok);
+    s.window->setUsers(s.users.get(), 0);
+    auto tabs = s.window->findChild<QTabWidget *>();
+    QCOMPARE(tabs->count(), 1);
+
+    navButton(s.window.get(), QStringLiteral("Ventas"))->click();
+    QCOMPARE(tabs->count(), 2);
+    QVERIFY(tabs->tabBar()->tabButton(1, closeButtonSide));
+    QMetaObject::invokeMethod(tabs, "tabCloseRequested", Q_ARG(int, 1));
+    QCOMPARE(tabs->count(), 1);
+}
+
+void tst_MainWindow::saleSurvivesAChangeOfUser()
+{
+    Session s;
+    QVERIFY(s.ok);
+    Product p;
+    p.code = QStringLiteral("7840001");
+    p.description = QStringLiteral("ARTICULO");
+    p.price = 11000;
+    p.stock = AguaraQuantity::whole(10);
+    QVERIFY(s.core.products->saveProduct(p));
+    QVERIFY(s.core.cash->openSession(oneNote()));
+    s.window->setUsers(s.users.get(), 0);
+    s.window->show();
+
+    auto tabs = s.window->findChild<QTabWidget *>();
+    QWidget *sales = tabs->widget(0);
+    auto entry = sales->findChild<QLineEdit *>(QStringLiteral("saleEntry"));
+    QTest::keyClicks(entry, p.code);
+    QTest::keyClick(entry, Qt::Key_Return);
+    auto lines = sales->findChild<QTableWidget *>(QStringLiteral("saleLines"));
+    QCOMPARE(lines->rowCount(), 1);
+
+    QVERIFY(s.users->login(QStringLiteral("admin"), QStringLiteral("secreto1")));
+    s.window->setUsers(s.users.get(), 0);       // what a change of user does
+
+    QCOMPARE(tabs->widget(0), sales);
+    QCOMPARE(lines->rowCount(), 1);
+}
+
+void tst_MainWindow::userWhoCantSellDoesNotInheritThePage()
+{
+    Session s;
+    QVERIFY(s.ok);
+    QVERIFY(s.core.cash->openSession(oneNote()));
+    s.window->setUsers(s.users.get(), 0);
+    auto tabs = s.window->findChild<QTabWidget *>();
+    QCOMPARE(tabs->count(), 2);
+
+    QVERIFY(s.users->login(QStringLiteral("admin"), QStringLiteral("secreto1")));
+    UserRole none;
+    none.name = QStringLiteral("Sin ventas");
+    QVERIFY(s.users->saveRole(none));
+    UserAccount other;
+    other.username = QStringLiteral("otro");
+    other.fullName = QStringLiteral("Otro");
+    for (const UserRole &r : s.users->roles()) {
+        if (r.name == none.name)
+            other.roleIds << r.id;
+    }
+    QVERIFY(s.users->saveUser(other, QStringLiteral("clave123")));
+    QVERIFY(s.users->login(QStringLiteral("otro"), QStringLiteral("clave123")));
+    s.window->setUsers(s.users.get(), 0);
+
+    QCOMPARE(tabs->count(), 1);                 // Avisos alone
+    QTest::qWait(0);
+}
+
+/// `steps` runs on the dialog that is about to open.
+static void whenDialogOpens(const std::function<void(QDialog *)> &steps)
+{
+    QTimer::singleShot(100, qApp, [steps]() {
+        auto dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        steps(dialog);
+        if (dialog->isVisible())
+            dialog->reject();
+    });
+}
+
+void tst_MainWindow::connectionComesFromTheMenu()
+{
+    QFile::remove(DatabaseSettings::settingsPath());
+    Session s;
+    QVERIFY(s.ok);
+    QVERIFY(s.users->login(QStringLiteral("admin"), QStringLiteral("secreto1")));
+    s.window->setUsers(s.users.get(), 0);
+    QSignalSpy restart(s.window.get(), SIGNAL(restartRequested()));
+    const QString file = s.tmp.filePath(QStringLiteral("otra.db"));
+
+    bool asked = false;
+    whenDialogOpens([&](QDialog *settings) {
+        QVERIFY(settings->findChild<QLabel *>(QStringLiteral("databaseNotice"))->text().contains(QStringLiteral("no se copian")));
+        settings->findChild<QLineEdit *>(QStringLiteral("databaseFile"))->setText(file);
+        whenDialogOpens([&](QDialog *ask) {
+            asked = true;
+            QVERIFY(ask->findChildren<QLabel *>().last()->text().contains(QStringLiteral("otra.db")));
+            ask->reject();                      // "later": saved, nothing restarts
+        });
+        settings->accept();
+    });
+    s.window->findChild<QAction *>(QStringLiteral("connectionAction"))->trigger();
+    QVERIFY(asked);
+    QCOMPARE(QDir::cleanPath(DatabaseSettings::load().sqlitePath), QDir::cleanPath(file));
+    QCOMPARE(restart.count(), 0);
+
+    whenDialogOpens([&](QDialog *settings) {
+        settings->findChild<QLineEdit *>(QStringLiteral("databaseFile"))->setText(s.tmp.filePath(QStringLiteral("tercera.db")));
+        whenDialogOpens([](QDialog *ask) { ask->accept(); });
+        settings->accept();
+    });
+    s.window->findChild<QAction *>(QStringLiteral("connectionAction"))->trigger();
+    QCOMPARE(restart.count(), 1);
+
+    // nothing changed: nothing to ask
+    asked = false;
+    whenDialogOpens([&](QDialog *settings) {
+        QTimer::singleShot(100, qApp, [&]() {
+            if (auto ask = qobject_cast<QDialog *>(QApplication::activeModalWidget())) {
+                asked = true;
+                ask->reject();
+            }
+        });
+        settings->accept();
+    });
+    s.window->findChild<QAction *>(QStringLiteral("connectionAction"))->trigger();
+    QTest::qWait(150);
+    QVERIFY(!asked);
+    QCOMPARE(restart.count(), 1);
+    QFile::remove(DatabaseSettings::settingsPath());
+}
+
+void tst_MainWindow::connectionNeedsPermission()
+{
+    QFile::remove(DatabaseSettings::settingsPath());
+    Session s;
+    QVERIFY(s.ok);
+    int asked = 0;
+    s.users->setSupervisorPrompt([&](const QString &, const QString &, const QString &, QWidget *, QString *, QString *) {
+        ++asked;
+        return false;
+    });
+    s.window->findChild<QAction *>(QStringLiteral("connectionAction"))->trigger();      // the cashier
+    QCOMPARE(asked, 1);
+    QVERIFY(!QFile::exists(DatabaseSettings::settingsPath()));
+
+    s.window->setConnectionEditable(false);     // --database: aguara.ini is not in use
+    QVERIFY(!s.window->findChild<QAction *>(QStringLiteral("connectionAction"))->isEnabled());
+}
+
+void tst_MainWindow::aConnectionThatFailsIsNotSaved()
+{
+    QFile::remove(DatabaseSettings::settingsPath());
+    Session s;
+    QVERIFY(s.ok);
+    QVERIFY(s.users->login(QStringLiteral("admin"), QStringLiteral("secreto1")));
+    s.window->setUsers(s.users.get(), 0);
+
+    whenDialogOpens([](QDialog *settings) {
+        auto backend = settings->findChild<QComboBox *>(QStringLiteral("databaseBackend"));
+        backend->setCurrentIndex(backend->findData(int(DatabaseSettings::PostgreSQL)));
+        settings->findChild<QLineEdit *>(QStringLiteral("databaseHost"))->clear();      // refused without any network
+        settings->accept();
+        QVERIFY(settings->isVisible());
+        QVERIFY(!settings->findChild<QLabel *>(QStringLiteral("databaseStatus"))->text().isEmpty());
+    });
+    s.window->findChild<QAction *>(QStringLiteral("connectionAction"))->trigger();
+    QVERIFY(!QFile::exists(DatabaseSettings::settingsPath()));
+}
+
+void tst_MainWindow::printerAndStoreFromTheMenu()
+{
+    Session s;
+    QVERIFY(s.ok);
+    QVERIFY(s.users->login(QStringLiteral("admin"), QStringLiteral("secreto1")));
+    s.window->setUsers(s.users.get(), 0);
+
+    whenDialogOpens([](QDialog *dialog) {
+        auto kind = dialog->findChild<QComboBox *>(QStringLiteral("printerKind"));
+        kind->setCurrentIndex(kind->findData(int(PrinterKind::Thermal)));
+        auto name = dialog->findChild<QComboBox *>(QStringLiteral("printerName"));
+        name->clear();
+        name->addItem(QStringLiteral("TERMICA"));
+        name->setCurrentIndex(0);
+        dialog->findChild<QPushButton *>(QStringLiteral("printerTest"))->click();
+        QVERIFY(dialog->findChild<QLabel *>(QStringLiteral("printerStatus"))->text().contains(QStringLiteral("TERMICA")));
+        dialog->findChild<QLineEdit *>(QStringLiteral("storeName"))->setText(QStringLiteral("ALMACEN"));
+        dialog->accept();
+    });
+    s.window->findChild<QAction *>(QStringLiteral("printerAction"))->trigger();
+
+    QCOMPARE(s.core.printed.size(), 1);         // the test print, on the settings not saved yet
+    QCOMPARE(s.core.print->printerSettings().name, QStringLiteral("TERMICA"));
+    QCOMPARE(s.core.print->printerSettings().kind, PrinterKind::Thermal);
+    QCOMPARE(s.core.print->storeInfo().name, QStringLiteral("ALMACEN"));
+}
+
+/// "Salir del programa" on the lock screen.
+static QAbstractButton *exitButton(QDialog *dialog)
+{
+    auto box = dialog->findChild<QDialogButtonBox *>();
+    for (QAbstractButton *button : box->buttons()) {
+        if (box->buttonRole(button) == QDialogButtonBox::RejectRole)
+            return button;
+    }
+    return nullptr;
+}
+
+void tst_MainWindow::cashierCantLeaveWithTheTillOpen()
+{
+    Session s;
+    QVERIFY(s.ok);
+    QVERIFY(s.core.cash->openSession(oneNote()));
+    s.window->setUsers(s.users.get(), 0);
+    s.window->show();
+
+    int asked = 0;
+    bool authorize = false;
+    QString shown;
+    s.users->setSupervisorPrompt([&](const QString &, const QString &reason, const QString &, QWidget *,
+                                     QString *username, QString *password) {
+        ++asked;
+        shown = reason;
+        *username = QStringLiteral("admin");
+        *password = QStringLiteral("secreto1");
+        return authorize;
+    });
+
+    QVERIFY(!s.window->close());                // refused, or cancelled
+    QVERIFY(s.window->isVisible());
+    QCOMPARE(asked, 1);
+    QVERIFY(shown.contains(QStringLiteral("abierta")));
+
+    authorize = true;
+    QVERIFY(s.window->close());
+    QCOMPARE(asked, 2);
+    bool audited = false;
+    for (const AuditEntry &e : s.users->auditEntries())
+        audited = audited || e.action == QLatin1String("caja.salir_abierta");
+    QVERIFY(audited);
+}
+
+void tst_MainWindow::closedTillLeavesFreely()
+{
+    Session s;
+    QVERIFY(s.ok);
+    QVERIFY(s.core.cash->openSession(oneNote()));
+    s.window->setUsers(s.users.get(), 0);
+    s.window->show();
+    QCOMPARE(s.core.cash->closeSession(oneNote()), CloseResult::Closed);
+
+    int asked = 0;
+    s.users->setSupervisorPrompt([&](const QString &, const QString &, const QString &, QWidget *, QString *, QString *) {
+        ++asked;
+        return false;
+    });
+    QVERIFY(s.window->close());                 // the cashier closed the till: free to go
+    QCOMPARE(asked, 0);
+}
+
+void tst_MainWindow::whoMayLeaveLeaves()
+{
+    Session s;
+    QVERIFY(s.ok);
+    QVERIFY(s.core.cash->openSession(oneNote()));
+    QVERIFY(s.users->login(QStringLiteral("admin"), QStringLiteral("secreto1")));
+    s.window->setUsers(s.users.get(), 0);
+    s.window->show();
+    QVERIFY(s.window->close());
+}
+
+/// Who locked is still signed in: an administrator's permission must not
+/// open the door to whoever finds the lock screen.
+void tst_MainWindow::lockScreenCantLeaveWithTheTillOpen()
+{
+    Session s;
+    QVERIFY(s.ok);
+    QVERIFY(s.core.cash->openSession(oneNote()));
+    QVERIFY(s.users->login(QStringLiteral("admin"), QStringLiteral("secreto1")));
+    s.window->setUsers(s.users.get(), 0);
+    s.window->show();
+
+    bool checked = false;
+    QTimer::singleShot(100, [&]() {
+        auto dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        QVERIFY(exitButton(dialog)->isHidden());
+        dialog->reject();
+        QVERIFY(dialog->isVisible());
+        checked = true;
+        dialog->findChild<QLineEdit *>(QStringLiteral("username"))->setText(QStringLiteral("admin"));
+        dialog->findChild<QLineEdit *>(QStringLiteral("password"))->setText(QStringLiteral("secreto1"));
+        dialog->accept();
+    });
+    QMetaObject::invokeMethod(s.window.get(), "lockSession");
+    QVERIFY(checked);
+    QVERIFY(s.window->isVisible());
+}
+
+void tst_MainWindow::lockScreenLeavesWithTheTillClosed()
+{
+    Session s;
+    QVERIFY(s.ok);
+    s.window->setUsers(s.users.get(), 0);
+    s.window->show();
+    QTimer::singleShot(100, [&]() {
+        auto dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        exitButton(dialog)->click();
+    });
+    QMetaObject::invokeMethod(s.window.get(), "lockSession");
+    QVERIFY(!s.window->isVisible());
+}
+
+void tst_MainWindow::restartAfterAConnectionChangeIsNotStopped()
+{
+    Session s;
+    QVERIFY(s.ok);
+    QVERIFY(s.core.cash->openSession(oneNote()));
+    s.window->setUsers(s.users.get(), 0);
+    s.window->show();
+    s.window->closeForRestart();
+    QVERIFY(!s.window->isVisible());
 }
 
 QTEST_MAIN(tst_MainWindow)

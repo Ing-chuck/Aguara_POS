@@ -101,6 +101,17 @@ struct SaleRecord {
     QString    voidedBy;
     QDateTime  voidedAt;
     QString    voidReason;
+    int        printCount = 0;      ///< tickets so far: after the first, copies
+};
+
+/// A sale charged on this computer that the database doesn't have yet.
+struct PendingSale {
+    qint64    registerId = 0;
+    qint64    number = 0;           ///< 0 until it needs one of its own
+    QDateTime when;
+    QString   user;
+    Money     total = 0;
+    QString   error;                ///< why the database refused it; empty while it just waits
 };
 
 /// A sale set aside to serve another customer.
@@ -165,8 +176,23 @@ public:
     /// in cash, the only part that rounds (see cashDue()). No payments at all
     /// is right only if nothing is owed. Everything is saved in one transaction:
     /// the sale, its lines, the payments, the stock movements and the number.
-    /// Returns the sale's id.
+    /// Returns the sale's id, or 0 if it wasn't charged.
+    ///
+    /// The sale goes first to a queue on this computer's disk. Without a
+    /// connection it waits there and the id is negative: sale() and
+    /// recordPrint() take it, so its ticket prints as usual, with its number.
+    /// It reaches the database by itself when the connection comes back. Only
+    /// the sale already being rung up can be finished this way: see online().
     virtual qint64 checkout(const SaleDraft &draft, const QList<SalePayment> &payments) = 0;
+
+    /// false: there's no connection with the server. Nothing new can start,
+    /// and the screen must not let it: a sale that's on the screen is finished,
+    /// and that's all.
+    virtual bool online() const = 0;
+    /// What the queue holds, oldest first.
+    virtual QList<PendingSale> pendingSales() const = 0;
+    /// Try to send the queue now. It also happens by itself. true if it's empty.
+    virtual bool flushPending() = 0;
 
     /// The number of a sale, not voided, that already used this code. Empty if
     /// none. Terminals can repeat a number after closing a batch, so a repeat
@@ -183,6 +209,9 @@ public:
     /// outside the program. Check ventas.anular first.
     virtual bool voidSale(qint64 id, const QString &reason) = 0;
 
+    /// One more ticket of this sale came out.
+    virtual bool recordPrint(qint64 id) = 0;
+
     /// Set a sale aside, in the database: it survives a restart.
     virtual qint64 holdSale(const SaleDraft &draft) = 0;
     /// This register's held sales, oldest first.
@@ -194,7 +223,7 @@ public:
     virtual QString lastError() const = 0;
 };
 
-#define SalesService_iid "org.AguaraPOS.SalesService/1.0"
+#define SalesService_iid "org.AguaraPOS.SalesService/1.1"
 Q_DECLARE_INTERFACE(SalesService, SalesService_iid)
 
 #endif // SALESSERVICE_H

@@ -172,6 +172,8 @@ Es el corazón del sistema.
   3. Si el conteo **coincide**, la caja se cierra.
   4. Si **no coincide**, el cierre se bloquea. Puede volver a contar, o un supervisor autoriza el cierre con la diferencia y un motivo obligatorio. Esa diferencia queda registrada y aparece en los reportes.
 - [x] Planilla de cierre impresa y reimprimible, con el detalle por medio de pago, los movimientos y las diferencias.
+- [x] Con la caja abierta, Ventas es la ventana principal: se abre al ingresar, queda primera y no se cierra hasta cerrar la caja (`WidgetModuleInterface::keepPageOpen()`). Sobrevive al cambio de usuario, con la venta en curso.
+- [x] Con la caja abierta no se sale del programa sin cerrarla o sin autorización (`caja.salir_abierta`), tampoco desde la pantalla de bloqueo. El apagado de Windows no se impide, pero queda auditado.
 - [x] Recuperación: si el programa o la PC se caen, al reabrir se retoma la sesión abierta. Una sesión olvidada de otro día solo la puede cerrar un supervisor.
 
 **Venta (`SalesService` y pantalla de ventas)**
@@ -183,6 +185,7 @@ Es el corazón del sistema.
   - subtotal y total grandes.
 - [x] Venta en espera: estacionar una venta y atender a otro cliente.
 - [x] Cobro en efectivo con cálculo de vuelto. Solo lo que se paga en efectivo se **redondea a 50 Gs.**, la moneda más chica: sin eso, una venta por peso no podría cuadrar en el arqueo. El redondeo queda guardado en la venta.
+- [x] **Cola local de ventas** (`SaleOutbox`): cada venta va primero a un archivo SQLite en el disco del equipo y recién después a la base. Sin conexión no se inician ventas nuevas, pero la venta en curso se cobra, imprime y abre el cajón; al volver la conexión sube sola. `ventas.uuid` evita duplicados si la conexión se corta durante el COMMIT, y la caja no cierra con ventas en cola.
 - [x] Guardado atómico en una sola transacción: venta, líneas, pagos, movimientos de stock y numeración. La numeración es correlativa por caja y no se repite entre puestos (contador `cajas.ultimo_numero`, dentro de la transacción de la venta: en las dos bases, y sin saltos si una venta falla).
 - [x] **Anulación** de una venta de la sesión actual, con permiso y motivo. Revierte el stock y la caja.
 - [x] **Descuentos** por línea o por total, en porcentaje o monto, con un límite por rol. Pasar el límite requiere supervisor.
@@ -197,18 +200,19 @@ Es el corazón del sistema.
 
 ### Fase 4: Comprobantes e impresión *(M)*
 
-- [ ] `PrintService` con dos caminos:
+- [x] `PrintService` con dos caminos:
   - **ESC/POS** directo a impresoras térmicas de 58 u 80 mm, por la cola de Windows en modo RAW (`WritePrinter`). Es rápido, tiene corte de papel y **pulso para abrir el cajón**.
   - **`QPrinter`**, para impresoras comunes (A4) y para exportar a PDF.
-- [ ] Plantilla de ticket configurable:
-  - datos del comercio, RUC y timbrado (si corresponde);
+- [x] Plantilla de ticket configurable:
+  - datos del comercio y RUC (el timbrado llega con la fase 8: el ticket es interno y lo aclara);
   - número de comprobante, caja, cajero, fecha y hora;
   - líneas con IVA, totales por tasa, pagos y vuelto;
   - pie de texto;
-  - texto aportado por los módulos (por ejemplo, el MTCN de un giro).
-- [ ] Reimpresión con la marca "COPIA", que requiere permiso.
-- [ ] Prueba de impresión desde la configuración del puesto.
-- [ ] Cajón de dinero: se abre al cobrar en efectivo, o a mano con permiso y queda auditado.
+  - pendiente: texto aportado por los módulos (por ejemplo, el MTCN de un giro). Llega con `SaleItemProvider`, que todavía no existe; `PrintService::printReceipt()` ya imprime cualquier `Receipt`.
+- [x] Reimpresión con la marca "COPIA", que requiere permiso. El primer ticket que sale es el original, aunque la impresora haya fallado al cobrar (`ventas.impresiones`).
+- [x] Prueba de impresión desde la configuración del puesto (Preferencias > Impresora y comercio).
+- [x] Cajón de dinero: se abre al cobrar en efectivo, o a mano con permiso y queda auditado.
+- [ ] **Probar con una térmica y un cajón reales.** El código está probado byte por byte, pero todavía no se imprimió en una impresora de verdad: la página de códigos 850, el corte y el pulso se confirman en el hardware.
 - [ ] Verificar los drivers de las impresoras elegidas en Windows 7 (Epson TM-T20, Bixolon y genéricas chinas de 80 mm).
 
 **Hecho cuando:** cada venta imprime su ticket en una térmica de 80 mm, el cajón se abre solo y la planilla de cierre sale impresa.

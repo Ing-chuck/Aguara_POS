@@ -2,6 +2,7 @@
 #define CLOSINGSHEET_H
 
 #include <cashservice.h>
+#include <printservice.h>
 
 #include <QString>
 
@@ -13,6 +14,8 @@ namespace ClosingSheet {
 
 QString html(const CashSessionReport &report);
 void print(QPrinter *printer, const CashSessionReport &report);
+/// The same, for a thermal printer's paper.
+Receipt receipt(const CashSessionReport &report);
 
 } // namespace ClosingSheet
 

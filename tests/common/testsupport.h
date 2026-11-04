@@ -12,14 +12,17 @@
 #include "database.h"
 #include "sqlcashservice.h"
 #include "sqlinventoryservice.h"
+#include "sqlprintservice.h"
 #include "sqlproductservice.h"
 #include "sqlsalesservice.h"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QThread>
@@ -103,6 +106,10 @@ public:
     bool open(DatabaseSettings::Backend backend, const QString &dir, QString *error)
     {
         close();
+        QStandardPaths::setTestModeEnabled(true);   // never the real aguara.ini
+        QFile::remove(DatabaseSettings::settingsPath());
+        printed.clear();
+        printerFails = false;
         DatabaseSettings s;
         if (backend == DatabaseSettings::PostgreSQL) {
             s = postgresSettings();
@@ -135,17 +142,30 @@ public:
         inventory.reset(new SqlInventoryService(monitor.get(), products.get()));
         cash.reset(new SqlCashService(monitor.get(), QStringLiteral("PC-TEST")));
         sales.reset(new SqlSalesService(monitor.get(), products.get(), cash.get()));
+        static int queues = 0;
+        sales->outbox()->setPath(QStringLiteral("%1/cola-%2.db").arg(dir).arg(++queues));
+        print.reset(new SqlPrintService(monitor.get(), sales.get(), cash.get()));
+        print->setRawSender([this](const QString &, const QByteArray &data, QString *problem) {
+            if (printerFails) {
+                *problem = QStringLiteral("La impresora no responde.");
+                return false;
+            }
+            printed << data;
+            return true;
+        });
         host.reset(new CoreHost);
         host->registerService(ProductService_iid, products.get());
         host->registerService(InventoryService_iid, inventory.get());
         host->registerService(CashService_iid, cash.get());
         host->registerService(SalesService_iid, sales.get());
+        host->registerService(PrintService_iid, print.get());
         return true;
     }
 
     void close()
     {
         host.reset();
+        print.reset();
         sales.reset();
         cash.reset();
         inventory.reset();
@@ -163,7 +183,10 @@ public:
     std::unique_ptr<SqlInventoryService> inventory;
     std::unique_ptr<SqlCashService> cash;
     std::unique_ptr<SqlSalesService> sales;
+    std::unique_ptr<SqlPrintService> print;
     std::unique_ptr<CoreHost> host;
+    QList<QByteArray> printed;      // what a thermal printer would have received
+    bool printerFails = false;
 };
 
 } // namespace TestSupport

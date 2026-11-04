@@ -21,6 +21,7 @@ public:
     ModuleInfo moduleInfo() const override;
     bool initialize(AguaraHost *host) override;
     QWidget *createWidget(QWidget *parent = nullptr) override;
+    bool keepPageOpen() const override;
     QList<PermissionInfo> permissions() const override;
 
 private:
@@ -29,6 +30,7 @@ private:
     UserService *users = nullptr;
     CashService *cash = nullptr;
     SalesService *sales = nullptr;
+    PrintService *print = nullptr;
 };
 
 #endif // SALESMODULEFACTORY_H

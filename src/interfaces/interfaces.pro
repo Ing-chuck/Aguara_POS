@@ -20,6 +20,7 @@ HEADERS += aguara_global.h \
            aguarahost.h \
            barcode.h \
            cashservice.h \
+           printservice.h \
            inventoryservice.h \
            quantity.h \
            interfaces.h \

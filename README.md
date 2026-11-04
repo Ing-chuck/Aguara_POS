@@ -43,8 +43,11 @@ Qt Creator. Cada push las ejecuta en GitHub Actions (`.github/workflows/ci.yml`)
 un servidor PostgreSQL de prueba.
 
 # Base de datos
-Dos opciones, elegidas en `aguara.exe --configure-database` (o automaticamente si la base de
-datos no se puede abrir). La eleccion se guarda en `%APPDATA%\Aguara\AguaraPOS\aguara.ini`.
+Dos opciones, elegidas en **Preferencias > Conexion a los datos** (permiso `datos.conexion`, solo
+administradores salvo que un rol lo reciba), en `aguara.exe --configure-database` o automaticamente si
+la base de datos no se puede abrir. La eleccion se guarda en `%APPDATA%\Aguara\AguaraPOS\aguara.ini`.
+Desde el menu solo se guarda una conexion que funciona, y se aplica al reiniciar el programa, que
+ofrece hacerlo en el momento. **Los datos no se copian de una base a otra.**
 
 * **Un solo puesto** (por defecto): un archivo SQLite creado al iniciar, sin servidor:
   `%APPDATA%\Aguara\AguaraPOS\aguara.db`. Para usar otro archivo:
@@ -155,6 +158,44 @@ frena las ventas hasta que un supervisor la cierre.
 
 Un codigo que no existe avisa en la misma pantalla, sin abrir un dialogo que se coma el proximo
 codigo. Vender mas de lo que hay avisa y sigue (ver *Inventario*).
+
+**Con la caja abierta, Ventas es la ventana principal:** la pagina se abre sola al ingresar, queda
+primera y no se puede cerrar hasta cerrar la caja, tambien si la sesion viene de otro dia. Se puede
+seguir usando el resto de las paginas. Al cambiar de usuario sigue abierta, con la venta en curso,
+siempre que el nuevo usuario pueda usar Ventas.
+
+**Con la caja abierta no se sale del programa:** Salir, la X, Alt+F4 y Ctrl+Q piden cerrar la caja o la
+autorizacion de un supervisor (`caja.salir_abierta`, que queda en la auditoria). Desde la pantalla de
+bloqueo no se puede salir: hay que ingresar primero, porque quien bloqueo sigue con su sesion y sus
+permisos. Si Windows se apaga, el programa no lo impide, pero queda en la auditoria
+(`caja.salida_windows`): la sesion y la cola de ventas estan a salvo y todo vuelve al iniciar. Sin
+conexion, un supervisor no puede autorizar, porque validar su clave necesita el servidor.
+
+**Tickets y cajon:** en **Preferencias > Impresora y comercio** se elige la impresora de cada equipo
+(se guarda en su `aguara.ini`) y los datos del comercio (en la base, compartidos entre cajas). Una
+termica recibe ESC/POS directo por la cola de Windows en modo RAW: 80 mm (48 columnas) o 58 mm (32),
+corte de papel y pulso al cajon conectado a la impresora. Una impresora comun imprime una pagina por
+su driver, sin cajon. Cada venta imprime su ticket, y el cobro con efectivo abre el cajon; ambas cosas
+se pueden desactivar. **Si la impresora falla, la venta queda cobrada igual** y la pantalla lo avisa.
+El primer ticket de una venta es el original, aunque salga mas tarde; los siguientes dicen `COPIA`,
+piden `ventas.reimprimir` y quedan en la auditoria (`Caja > Ventas de la sesion`, tambien en PDF).
+Abrir el cajon a mano (`Caja > Abrir cajon`) pide `caja.abrir_cajon` y queda en la auditoria. Con una
+termica configurada, la planilla de cierre sale en el ticket; si no, en una pagina con vista previa.
+El ticket es **interno** y lo dice ("No valido como factura"): no lleva timbrado hasta la fase 8.
+
+**Ninguna venta se pierde:** cada venta se escribe primero en una cola en el disco de este equipo
+(`%APPDATA%\Aguara\AguaraPOS\ventas-pendientes-aguara.db`, un archivo SQLite con escritura forzada) y
+recien despues se envia a la base; al confirmarse, sale de la cola. Un corte de luz, un cierre
+inesperado o una caida de la red pueden dejar una venta en la cola, nunca perderla. Sin conexion **no se
+pueden iniciar ventas nuevas**: la venta en pantalla se termina de cobrar, con su numero, ticket y cajon,
+y espera en la cola. Cada equipo es su propia caja, asi que sigue su numeracion sin chocar con otro. Al
+volver la conexion las ventas suben solas, en orden, con su fecha y su usuario, y descuentan el stock en
+ese momento. Cada venta tiene un `uuid`: subirla dos veces la guarda una sola vez, aunque la conexion se
+corte justo en el COMMIT. La caja **no cierra** con ventas en cola, porque el esperado no coincidiria.
+`Caja > Ventas por subir` muestra lo que espera y, si la base rechazo alguna, por que; esa queda en la
+cola, sin bloquear a las demas, y se puede reintentar. Mientras no hay conexion no se bloquea la sesion
+por inactividad: para volver a entrar haria falta el servidor. Tampoco se puede anular ni reimprimir una
+venta que siga en la cola.
 
 **Una venta se guarda entera o no se guarda:** venta, lineas, pago, movimientos de stock y numero van
 en una sola transaccion. La numeracion es correlativa por caja, sin saltos ni repetidos entre puestos.

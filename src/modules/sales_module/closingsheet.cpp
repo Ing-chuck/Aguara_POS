@@ -113,6 +113,66 @@ QString ClosingSheet::html(const CashSessionReport &r)
     return QStringLiteral("<html><body style=\"font-size: 10pt;\">%1</body></html>").arg(body);
 }
 
+Receipt ClosingSheet::receipt(const CashSessionReport &r)
+{
+    const CashSession &s = r.session;
+    const QString dateTime = QStringLiteral("dd/MM/yyyy HH:mm");
+    Receipt out;
+    out.center(tr("Planilla de cierre"), ReceiptLine::Title);
+    out.center(s.registerName, ReceiptLine::Strong);
+    out.rule();
+    out.add(tr("Apertura"), s.opened.toString(dateTime));
+    out.add(QString(), s.openedBy);
+    out.add(tr("Cierre"), s.closed.toString(dateTime));
+    out.add(QString(), s.closedBy);
+    out.rule();
+
+    out.add(tr("Ventas cobradas"), QString::number(r.salesCount));
+    out.add(tr("Descuentos"), money(r.discounts));
+    out.add(tr("Redondeo"), money(r.rounding));
+    out.add(tr("Anuladas (%1)").replace(QLatin1String("%1"), QString::number(r.voidedCount)), money(r.voidedTotal));
+    out.add(tr("Total vendido"), money(r.salesTotal), ReceiptLine::Strong);
+    out.rule();
+
+    out.add(tr("Gravado 10 %"), money(r.taxed10));
+    out.add(tr("IVA 10 %"), money(r.vat10));
+    out.add(tr("Gravado 5 %"), money(r.taxed5));
+    out.add(tr("IVA 5 %"), money(r.vat5));
+    out.add(tr("Exento"), money(r.exempt));
+    out.rule();
+
+    out.add(tr("Por medio de pago"), QString(), ReceiptLine::Strong);
+    for (const PaymentTotal &p : r.payments)
+        out.add(AguaraSale::methodName(p.method), money(p.amount));
+    if (!r.vouchers.isEmpty()) {
+        out.rule();
+        out.add(tr("Comprobantes por conciliar"), QString(), ReceiptLine::Strong);
+        for (const PaymentVoucher &v : r.vouchers)
+            out.add(QStringLiteral("%1 %2 %3").arg(AguaraSale::methodName(v.method), v.reference, v.saleNumber), money(v.amount));
+    }
+    if (!r.movements.isEmpty()) {
+        out.rule();
+        out.add(tr("Movimientos de caja"), QString(), ReceiptLine::Strong);
+        for (const CashMovement &m : r.movements) {
+            out.add(QStringLiteral("%1 %2 - %3 (%4)").arg(m.when.toString(QStringLiteral("HH:mm")), movementName(m.type), m.reason, m.user),
+                    money(m.type == QLatin1String(CashMovementType::In) ? m.amount : -m.amount));
+        }
+    }
+    out.rule();
+
+    out.add(tr("Fondo inicial"), money(s.openingFloat));
+    out.add(tr("Ventas en efectivo y otros ingresos"), money(r.expectedCash - s.openingFloat + r.cashOut));
+    out.add(tr("Egresos y retiros"), money(-r.cashOut));
+    out.add(tr("Esperado"), money(r.expectedCash), ReceiptLine::Strong);
+    out.add(tr("Contado"), money(s.counted), ReceiptLine::Strong);
+    out.add(s.difference < 0 ? tr("Faltante") : tr("Diferencia"), money(s.difference), ReceiptLine::Strong);
+    if (s.difference != 0) {
+        out.add(tr("Motivo: %1").replace(QLatin1String("%1"), s.differenceReason));
+        out.add(tr("Autorizó: %1").replace(QLatin1String("%1"), s.authorizedBy));
+    }
+    return out;
+}
+
 void ClosingSheet::print(QPrinter *printer, const CashSessionReport &report)
 {
     QTextDocument document;

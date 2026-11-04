@@ -17,6 +17,7 @@
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTableWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace {
@@ -37,8 +38,9 @@ QLabel *figure(QGridLayout *grid, int row, const QString &name)
 } // namespace
 
 SalesModule::SalesModule(ProductService *products, InventoryService *inventory, UserService *users,
-                         CashService *cash, SalesService *sales, QWidget *parent)
+                         CashService *cash, SalesService *sales, PrintService *print, QWidget *parent)
     : AguaraWidget(parent), products(products), inventory(inventory), users(users), cash(cash), sales(sales)
+    , print(print)
 {
     auto layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -74,6 +76,11 @@ SalesModule::SalesModule(ProductService *products, InventoryService *inventory, 
 
     renderSale();
     refreshSession();
+
+    auto watch = new QTimer(this);
+    connect(watch, &QTimer::timeout, this, &SalesModule::refreshConnection);
+    watch->start(1000);
+    refreshConnection();
 }
 
 void SalesModule::buildCashMenu(QPushButton *button)
@@ -86,6 +93,8 @@ void SalesModule::buildCashMenu(QPushButton *button)
     };
     add(tr("Ventas de la sesión"), "actionSessionSales", &SalesModule::showSessionSales);
     add(tr("Movimiento de caja"), "actionCashMovement", &SalesModule::cashMovement);
+    add(tr("Abrir cajón"), "actionOpenDrawer", &SalesModule::openDrawer);
+    add(tr("Ventas por subir"), "actionPending", &SalesModule::showPending);
     add(tr("Cerrar caja"), "actionCloseRegister", &SalesModule::closeRegister);
     menu->addSeparator();
     add(tr("Planillas anteriores"), "actionSessions", &SalesModule::showSessions);
@@ -161,6 +170,14 @@ QWidget *SalesModule::buildSalePage()
     table->setColumnWidth(ColumnAmount, 100);
     table->horizontalHeader()->setSectionResizeMode(ColumnDescription, QHeaderView::Stretch);
     left->addWidget(table, 1);
+
+    connectionBanner = new QLabel;
+    connectionBanner->setObjectName(QStringLiteral("saleConnection"));
+    connectionBanner->setWordWrap(true);
+    connectionBanner->setMargin(8);
+    AguaraStyle::setRole(connectionBanner, AguaraStyle::Warning);
+    connectionBanner->hide();
+    left->addWidget(connectionBanner);
 
     message = new QLabel;
     message->setObjectName(QStringLiteral("saleMessage"));
@@ -279,6 +296,11 @@ void SalesModule::refreshSession()
     const std::optional<CashSession> session = cash->currentSession();
     const bool selling = session && !session->isStale();
 
+    if (sessionOpen != session.has_value()) {
+        sessionOpen = session.has_value();
+        emit keepOpenChanged();
+    }
+
     if (selling) {
         subtitle->setText(tr("%1 · abierta por %2 a las %3").arg(cashRegister.name, session->openedBy,
                           session->opened.toString(QStringLiteral("HH:mm"))));
@@ -332,6 +354,38 @@ void SalesModule::renderSale()
     countLabel->setText(QString::number(draft.lines.size()));
 }
 
+/// What the cashier must know about the server, always in sight.
+void SalesModule::refreshConnection()
+{
+    const QList<PendingSale> pending = sales->pendingSales();
+    int refused = 0;
+    for (const PendingSale &sale : pending)
+        refused += sale.error.isEmpty() ? 0 : 1;
+
+    QString text;
+    if (!sales->online()) {
+        text = tr("Sin conexión con el servidor. Cobre la venta en curso: no se pueden iniciar ventas nuevas.");
+        if (!pending.isEmpty())
+            text += QLatin1Char(' ') + tr("%1 en la cola de este equipo, se suben solas.").arg(pending.size());
+    } else if (refused > 0) {
+        text = tr("%1 ventas no se pudieron subir. Ver Caja > Ventas por subir.").arg(refused);
+    } else if (!pending.isEmpty()) {
+        text = tr("Subiendo %1 ventas al servidor.").arg(pending.size());
+    }
+    connectionBanner->setText(text);
+    connectionBanner->setVisible(!text.isEmpty());
+}
+
+/// Without a server nothing new starts: the sale on the screen is finished.
+bool SalesModule::mayStartSomething()
+{
+    if (sales->online())
+        return true;
+    complain(draft.lines.isEmpty() ? tr("Sin conexión con el servidor: no se pueden iniciar ventas nuevas.")
+                                   : tr("Sin conexión con el servidor: cobre la venta en curso."));
+    return false;
+}
+
 void SalesModule::say(const char *role, const QString &text)
 {
     message->setText(text);
@@ -359,6 +413,8 @@ void SalesModule::submitEntry()
     if (text.isEmpty())
         return;
     entry->clear();
+    if (!mayStartSomething())
+        return;
 
     bool explicitQuantity = false;
     Quantity quantity = AguaraQuantity::One;
@@ -450,6 +506,8 @@ void SalesModule::addScan(const ScanResult &scan, bool explicitQuantity, Quantit
 
 void SalesModule::searchArticle()
 {
+    if (!mayStartSomething())
+        return;
     ArticleSearchDialog search(products, entry->text().trimmed(), this);
     if (search.exec() == QDialog::Accepted) {
         entry->clear();
@@ -552,7 +610,7 @@ void SalesModule::discountSale()
 
 void SalesModule::holdSale()
 {
-    if (draft.lines.isEmpty())
+    if (draft.lines.isEmpty() || !mayStartSomething())
         return;
     if (!sales->holdSale(draft)) {
         complain(sales->lastError());
@@ -566,6 +624,8 @@ void SalesModule::holdSale()
 
 void SalesModule::recallSale()
 {
+    if (!mayStartSomething())
+        return;
     if (!draft.lines.isEmpty()) {
         complain(tr("Termine o ponga en espera la venta actual antes de recuperar otra."));
         return;
@@ -621,8 +681,13 @@ void SalesModule::charge()
             renderSale();
             lastChange->setText(tr("Vuelto: Gs. %1").arg(AguaraMoney::format(dialog.change())));
             lastChange->setVisible(dialog.paidInCash());
-            say(AguaraStyle::Success, tr("Venta %1 cobrada.").arg(
-                record ? AguaraSale::formatNumber(record->registerId, record->number) : QString()));
+            const QString number = record ? AguaraSale::formatNumber(record->registerId, record->number) : QString();
+            // The sale is saved whatever the printer does: say so, and go on
+            if (print->finishSale(id))
+                say(AguaraStyle::Success, tr("Venta %1 cobrada.").arg(number));
+            else
+                say(AguaraStyle::Warning, tr("Venta %1 cobrada, sin ticket: %2 Se reimprime en Caja > Ventas de la sesión.")
+                                              .arg(number, print->lastError()));
         }
     }
     refreshSession();
@@ -701,10 +766,22 @@ void SalesModule::closeRegister()
     refreshSession();
     say(AguaraStyle::Info, QString());
     lastChange->hide();
-    if (askConfirm(this, tr("Caja cerrada"), tr("¿Ver e imprimir la planilla de cierre?"), tr("Ver planilla"))) {
+    if (askConfirm(this, tr("Caja cerrada"), tr("¿Imprimir la planilla de cierre?"), tr("Imprimir"))) {
         if (const std::optional<CashSessionReport> report = cash->sessionReport(session->id))
-            previewClosingSheet(*report, this);
+            printClosingSheet(*report, print, this);
     }
+}
+
+/// Without a sale, for change or a mistake: on record.
+void SalesModule::openDrawer()
+{
+    if (!users->authorize(QStringLiteral("caja.abrir_cajon"), tr("Abrir el cajón"), this))
+        return;
+    if (print->openDrawer())
+        say(AguaraStyle::Info, tr("Cajón abierto."));
+    else
+        complain(print->lastError());
+    entry->setFocus();
 }
 
 void SalesModule::cashMovement()
@@ -733,7 +810,7 @@ void SalesModule::showSessionSales()
         say(AguaraStyle::Info, tr("La caja no está abierta."));
         return;
     }
-    SessionSalesDialog dialog(sales, users, session->id, this);
+    SessionSalesDialog dialog(sales, users, print, session->id, this);
     dialog.exec();
     entry->setFocus();
 }
@@ -742,8 +819,14 @@ void SalesModule::showSessions()
 {
     if (!users->authorize(QStringLiteral("caja.planillas"), tr("Ver planillas de cierre"), this))
         return;
-    SessionsDialog dialog(cash, this);
+    SessionsDialog dialog(cash, print, this);
     dialog.exec();
+}
+
+void SalesModule::showPending()
+{
+    PendingSalesDialog(sales, this).exec();
+    refreshConnection();
 }
 
 void SalesModule::renameRegister()

@@ -163,19 +163,38 @@ private:
     QTableWidget *table;
 };
 
-/// The sales of the session, and voiding one.
+/// What is still in this computer's queue, and why.
+class PendingSalesDialog : public QDialog
+{
+    Q_OBJECT
+public:
+    PendingSalesDialog(SalesService *sales, QWidget *parent);
+
+private:
+    void reload();
+
+    SalesService *sales;
+    QTableWidget *table;
+};
+
+/// The sales of the session: voiding, reprinting, saving as PDF.
 class SessionSalesDialog : public QDialog
 {
     Q_OBJECT
 public:
-    SessionSalesDialog(SalesService *sales, UserService *users, qint64 sessionId, QWidget *parent);
+    SessionSalesDialog(SalesService *sales, UserService *users, PrintService *print, qint64 sessionId, QWidget *parent);
 
 private:
     void reload();
     void voidSelected();
+    void printSelected();
+    void saveSelected();
+    bool mayCopy(const SaleRecord &record);
+    void showProblem(const QString &text);
 
     SalesService *sales;
     UserService *users;
+    PrintService *print;
     qint64 sessionId;
     QTableWidget *table;
     QList<SaleRecord> list;

@@ -6,6 +6,9 @@
 #include <QObject>
 #include <QSqlDatabase>
 
+#include <functional>
+#include <optional>
+
 class ConnectionMonitor;
 class QSqlQuery;
 class UserService;
@@ -22,6 +25,14 @@ public:
 
     /// Who is acting, and where changes are recorded (may stay null).
     void setUsers(UserService *users) { m_users = users; }
+
+    /// How many sales are still on their way: they count in the expected cash,
+    /// so a session can't close before they arrive.
+    void setPendingSales(const std::function<int()> &pending) { m_pendingSales = pending; }
+
+    /// The last number of this register that this computer knows of.
+    qint64 lastNumber() const { return m_lastNumber; }
+    void noteNumber(qint64 number) { m_lastNumber = qMax(m_lastNumber, number); }
 
     CashRegister currentRegister() override;
     bool renameRegister(const QString &name) override;
@@ -43,6 +54,7 @@ private:
     void rollback();
     void audit(const QString &action, const QString &entityId, const QString &after);
     QString userName() const;
+    bool salesArePending();
 
     QList<CashSession> readSessions(const QString &where, const QVariantList &values) const;
     Money expectedCash(qint64 sessionId, Money openingFloat) const;
@@ -56,6 +68,12 @@ private:
     QString m_station;
     UserService *m_users = nullptr;
     bool m_inTransaction = false;
+    std::function<int()> m_pendingSales;
+    // The last answers from the server: during an outage the till goes on
+    // with them, to finish the sale in progress.
+    CashRegister m_knownRegister;
+    std::optional<CashSession> m_knownSession;
+    qint64 m_lastNumber = 0;
     mutable QString m_lastError;
 };
 

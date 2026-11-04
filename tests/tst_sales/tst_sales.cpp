@@ -1,5 +1,6 @@
 // Cash sessions and sales: what a day at the till leaves in the database, on
 // SQLite and PostgreSQL.
+#include "sqluserservice.h"
 #include "testsupport.h"
 
 #include <cashservice.h>
@@ -84,6 +85,19 @@ private slots:
     void stockMayGoNegative();
     void heldSaleSurvivesAndIsTakenOnce();
     void heldSalesBelongToTheRegister();
+
+    // the queue
+    void everySaleLeavesTheQueueWhenSaved();
+    void outageKeepsTheSaleUntilTheServerIsBack();
+    void queuedSalesKeepTheirNumbersAndOrder();
+    void queueSurvivesARestart();
+    void aSaleAlreadySavedIsNotSavedTwice();
+    void refusedSaleStaysAndShows();
+    void takenNumberIsReplaced();
+    void closingWaitsForTheQueue();
+    void queuedSaleCantBeVoided();
+    void repeatedVoucherIsReportedWhenItArrives();
+    void newSaleWaitsItsTurnBehindARefusedOne();
 
     // voiding
     void voidGivesBackStockAndCash();
@@ -632,6 +646,252 @@ void tst_Sales::heldSalesBelongToTheRegister()
 }
 
 // --- voiding -----------------------------------------------------------------
+
+static SaleDraft oneOf(const QString &code)
+{
+    SaleDraft draft;
+    draft.lines << lineOf(code, 10000);
+    return draft;
+}
+
+void tst_Sales::everySaleLeavesTheQueueWhenSaved()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    QVERIFY(add(QStringLiteral("A")));
+    QVERIFY(openWith());
+    QVERIFY(m_core.sales->online());
+    QVERIFY(sell(QStringLiteral("A")) > 0);
+    QVERIFY(m_core.sales->outbox()->isOpen());      // it went through it
+    QCOMPARE(m_core.sales->outbox()->count(), 0);
+    QVERIFY(m_core.sales->pendingSales().isEmpty());
+    QCOMPARE(rows(QStringLiteral("SELECT COUNT(*) FROM ventas WHERE uuid IS NOT NULL")), 1);
+}
+
+void tst_Sales::outageKeepsTheSaleUntilTheServerIsBack()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    QVERIFY(add(QStringLiteral("A")));
+    QVERIFY(openWith(100000));
+    QVERIFY(sell(QStringLiteral("A")) > 0);
+
+    m_core.monitor->simulateOutage(true);
+    QVERIFY(!m_core.sales->online());
+    QVERIFY(m_core.cash->currentSession().has_value());     // the till doesn't look closed
+
+    const qint64 id = m_core.sales->checkout(oneOf(QStringLiteral("A")),
+                                             { byVoucher(PaymentMethod::Debit, 3000, QStringLiteral("D1")), inCash(10000) });
+    QVERIFY2(id < 0, qPrintable(m_core.sales->lastError()));
+
+    // on this computer it's a sale like any other, for its ticket
+    const auto queued = m_core.sales->sale(id);
+    QVERIFY(queued.has_value());
+    QCOMPARE(AguaraSale::formatNumber(queued->registerId, queued->number), QStringLiteral("001-000002"));
+    QCOMPARE(queued->totals.total, Money(10000));
+    QCOMPARE(queued->payments.size(), 2);
+    QCOMPARE(queued->payments.at(1).change, Money(3000));
+    QCOMPARE(queued->state, QLatin1String(SaleState::Paid));
+
+    // and the database doesn't have it
+    QCOMPARE(rows(QStringLiteral("SELECT COUNT(*) FROM ventas")), 1);
+    QCOMPARE(stock(QStringLiteral("A")), AguaraQuantity::whole(9));
+    QCOMPARE(m_core.sales->pendingSales().size(), 1);
+    QVERIFY(m_core.sales->pendingSales().first().error.isEmpty());
+    QVERIFY(m_core.sales->recordPrint(id));
+
+    m_core.monitor->simulateOutage(false);
+    QVERIFY(TestSupport::waitFor([&] { return m_core.sales->pendingSales().isEmpty(); }));
+
+    QCOMPARE(rows(QStringLiteral("SELECT COUNT(*) FROM ventas")), 2);
+    QCOMPARE(rows(QStringLiteral("SELECT MAX(numero) FROM ventas")), 2);
+    QCOMPARE(rows(QStringLiteral("SELECT ultimo_numero FROM cajas")), 2);
+    QCOMPARE(rows(QStringLiteral("SELECT impresiones FROM ventas WHERE numero = 2")), 1);     // not a second original
+    QCOMPARE(stock(QStringLiteral("A")), AguaraQuantity::whole(8));
+    QCOMPARE(expected(), Money(100000 + 10000 + 7000));
+    QVERIFY(sell(QStringLiteral("A")) > 0);
+    QCOMPARE(rows(QStringLiteral("SELECT MAX(numero) FROM ventas")), 3);
+}
+
+void tst_Sales::queuedSalesKeepTheirNumbersAndOrder()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    QVERIFY(add(QStringLiteral("A")));
+    QVERIFY(openWith());
+    m_core.monitor->simulateOutage(true);
+    QList<qint64> numbers;
+    for (int i = 0; i < 3; ++i) {
+        const qint64 id = sell(QStringLiteral("A"));
+        QVERIFY(id < 0);
+        numbers << m_core.sales->sale(id)->number;
+    }
+    QCOMPARE(numbers, QList<qint64>({ 1, 2, 3 }));
+    m_core.monitor->simulateOutage(false);
+    QVERIFY(TestSupport::waitFor([&] { return m_core.sales->pendingSales().isEmpty(); }));
+    QCOMPARE(rows(QStringLiteral("SELECT COUNT(DISTINCT numero) FROM ventas")), 3);
+    QCOMPARE(rows(QStringLiteral("SELECT ultimo_numero FROM cajas")), 3);
+}
+
+void tst_Sales::queueSurvivesARestart()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    QVERIFY(add(QStringLiteral("A")));
+    QVERIFY(openWith());
+    m_core.monitor->simulateOutage(true);
+    const qint64 id = sell(QStringLiteral("A"));
+    QVERIFY(id < 0);
+    const QString file = m_core.sales->outbox()->path();
+    const auto sale = m_core.sales->sale(id);
+
+    // the program starts again: a new service on the same file
+    m_core.sales.reset();
+    m_core.monitor->simulateOutage(false);
+    SqlSalesService again(m_core.monitor.get(), m_core.products.get(), m_core.cash.get());
+    again.outbox()->setPath(file);
+    QVERIFY(again.flushPending());
+
+    QCOMPARE(rows(QStringLiteral("SELECT COUNT(*) FROM ventas")), 1);
+    QCOMPARE(rows(QStringLiteral("SELECT numero FROM ventas")), int(sale->number));
+}
+
+/// The COMMIT reached the server, but the answer didn't reach us.
+void tst_Sales::aSaleAlreadySavedIsNotSavedTwice()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    QVERIFY(add(QStringLiteral("A")));
+    QVERIFY(openWith());
+    QVERIFY(sell(QStringLiteral("A")) > 0);
+
+    QSqlQuery q(m_core.connection());
+    QVERIFY(q.exec(QStringLiteral("SELECT uuid FROM ventas")) && q.next());
+    OutboxEntry entry;
+    entry.uuid = q.value(0).toString();
+    q.finish();
+    const auto session = m_core.cash->currentSession();
+    entry.when = QDateTime::currentDateTime();
+    entry.registerId = session->registerId;
+    entry.sessionId = session->id;
+    entry.number = 1;
+    entry.draft = oneOf(QStringLiteral("A"));
+    entry.payments = { inCash(10000) };
+    QVERIFY(m_core.sales->outbox()->add(entry));
+
+    QVERIFY(m_core.sales->flushPending());
+    QCOMPARE(rows(QStringLiteral("SELECT COUNT(*) FROM ventas")), 1);
+    QCOMPARE(stock(QStringLiteral("A")), AguaraQuantity::whole(9));
+}
+
+void tst_Sales::refusedSaleStaysAndShows()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    QVERIFY(add(QStringLiteral("A")));
+    QVERIFY(openWith());
+    m_core.monitor->simulateOutage(true);
+    QVERIFY(m_core.sales->checkout(oneOf(QStringLiteral("NO-EXISTE")), { inCash(10000) }) < 0);
+    QVERIFY(sell(QStringLiteral("A")) < 0);
+
+    m_core.monitor->simulateOutage(false);
+    QVERIFY(TestSupport::waitFor([&] { return m_core.sales->pendingSales().size() == 1; }));
+    QVERIFY(m_core.sales->pendingSales().first().error.contains(QStringLiteral("no existe")));
+    QCOMPARE(rows(QStringLiteral("SELECT COUNT(*) FROM ventas")), 1);   // the other one went on
+
+    QVERIFY(add(QStringLiteral("NO-EXISTE")));                          // solved: retrying saves it
+    QVERIFY(m_core.sales->flushPending());
+    QCOMPARE(rows(QStringLiteral("SELECT COUNT(*) FROM ventas")), 2);
+}
+
+void tst_Sales::takenNumberIsReplaced()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    QVERIFY(add(QStringLiteral("A")));
+    QVERIFY(openWith());
+    const auto session = m_core.cash->currentSession();
+    m_core.monitor->simulateOutage(true);
+    const qint64 id = sell(QStringLiteral("A"));
+    QCOMPARE(m_core.sales->sale(id)->number, qint64(1));
+
+    // a second copy of the program on this computer took that number
+    QSqlQuery q(m_core.connection());
+    QVERIFY(q.exec(QStringLiteral(
+        "INSERT INTO ventas (caja_id, sesion_id, numero, estado, bruto, descuento, neto, redondeo, total,"
+        " gravado10, iva10, gravado5, iva5, exento) VALUES (%1, %2, 1, 'cobrada', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)")
+        .arg(session->registerId).arg(session->id)));
+    QVERIFY(q.exec(QStringLiteral("UPDATE cajas SET ultimo_numero = 1")));
+
+    m_core.monitor->simulateOutage(false);
+    QVERIFY(TestSupport::waitFor([&] { return m_core.sales->pendingSales().isEmpty(); }));
+    QCOMPARE(rows(QStringLiteral("SELECT COUNT(*) FROM ventas")), 2);
+    QCOMPARE(rows(QStringLiteral("SELECT MAX(numero) FROM ventas")), 2);
+}
+
+void tst_Sales::closingWaitsForTheQueue()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    QVERIFY(add(QStringLiteral("A")));
+    QVERIFY(openWith(100000));
+    m_core.monitor->simulateOutage(true);
+    QVERIFY(sell(QStringLiteral("A")) < 0);
+
+    QCOMPARE(m_core.cash->closeSession(worth(110000)), CloseResult::Failed);
+    QVERIFY(m_core.cash->lastError().contains(QStringLiteral("sin subir")));
+    QVERIFY(!m_core.cash->closeWithDifference(worth(110000), QStringLiteral("motivo"), QStringLiteral("jefe")));
+
+    m_core.monitor->simulateOutage(false);
+    QVERIFY(TestSupport::waitFor([&] { return m_core.sales->pendingSales().isEmpty(); }));
+    QCOMPARE(m_core.cash->closeSession(worth(110000)), CloseResult::Closed);    // its cash counts
+}
+
+void tst_Sales::queuedSaleCantBeVoided()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    QVERIFY(add(QStringLiteral("A")));
+    QVERIFY(openWith());
+    m_core.monitor->simulateOutage(true);
+    const qint64 id = sell(QStringLiteral("A"));
+    QVERIFY(!m_core.sales->voidSale(id, QStringLiteral("motivo")));
+    QVERIFY(m_core.sales->lastError().contains(QStringLiteral("no llegó")));
+    QCOMPARE(m_core.sales->pendingSales().size(), 1);
+    m_core.monitor->simulateOutage(false);
+}
+
+void tst_Sales::repeatedVoucherIsReportedWhenItArrives()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    SqlUserService users(m_core.monitor.get());
+    QVERIFY(users.createFirstAdmin(QStringLiteral("admin"), QStringLiteral("Admin"), QStringLiteral("secreto1")));
+    m_core.sales->setUsers(&users);
+    QVERIFY(add(QStringLiteral("A")));
+    QVERIFY(openWith());
+    QVERIFY(m_core.sales->checkout(oneOf(QStringLiteral("A")), { byVoucher(PaymentMethod::Debit, 10000, QStringLiteral("V7")) }) > 0);
+
+    m_core.monitor->simulateOutage(true);
+    QVERIFY(m_core.sales->checkout(oneOf(QStringLiteral("A")), { byVoucher(PaymentMethod::Debit, 10000, QStringLiteral("V7")) }) < 0);
+    m_core.monitor->simulateOutage(false);
+    QVERIFY(TestSupport::waitFor([&] { return m_core.sales->pendingSales().isEmpty(); }));
+
+    QStringList actions;
+    for (const AuditEntry &e : users.auditEntries())
+        actions << e.action;
+    QVERIFY(actions.contains(QStringLiteral("venta.diferida")));
+    QVERIFY(actions.contains(QStringLiteral("venta.comprobante_repetido")));
+    m_core.sales->setUsers(nullptr);
+}
+
+void tst_Sales::newSaleWaitsItsTurnBehindARefusedOne()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    QVERIFY(add(QStringLiteral("A")));
+    QVERIFY(openWith());
+    m_core.monitor->simulateOutage(true);
+    const qint64 stuck = m_core.sales->checkout(oneOf(QStringLiteral("NO-EXISTE")), { inCash(10000) });
+    QCOMPARE(m_core.sales->sale(stuck)->number, qint64(1));
+    m_core.monitor->simulateOutage(false);
+    QVERIFY(TestSupport::waitFor([&] { return !m_core.sales->pendingSales().first().error.isEmpty(); }));
+
+    // online, with number 1 promised to the sale that's stuck
+    const qint64 id = sell(QStringLiteral("A"));
+    QVERIFY(id != 0);
+    QVERIFY(TestSupport::waitFor([&] { return m_core.sales->pendingSales().size() == 1; }));
+    QCOMPARE(rows(QStringLiteral("SELECT numero FROM ventas")), 2);
+}
 
 void tst_Sales::voidGivesBackStockAndCash()
 {

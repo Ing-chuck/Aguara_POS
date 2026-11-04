@@ -8,6 +8,7 @@
 #include "sessiondialogs.h"
 #include "sqlcashservice.h"
 #include "sqlinventoryservice.h"
+#include "sqlprintservice.h"
 #include "sqlproductservice.h"
 #include "sqlsalesservice.h"
 #include "sqluserservice.h"
@@ -19,6 +20,7 @@
 #include <QDir>
 #include <QLibraryInfo>
 #include <QLocale>
+#include <QProcess>
 #include <QSettings>
 #include <QSysInfo>
 #include <QTranslator>
@@ -120,12 +122,16 @@ int main(int argc, char *argv[])
     cash.setUsers(&users);
     SqlSalesService sales(&connection, &products, &cash);
     sales.setUsers(&users);
+    SqlPrintService print(&connection, &sales, &cash);
+    print.setUsers(&users);
+    print.storeInfo();          // remembered: a ticket must print during an outage
     CoreHost host;
     host.registerService(ProductService_iid, &products);
     host.registerService(InventoryService_iid, &inventory);
     host.registerService(UserService_iid, &users);
     host.registerService(CashService_iid, &cash);
     host.registerService(SalesService_iid, &sales);
+    host.registerService(PrintService_iid, &print);
 
     // Nothing opens without a user. First run: create the administrator.
     if (users.hasUsers()) {
@@ -137,6 +143,10 @@ int main(int argc, char *argv[])
         if (firstRun.exec() != QDialog::Accepted)
             return 0;
     }
+
+    // What a crash or a lost connection left on this computer's disk
+    if (!sales.flushPending())
+        qCWarning(lcApp) << "Sales still in the queue:" << sales.pendingSales().size();
 
     // Tell the user when the server is unreachable and when it's back
     // (same sender+id, so the second message replaces the first). The
@@ -167,6 +177,12 @@ int main(int argc, char *argv[])
     const int lockMinutes = QSettings(DatabaseSettings::settingsPath(), QSettings::IniFormat)
                                 .value(QStringLiteral("session/lock_minutes"), 10).toInt();
     w.setUsers(&users, lockMinutes);
+    w.setConnectionEditable(!explicitFile);
+    bool restart = false;
+    QObject::connect(&w, &MainWindow::restartRequested, &w, [&restart, &w]() {
+        restart = true;
+        w.closeForRestart();
+    });
     QObject::connect(&connection, &ConnectionMonitor::connectionLost, &w, [&w]() { w.setConnected(false); });
     QObject::connect(&connection, &ConnectionMonitor::reconnected, &w, [&w]() { w.setConnected(true); });
     w.show();
@@ -197,5 +213,11 @@ int main(int argc, char *argv[])
     const int result = a.exec();
     users.logout();
     qCInfo(lcApp) << "Exiting, code" << result;
+    if (restart) {
+        QStringList arguments = QCoreApplication::arguments().mid(1);
+        arguments.removeAll(QStringLiteral("--configure-database"));
+        if (!QProcess::startDetached(QCoreApplication::applicationFilePath(), arguments))
+            qCWarning(lcApp) << "Could not restart";
+    }
     return result;
 }

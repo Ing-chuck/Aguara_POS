@@ -79,16 +79,19 @@ QString SqlCashService::userName() const
 
 CashRegister SqlCashService::currentRegister()
 {
+    if (!m_monitor->isConnected() && m_knownRegister.id != 0)
+        return m_knownRegister;
     CashRegister result;
     result.station = m_station;
     QSqlQuery find(db());
     find.prepare(QStringLiteral("SELECT id, nombre FROM cajas WHERE puesto = ?"));
     find.addBindValue(m_station);
     if (!exec(find))
-        return result;
+        return m_monitor->isConnected() ? result : m_knownRegister;
     if (find.next()) {
         result.id = find.value(0).toLongLong();
         result.name = find.value(1).toString();
+        m_knownRegister = result;
         return result;
     }
     find.finish();
@@ -172,13 +175,35 @@ QList<CashSession> SqlCashService::readSessions(const QString &where, const QVar
 std::optional<CashSession> SqlCashService::currentSession()
 {
     const CashRegister cashRegister = currentRegister();
+    if (!m_monitor->isConnected())
+        return m_knownSession;
     if (cashRegister.id == 0)
         return std::nullopt;
     const QList<CashSession> open = readSessions(QStringLiteral("WHERE s.caja_id = ? AND s.estado = 'abierta'"),
                                                  { cashRegister.id });
-    if (open.isEmpty())
-        return std::nullopt;
-    return open.first();
+    if (!m_monitor->isConnected())          // that was the query that found out
+        return m_knownSession;
+
+    QSqlQuery number(db());
+    number.prepare(QStringLiteral("SELECT ultimo_numero FROM cajas WHERE id = ?"));
+    number.addBindValue(cashRegister.id);
+    if (exec(number) && number.next())
+        m_lastNumber = number.value(0).toLongLong();
+
+    m_knownSession = std::nullopt;
+    if (!open.isEmpty())
+        m_knownSession = open.first();
+    return m_knownSession;
+}
+
+/// A sale still on its way isn't in the expected cash yet.
+bool SqlCashService::salesArePending()
+{
+    const int pending = m_pendingSales ? m_pendingSales() : 0;
+    if (pending > 0)
+        m_lastError = tr("Hay %n venta(s) sin subir al servidor: la caja no se puede cerrar hasta que lleguen. "
+                         "Ver Caja > Ventas por subir.", nullptr, pending);
+    return pending > 0;
 }
 
 CashCount SqlCashService::readCount(qint64 sessionId, const char *moment) const
@@ -252,6 +277,7 @@ bool SqlCashService::openSession(const CashCount &count)
     }
     if (!commit())
         return false;
+    currentSession();           // remembered: the connection could drop at any moment
     audit(QStringLiteral("caja.abrir"), QString::number(id),
           tr("%1, fondo Gs. %2").arg(cashRegister.name, AguaraMoney::format(openingFloat)));
     return true;
@@ -362,12 +388,15 @@ bool SqlCashService::finish(const CashSession &session, const CashCount &count, 
     audit(QStringLiteral("caja.cerrar"), QString::number(session.id),
           tr("Esperado Gs. %1, contado Gs. %2").arg(AguaraMoney::format(expected), AguaraMoney::format(counted))
               + (reason.isEmpty() ? QString() : QStringLiteral(". ") + reason));
+    m_knownSession = std::nullopt;
     return true;
 }
 
 CloseResult SqlCashService::closeSession(const CashCount &count)
 {
     m_lastError.clear();
+    if (salesArePending())
+        return CloseResult::Failed;
     const std::optional<CashSession> session = currentSession();
     if (!session) {
         m_lastError = tr("La caja no está abierta.");
@@ -390,6 +419,8 @@ bool SqlCashService::closeWithDifference(const CashCount &count, const QString &
         m_lastError = tr("Indique el motivo de la diferencia.");
         return false;
     }
+    if (salesArePending())
+        return false;
     const std::optional<CashSession> session = currentSession();
     if (!session) {
         m_lastError = tr("La caja no está abierta.");

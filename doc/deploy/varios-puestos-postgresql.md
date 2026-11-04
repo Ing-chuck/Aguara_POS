@@ -68,7 +68,7 @@ servidores PostgreSQL actuales):
    de su carpeta `pgsql\bin` al lado de `aguara.exe`:
    `libpq.dll`, `libssl-1_1.dll`, `libcrypto-1_1.dll`, `libintl-8.dll`, `libiconv-2.dll`.
 2. Instalar el **Visual C++ 2013 Redistributable (x86)** de Microsoft (lo requiere `libpq.dll`).
-3. Iniciar `aguara.exe --configure-database`, elegir **Servidor en la red**, completar
+3. Abrir **Preferencias > Conexion a los datos** como administrador (o iniciar `aguara.exe --configure-database`), elegir **Servidor en la red**, completar
    servidor, puerto, base de datos, usuario y contraseña, y **Probar conexion**.
    La configuracion se guarda en `%APPDATA%\Aguara\AguaraPOS\aguara.ini`.
    La contraseña queda **cifrada** con DPAPI de Windows: solo el mismo usuario de Windows en el
