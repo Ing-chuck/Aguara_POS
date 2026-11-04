@@ -5,7 +5,7 @@
 //
 // Backends: SQLite always (a file in a temporary folder). PostgreSQL only when
 // AGUARA_TEST_PG_HOST is set (plus _PORT, _USER, _PASSWORD), and only on a
-// database named aguara_test, because the suites drop and recreate its schema.
+// database named aguara_test, because the suites delete everything in it.
 
 #include "connectionmonitor.h"
 #include "corehost.h"
@@ -15,6 +15,7 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QSqlDatabase>
+#include <QSqlError>
 #include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QTest>
@@ -77,8 +78,8 @@ public:
         : database(connectionName) {}
     ~CoreFixture() { close(); }
 
-    /// SQLite: a new file in `dir`. PostgreSQL: drops and recreates the
-    /// public schema of aguara_test. Returns false with `error` set.
+    /// SQLite: a new file in `dir`. PostgreSQL: empties aguara_test.
+    /// Returns false with `error` set.
     bool open(DatabaseSettings::Backend backend, const QString &dir, QString *error)
     {
         close();
@@ -95,9 +96,12 @@ public:
             return false;
         }
         if (backend == DatabaseSettings::PostgreSQL) {
+            // Everything the test user created. Not DROP SCHEMA public: up to
+            // PostgreSQL 14 that schema belongs to the superuser, not to the
+            // database owner.
             QSqlQuery q(QSqlDatabase::database(database.connectionName()));
-            if (!q.exec(QStringLiteral("DROP SCHEMA public CASCADE")) || !q.exec(QStringLiteral("CREATE SCHEMA public"))) {
-                *error = QStringLiteral("cannot reset the test schema");
+            if (!q.exec(QStringLiteral("DROP OWNED BY CURRENT_USER CASCADE"))) {
+                *error = QStringLiteral("cannot reset the test database: %1").arg(q.lastError().text());
                 return false;
             }
         }

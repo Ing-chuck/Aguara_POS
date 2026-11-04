@@ -36,6 +36,7 @@ exe() { if [ -x "$PG_BIN/$1.exe" ]; then echo "$PG_BIN/$1.exe"; else echo "$PG_B
 INITDB="$(exe initdb)"; PG_CTL="$(exe pg_ctl)"; PSQL="$(exe psql)"
 DATA="$WORK_DIR/data"
 
+"$PSQL" --version
 echo "== 1. new data folder $DATA"
 rm -rf "$DATA"
 mkdir -p "$WORK_DIR"
