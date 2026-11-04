@@ -10,11 +10,16 @@ DESTDIR    = $$AGUARA_LIB_DIR
 DLLDESTDIR = $$AGUARA_BIN_DIR
 
 SOURCES += aguarastyle.cpp \
+           barcode.cpp \
            interfaces.cpp \
-           money.cpp
+           money.cpp \
+           quantity.cpp
 HEADERS += aguara_global.h \
            aguarastyle.h \
            aguarahost.h \
+           barcode.h \
+           inventoryservice.h \
+           quantity.h \
            interfaces.h \
            messages.h \
            money.h \

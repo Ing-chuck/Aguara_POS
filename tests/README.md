@@ -5,7 +5,7 @@ un subproyecto de `Aguara_POS.pro`). Los ejecutables quedan en `<compilación>/t
 
 | Suite | Qué prueba |
 |---|---|
-| `tst_money` | Montos en guaraníes: lo que escribe el cajero, formato e IVA incluido |
+| `tst_money` | Montos en guaraníes, cantidades con decimales, EAN-13 y códigos de balanza |
 | `tst_csvreader` | Lectura de CSV: comillas (RFC 4180), separador, UTF-8 y Windows-1252 |
 | `tst_logging` | Archivo de registro: niveles, categorías y rotación |
 | `tst_settings` | `aguara.ini`: valores guardados y contraseña cifrada (DPAPI), nunca en texto plano |
@@ -13,7 +13,8 @@ un subproyecto de `Aguara_POS.pro`). Los ejecutables quedan en `<compilación>/t
 | `tst_database` | Apertura y migraciones *(SQLite y PostgreSQL)* |
 | `tst_productservice` | `ProductService`, lo que usan los módulos *(SQLite y PostgreSQL)* |
 | `tst_users` | Usuarios, roles, permisos, autorización de supervisor y auditoría *(SQLite y PostgreSQL)* |
-| `tst_modules` | Los plugins reales: importación de CSV, teclado y lector en inventario, autorización y pantalla de usuarios |
+| `tst_inventory` | Movimientos, compras, recuentos, precios, proveedores y lector *(SQLite y PostgreSQL)* |
+| `tst_modules` | Los plugins reales: importación de CSV, teclado y lector en inventario, compra y recuento por pantalla, etiquetas, autorización y pantalla de usuarios |
 | `tst_reconnect` | Varias cajas en un servidor: avisos entre cajas, reinicio y caída del servidor *(solo PostgreSQL)* |
 | `tst_mainwindow` | Ventana principal: avisos, reloj, menús, atajos, y lo que ve cada usuario, con los módulos reales |
 

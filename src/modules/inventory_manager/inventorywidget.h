@@ -7,6 +7,9 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class inventoryWidget; }
 class QAbstractItemModel;
 class QCompleter;
+class QMenu;
+class QPushButton;
+class QTabWidget;
 QT_END_NAMESPACE
 
 class addItemDialog;
@@ -17,13 +20,18 @@ class inventoryWidget : public AguaraWidget
 
 public:
     /// `users` may be null (nothing is restricted then).
-    explicit inventoryWidget(ProductService *products, UserService *users, QWidget *parent = nullptr);
+    explicit inventoryWidget(ProductService *products, InventoryService *inventory, UserService *users,
+                             QWidget *parent = nullptr);
     ~inventoryWidget();
 
 private:
     Ui::inventoryWidget *ui = nullptr;
     ProductService *products = nullptr;
+    InventoryService *inventory = nullptr;
     UserService *users = nullptr;
+    QTabWidget *sections = nullptr;
+    QMenu *moreMenu = nullptr;
+    QPushButton *moreButton = nullptr;
     addItemDialog *addDialog = nullptr;
     addItemDialog *editDialog = nullptr;
     QAbstractItemModel *model = nullptr;
@@ -35,9 +43,14 @@ private:
     bool eventFilter(QObject *watched, QEvent *event) override;
     QString selectedCode() const;
     bool authorized(const QString &permission, const QString &reason);
+    void buildSections();
 
 private slots:
     void focusSearch();
+    void onAdjustStock();
+    void onHistory();
+    void onPriceChange();
+    void onLabels();
     void onSearchEntered();
     void updateSummary();
     void updateActions();

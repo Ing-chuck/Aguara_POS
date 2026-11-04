@@ -25,6 +25,7 @@ public:
 
 private:
     ProductService *products = nullptr;
+    InventoryService *inventory = nullptr;
     UserService *users = nullptr;
 };
 

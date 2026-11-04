@@ -33,6 +33,7 @@ for exe in tst_*; do
         *)     name="$exe" ;;                # other systems: no extension
     esac
     [ -f "$exe" ] && [ -x "$exe" ] || continue
+    rm -f "$OUT/$name.txt" "$OUT/$name.xml"     # a suite that cannot start must not show the last result
     ./"$exe" -o "$OUT/$name.txt,txt" -o "$OUT/$name.xml,junitxml" < /dev/null > "$OUT/$name.stdout" 2>&1
     code=$?
     totals="$(grep '^Totals' "$OUT/$name.txt" 2>/dev/null)"

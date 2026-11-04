@@ -2,6 +2,7 @@
 // the same host and services the application gives them, on SQLite.
 #include "testsupport.h"
 
+#include "labelsheet.h"
 #include "passwordhash.h"
 #include "sqluserservice.h"
 
@@ -12,8 +13,15 @@
 #include <QFile>
 #include <QLineEdit>
 #include <QPluginLoader>
+#include <QAbstractButton>
+#include <QFileInfo>
+#include <QLabel>
+#include <QMenu>
+#include <QMessageBox>
+#include <QPrinter>
 #include <QPushButton>
 #include <QTableView>
+#include <QTimer>
 #include <QTableWidget>
 #include <QTabWidget>
 #include <QtTest>
@@ -39,6 +47,11 @@ private slots:
     void inventoryNotFoundNotifies();
     void inventoryAsksForAuthorization();
     void usersPageShowsWhatTheRoleAllows();
+    void purchaseThroughTheScreen();
+    void scannerNeverSavesThePurchase();
+    void countThroughTheScreen();
+    void adjustThroughTheScreen();
+    void labelsFillPages();
 
 private:
     void openUsers();
@@ -104,7 +117,7 @@ void tst_Modules::importMergesWithExistingArticles()
 
     Product existing;
     existing.code = QStringLiteral("777"); existing.description = QStringLiteral("GASEOSA 2.25L");
-    existing.price = 15000; existing.cost = 11000; existing.stock = 24;
+    existing.price = 15000; existing.cost = 11000; existing.stock = AguaraQuantity::whole(24);
     QVERIFY(m_core.products->saveProduct(existing));
 
     const QString csv = writeFile(QStringLiteral("precios.csv"), QString::fromUtf8(
@@ -118,7 +131,7 @@ void tst_Modules::importMergesWithExistingArticles()
 
     const auto updated = m_core.products->product(QStringLiteral("777"));
     QCOMPARE(updated->price, Money(16500));
-    QCOMPARE(updated->stock, 24);               // not in the file: kept
+    QCOMPARE(updated->stock, AguaraQuantity::whole(24));    // not in the file: kept
     QCOMPARE(updated->cost, Money(11000));
     QCOMPARE(updated->brandName, QStringLiteral("COCA COLA"));
     const auto added = m_core.products->product(QStringLiteral("2002"));
@@ -224,6 +237,196 @@ void tst_Modules::usersPageShowsWhatTheRoleAllows()
     QCOMPARE(page->findChild<QTabWidget *>(QStringLiteral("usersTabs"))->count(), 1);     // the audit log only
     QVERIFY(!page->findChild<QTableWidget *>(QStringLiteral("usersTable")));
     QVERIFY(page->findChild<QTableWidget *>(QStringLiteral("auditTable"))->rowCount() > 0);
+}
+
+/// A modal dialog is about to open: run `steps` on it once it's up.
+static void whenDialogOpens(const std::function<void(QDialog *)> &steps)
+{
+    QTimer::singleShot(150, qApp, [steps]() {
+        auto dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        steps(dialog);
+        if (dialog->isVisible())
+            dialog->reject();       // a failed step must not leave the test waiting on exec()
+    });
+}
+
+void tst_Modules::purchaseThroughTheScreen()
+{
+    QLineEdit *search = nullptr;
+    QVERIFY(showInventory(&search));
+    Supplier supplier;
+    supplier.name = QStringLiteral("DISTRIBUIDORA");
+    QVERIFY(m_core.inventory->saveSupplier(supplier));
+
+    auto sections = m_page->findChild<QTabWidget *>(QStringLiteral("inventorySections"));
+    QVERIFY(sections);
+    QCOMPARE(sections->count(), 4);
+    sections->setCurrentIndex(1);
+
+    bool done = false;
+    whenDialogOpens([&](QDialog *dialog) {
+        dialog->findChild<QLineEdit *>(QStringLiteral("purchaseInvoice"))->setText(QStringLiteral("001-001-55"));
+        auto entry = dialog->findChild<QLineEdit *>(QStringLiteral("purchaseEntry"));
+        QTest::keyClicks(entry, QStringLiteral("7840002"));
+        QTest::keyClick(entry, Qt::Key_Return);
+        auto lines = dialog->findChild<QTableWidget *>(QStringLiteral("purchaseLines"));
+        QCOMPARE(lines->rowCount(), 1);
+        // the way a person does it: type in the cell, Tab to the next one
+        const auto typeInCell = [lines](const QString &text, Qt::Key next) {
+            auto editor = qobject_cast<QLineEdit *>(lines->indexWidget(lines->currentIndex()));
+            QVERIFY(editor);
+            editor->selectAll();
+            QTest::keyClicks(editor, text);
+            if (next != Qt::Key_unknown)
+                QTest::keyClick(editor, next);
+        };
+        typeInCell(QStringLiteral("12"), Qt::Key_Tab);          // Cantidad
+        typeInCell(QStringLiteral("4.000"), Qt::Key_Tab);       // Costo
+        typeInCell(QStringLiteral("6.500"), Qt::Key_unknown);   // Precio nuevo, still being typed when saving
+        QCOMPARE(lines->item(0, 5)->text(), QStringLiteral("48.000"));
+        QVERIFY(dialog->findChild<QLabel *>(QStringLiteral("purchaseTotal"))->text().contains(QStringLiteral("48.000")));
+        done = true;
+        dialog->accept();
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("newPurchaseButton"))->click();
+    QVERIFY(done);
+
+    const auto p = m_core.products->product(QStringLiteral("7840002"));
+    QCOMPARE(p->stock, AguaraQuantity::whole(12));
+    QCOMPARE(p->cost, Money(4000));
+    QCOMPARE(p->price, Money(6500));
+    QCOMPARE(m_page->findChild<QTableWidget *>(QStringLiteral("purchasesTable"))->rowCount(), 1);
+}
+
+void tst_Modules::scannerNeverSavesThePurchase()
+{
+    QLineEdit *search = nullptr;
+    QVERIFY(showInventory(&search));
+    Supplier supplier;
+    supplier.name = QStringLiteral("DISTRIBUIDORA");
+    QVERIFY(m_core.inventory->saveSupplier(supplier));
+    m_page->findChild<QTabWidget *>(QStringLiteral("inventorySections"))->setCurrentIndex(1);
+
+    bool done = false;
+    whenDialogOpens([&](QDialog *dialog) {
+        dialog->findChild<QLineEdit *>(QStringLiteral("purchaseInvoice"))->setText(QStringLiteral("001-001-56"));
+        auto entry = dialog->findChild<QLineEdit *>(QStringLiteral("purchaseEntry"));
+        auto lines = dialog->findChild<QTableWidget *>(QStringLiteral("purchaseLines"));
+        const auto scan = [entry]() {
+            QTest::keyClicks(entry, QStringLiteral("7840002"));
+            QTest::keyClick(entry, Qt::Key_Return);             // what the scanner sends after each code
+        };
+        scan();
+        QVERIFY(dialog->isVisible());
+        QCOMPARE(lines->rowCount(), 1);
+
+        // Enter in the cell leaves the focus ready for the next code
+        auto editor = qobject_cast<QLineEdit *>(lines->indexWidget(lines->currentIndex()));
+        QVERIFY(editor);
+        QTest::keyClicks(editor, QStringLiteral("3"));
+        QTest::keyClick(editor, Qt::Key_Return);
+        QTest::qWait(20);                                       // Qt commits an Enter on the next tick
+        QCOMPARE(lines->item(0, 2)->text(), QStringLiteral("3"));
+        QCOMPARE(dialog->focusWidget(), static_cast<QWidget *>(entry));
+
+        scan();
+        QVERIFY(dialog->isVisible());
+        QCOMPARE(lines->rowCount(), 2);
+        done = true;
+        dialog->reject();
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("newPurchaseButton"))->click();
+    QVERIFY(done);
+    QCOMPARE(m_page->findChild<QTableWidget *>(QStringLiteral("purchasesTable"))->rowCount(), 0);
+    QCOMPARE(m_core.products->product(QStringLiteral("7840002"))->stock, Quantity(0));
+}
+
+void tst_Modules::countThroughTheScreen()
+{
+    QLineEdit *search = nullptr;
+    QVERIFY(showInventory(&search));
+    QVERIFY(m_core.inventory->adjustStock(QStringLiteral("7840001"), AguaraQuantity::whole(5), QStringLiteral("x")));
+    m_page->findChild<QTabWidget *>(QStringLiteral("inventorySections"))->setCurrentIndex(3);
+
+    m_page->findChild<QPushButton *>(QStringLiteral("countPrepare"))->click();
+    auto table = m_page->findChild<QTableWidget *>(QStringLiteral("countTable"));
+    QCOMPARE(table->rowCount(), 3);
+
+    auto entry = m_page->findChild<QLineEdit *>(QStringLiteral("countEntry"));
+    for (int i = 0; i < 3; ++i) {               // three scans of the same article
+        QTest::keyClicks(entry, QStringLiteral("7840001"));
+        QTest::keyClick(entry, Qt::Key_Return);
+    }
+
+    int row = -1;
+    for (int i = 0; i < table->rowCount(); ++i) {
+        if (table->item(i, 0)->text() == QLatin1String("7840001"))
+            row = i;
+    }
+    QVERIFY(row >= 0);
+    QCOMPARE(table->item(row, 3)->text(), QStringLiteral("3"));
+    QCOMPARE(table->item(row, 4)->text(), QStringLiteral("-2"));
+
+    // QMessageBox::showEvent asks for the native window, which Qt's offscreen platform doesn't
+    // have on Windows: it crashes there. The service side is covered in tst_inventory.
+    if (QGuiApplication::platformName() == QLatin1String("offscreen"))
+        QSKIP("A QMessageBox can't be shown on the offscreen platform");
+
+    whenDialogOpens([](QDialog *question) {
+        for (QAbstractButton *b : question->findChildren<QAbstractButton *>()) {
+            if (qobject_cast<QMessageBox *>(question)->buttonRole(b) == QMessageBox::YesRole)
+                b->click();
+        }
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("countApply"))->click();
+
+    QCOMPARE(m_core.products->product(QStringLiteral("7840001"))->stock, AguaraQuantity::whole(3));
+    QCOMPARE(m_core.products->product(QStringLiteral("7840002"))->stock, Quantity(0));     // not counted
+}
+
+void tst_Modules::adjustThroughTheScreen()
+{
+    QLineEdit *search = nullptr;
+    QTableView *table = showInventory(&search);
+    QVERIFY(table);
+    table->selectRow(0);
+
+    bool done = false;
+    whenDialogOpens([&](QDialog *dialog) {
+        dialog->findChild<QLineEdit *>(QStringLiteral("adjustQuantity"))->setText(QStringLiteral("2"));
+        dialog->accept();
+        done = true;
+    });
+    QMenu *menu = m_page->findChild<QPushButton *>(QStringLiteral("moreButton"))->menu();
+    QVERIFY(menu);
+    menu->actions().first()->trigger();         // Ajustar stock...
+    QVERIFY(done);
+
+    const QString code = table->model()->index(0, int(ProductColumn::Code)).data().toString();
+    QCOMPARE(m_core.products->product(code)->stock, -AguaraQuantity::whole(2));    // a way out, by default
+    const StockMovement move = m_core.inventory->movements(code).first();
+    QCOMPARE(move.type, QLatin1String(StockMovementType::Adjustment));
+    QCOMPARE(move.reason, QStringLiteral("Rotura"));
+}
+
+void tst_Modules::labelsFillPages()
+{
+    QList<Product> labels;
+    Product p;
+    p.code = QStringLiteral("4006381333931");
+    p.description = QStringLiteral("YERBA MATE KURUPI MENTA 500G");
+    p.price = 12500;
+    for (int i = 0; i < LabelSheet::Columns * LabelSheet::Rows + 1; ++i)
+        labels << p;
+
+    const QString file = m_tmp.filePath(QStringLiteral("labels.pdf"));
+    QPrinter printer(QPrinter::HighResolution);
+    printer.setOutputFormat(QPrinter::PdfFormat);
+    printer.setOutputFileName(file);
+    printer.setPageSize(QPageSize(QPageSize::A4));
+    QCOMPARE(LabelSheet::print(&printer, labels), 2);       // one label over: a second page
+    QVERIFY(QFileInfo(file).size() > 1000);
 }
 
 QTableView *tst_Modules::showInventory(QLineEdit **search)

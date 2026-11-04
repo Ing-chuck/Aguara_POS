@@ -137,19 +137,19 @@ Va primero porque todo lo demás necesita saber **quién** hizo cada cosa.
 
 ### Fase 2: Inventario completo *(L)*
 
-- [ ] **Movimientos de stock** como única forma de cambiar el stock, con un kardex por artículo.
-- [ ] **Proveedores:** ABM, usando la tabla `proveedores` que ya existe.
-- [ ] **Compras:** ingreso de mercadería por proveedor con número de factura, costo por línea y actualización opcional del costo y del precio con margen sugerido.
-- [ ] **Ajustes** con motivo (rotura, vencimiento, robo o consumo interno), que requieren permiso.
-- [ ] **Recuento físico:** se carga la cantidad contada (con lector o a mano) y se generan los ajustes por diferencia. Se puede hacer por rubro.
-- [ ] Rubros jerárquicos (`rubros.parent_id`).
-- [ ] **Unidades:**
+- [x] **Movimientos de stock** como única forma de cambiar el stock, con un kardex por artículo.
+- [x] **Proveedores:** ABM, usando la tabla `proveedores` que ya existe.
+- [x] **Compras:** ingreso de mercadería por proveedor con número de factura, costo por línea y actualización opcional del costo y del precio con margen sugerido.
+- [x] **Ajustes** con motivo (rotura, vencimiento, robo o consumo interno), que requieren permiso.
+- [x] **Recuento físico:** se carga la cantidad contada (con lector o a mano) y se generan los ajustes por diferencia. Se puede hacer por rubro.
+- [x] Rubros jerárquicos (`rubros.parent_id`).
+- [x] **Unidades:**
   - Artículos por unidad o por peso y volumen (`unidades_basicas`), con cantidades decimales.
   - Códigos de balanza (EAN-13 con peso o precio embebido, prefijos 20 a 29).
-- [ ] Varios códigos de barras por artículo, para presentaciones y proveedores distintos.
-- [ ] Historial de precios, cambio masivo por porcentaje (por rubro, marca o proveedor) e impresión de etiquetas de góndola.
-- [ ] Alertas de stock mínimo, aprovechando las notificaciones del core.
-- [ ] Decidir si se permite stock negativo. **Recomendado:** permitirlo, con aviso y registro, para que una carga atrasada no frene la venta.
+- [x] Varios códigos de barras por artículo, para presentaciones y proveedores distintos.
+- [x] Historial de precios, cambio masivo por porcentaje (por rubro, marca o proveedor) e impresión de etiquetas de góndola.
+- [x] Alertas de stock mínimo, aprovechando las notificaciones del core.
+- [x] Stock negativo: **se permite**, con aviso y registro, para que una carga atrasada no frene la venta.
 
 **Hecho cuando:**
 - el stock de cualquier artículo se explica sumando sus movimientos;

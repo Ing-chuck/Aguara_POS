@@ -25,7 +25,9 @@ SOURCES      +=     \
     passwordhash.cpp \
     sessiondialogs.cpp \
     sqlproductservice.cpp \
-    sqluserservice.cpp
+    sqlinventoryservice.cpp \
+    sqluserservice.cpp \
+    stockledger.cpp
 
 HEADERS      +=     \
     backup.h        \
@@ -44,7 +46,9 @@ HEADERS      +=     \
     passwordhash.h  \
     sessiondialogs.h \
     sqlproductservice.h \
-    sqluserservice.h
+    sqlinventoryservice.h \
+    sqluserservice.h \
+    stockledger.h
 
 FORMS        +=     \
     mainwindow.ui   \

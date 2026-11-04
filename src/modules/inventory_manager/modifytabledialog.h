@@ -29,6 +29,8 @@ signals:
     void listChanged();
 
 private:
+    class QComboBox *parentCombo = nullptr;
+    class QPushButton *moveButton = nullptr;
     Ui::modifyTableDialog *ui;
     QCompleter *searchCompleter;
     QStandardItemModel *model;
@@ -36,6 +38,8 @@ private:
     List list;
 
     void reload();
+    void buildParentChoice();
+    void reloadParents();
 
 private slots:
     void onCompleterAccepted(const QModelIndex &index);

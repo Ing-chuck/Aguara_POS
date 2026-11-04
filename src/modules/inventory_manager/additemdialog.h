@@ -40,6 +40,7 @@ private:
     static void selectNamed(QComboBox *combo, qint64 id, const QString &name);
     void showModal();
     void clearForm();
+    void setStockEditable(bool editable);
     void updateMargin();
     bool readInput(Product *product);
 

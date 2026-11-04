@@ -84,12 +84,17 @@ void tst_Database::existingDataSurvivesUpgrade()
     QVERIFY2(old.migrate(QStringLiteral("core"), coreMigrations().mid(0, 1)), qPrintable(old.lastError()));
     QCOMPARE(old.schemaVersion(QStringLiteral("core")), 1);
     QSqlQuery q(connection);
-    QVERIFY(q.exec(QStringLiteral("INSERT INTO productos (codigo, descripcion, precio) VALUES ('777', 'GASEOSA', 15000)")));
+    QVERIFY(q.exec(QStringLiteral("INSERT INTO productos (codigo, descripcion, precio, stock) VALUES ('777', 'GASEOSA', 15000, 24)")));
 
     QVERIFY2(old.migrate(QStringLiteral("core"), coreMigrations()), qPrintable(old.lastError()));
     QCOMPARE(old.schemaVersion(QStringLiteral("core")), coreMigrations().last().version);
     QVERIFY(q.exec(QStringLiteral("SELECT precio FROM productos WHERE codigo = '777'")) && q.next());
     QCOMPARE(q.value(0).toLongLong(), qint64(15000));
+    // the stock became thousandths, with its opening movement
+    QVERIFY(q.exec(QStringLiteral("SELECT stock FROM productos WHERE codigo = '777'")) && q.next());
+    QCOMPARE(q.value(0).toLongLong(), qint64(24000));
+    QVERIFY(q.exec(QStringLiteral("SELECT SUM(cantidad) FROM stock_movimientos WHERE producto_codigo = '777'")) && q.next());
+    QCOMPARE(q.value(0).toLongLong(), qint64(24000));
     QVERIFY(q.exec(QStringLiteral("SELECT COUNT(*) FROM roles")) && q.next());
     QCOMPARE(q.value(0).toInt(), 3);
     QVERIFY(q.exec(QStringLiteral("SELECT COUNT(*) FROM usuarios")) && q.next());

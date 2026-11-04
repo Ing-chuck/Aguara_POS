@@ -10,6 +10,7 @@
 #include "connectionmonitor.h"
 #include "corehost.h"
 #include "database.h"
+#include "sqlinventoryservice.h"
 #include "sqlproductservice.h"
 
 #include <QCoreApplication>
@@ -112,14 +113,17 @@ public:
         monitor.reset(new ConnectionMonitor(database.connectionName(), backend == DatabaseSettings::PostgreSQL));
         monitor->setHealthCheckInterval(0);     // tests drive it explicitly
         products.reset(new SqlProductService(monitor.get()));
+        inventory.reset(new SqlInventoryService(monitor.get(), products.get()));
         host.reset(new CoreHost);
         host->registerService(ProductService_iid, products.get());
+        host->registerService(InventoryService_iid, inventory.get());
         return true;
     }
 
     void close()
     {
         host.reset();
+        inventory.reset();
         products.reset();
         monitor.reset();
         database.close();
@@ -131,6 +135,7 @@ public:
     Database database;
     std::unique_ptr<ConnectionMonitor> monitor;
     std::unique_ptr<SqlProductService> products;
+    std::unique_ptr<SqlInventoryService> inventory;
     std::unique_ptr<CoreHost> host;
 };
 

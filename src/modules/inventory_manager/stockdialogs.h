@@ -1,0 +1,114 @@
+#ifndef STOCKDIALOGS_H
+#define STOCKDIALOGS_H
+
+#include <interfaces.h>
+
+#include <QDialog>
+
+QT_BEGIN_NAMESPACE
+class QCheckBox;
+class QComboBox;
+class QDoubleSpinBox;
+class QLabel;
+class QLineEdit;
+class QListWidget;
+class QRadioButton;
+class QSpinBox;
+class QTableWidget;
+QT_END_NAMESPACE
+
+/// The look of every table in the module.
+QTableWidget *makeInventoryTable(const QStringList &headers);
+/// An Enter nobody handled no longer presses the dialog's default button. Scanners end every
+/// code with Enter, so without this the first scan in a field would save or close the dialog.
+void keepEnterInDialog(QDialog *dialog);
+/// Wide enough for a whole EAN-13: an elided code can't be checked against the box.
+void fitCodeColumn(QTableWidget *table, int column = 0);
+/// Takes the value still being typed in a cell, for when saving doesn't move the focus first.
+void commitOpenEditor(QTableWidget *table);
+/// Enter in a cell sends the focus to `entry`, where the scanner's next code belongs.
+void returnFocusOnEnter(QTableWidget *table, QWidget *entry);
+/// A title and a subtitle over a dialog.
+class QVBoxLayout;
+QVBoxLayout *dialogHeader(QDialog *dialog, const QString &title, const QString &subtitle = QString());
+
+/// The signed-in user may, or a supervisor authorizes it on the spot.
+bool isAuthorized(UserService *users, const QString &permission, const QString &reason, QWidget *parent);
+
+/// Correct the stock of one article, with a reason.
+class AdjustStockDialog : public QDialog
+{
+    Q_OBJECT
+public:
+    AdjustStockDialog(InventoryService *inventory, const Product &product, QWidget *parent);
+    void accept() override;
+
+private:
+    void updateResult();
+
+    InventoryService *inventory;
+    Product product;
+    QComboBox *direction;
+    QLineEdit *quantity;
+    QComboBox *reason;
+    QLabel *result;
+};
+
+/// An article's kardex, its price history and its alternate barcodes.
+class ArticleHistoryDialog : public QDialog
+{
+    Q_OBJECT
+public:
+    ArticleHistoryDialog(InventoryService *inventory, UserService *users, const Product &product, QWidget *parent);
+
+private:
+    void reloadBarcodes();
+
+    InventoryService *inventory;
+    UserService *users;
+    Product product;
+    QListWidget *barcodes;
+};
+
+/// Raise or lower many prices at once, with a preview.
+class PriceChangeDialog : public QDialog
+{
+    Q_OBJECT
+public:
+    PriceChangeDialog(ProductService *products, InventoryService *inventory, QWidget *parent);
+    void accept() override;
+
+private:
+    void updatePreview();
+    PriceFilter filter() const;
+    int percent() const;
+    Money roundTo() const;
+
+    InventoryService *inventory;
+    QComboBox *category;
+    QComboBox *brand;
+    QComboBox *supplier;
+    QDoubleSpinBox *change;
+    QComboBox *rounding;
+    QTableWidget *preview;
+    QLabel *summary;
+};
+
+/// Print shelf labels for the selected article or a whole category.
+class LabelsDialog : public QDialog
+{
+    Q_OBJECT
+public:
+    LabelsDialog(ProductService *products, InventoryService *inventory, const QString &selectedCode, QWidget *parent);
+    void accept() override;
+
+private:
+    ProductService *products;
+    InventoryService *inventory;
+    QString selectedCode;
+    QRadioButton *onlySelected;
+    QComboBox *category;
+    QSpinBox *copies;
+};
+
+#endif // STOCKDIALOGS_H

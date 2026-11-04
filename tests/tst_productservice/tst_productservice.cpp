@@ -46,7 +46,7 @@ Product tst_ProductService::gaseosa()
     p.categoryName = QStringLiteral("BEBIDAS");
     p.price = 15000;
     p.cost = 11000;
-    p.stock = 24;
+    p.stock = AguaraQuantity::whole(24);
     p.vatRate = 10;
     p.purchased = QDate(2026, 10, 31);
     return p;
@@ -76,7 +76,7 @@ void tst_ProductService::saveAndRead()
     QCOMPARE(got->description, QStringLiteral("GASEOSA 2L"));
     QCOMPARE(got->price, Money(15000));
     QCOMPARE(got->cost, Money(11000));
-    QCOMPARE(got->stock, 24);
+    QCOMPARE(got->stock, AguaraQuantity::whole(24));
     QCOMPARE(got->brandName, QStringLiteral("COCA COLA"));
     QCOMPARE(got->categoryName, QStringLiteral("BEBIDAS"));
     QCOMPARE(got->purchased, QDate(2026, 10, 31));

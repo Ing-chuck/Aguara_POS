@@ -34,11 +34,11 @@ addItemDialog::addItemDialog(ProductService *products, QWidget *parent) :
     ui->dateEdit->setDate(QDate::currentDate());
 
     // Setup validators for lineEdits
-    // code: digits, up to 14 (GTIN-14; EAN-13 barcodes have 13)
+    // code: a barcode (EAN-13 has 13 digits), a scale's article number or an internal code
     // money: whole guaraníes, "." allowed as thousands separator
-    QRegularExpressionValidator *codeVal = new QRegularExpressionValidator(QRegularExpression(R"(^\d{0,14}$)"), this);
+    QRegularExpressionValidator *codeVal = new QRegularExpressionValidator(QRegularExpression(R"(^[0-9A-Za-z-]{0,20}$)"), this);
     QRegularExpressionValidator *priceVal = new QRegularExpressionValidator(QRegularExpression(R"(^[\d.]{0,15}$)"), this);
-    QRegularExpressionValidator *stockVal = new QRegularExpressionValidator(QRegularExpression(R"(^\d{0,9}$)"), this);
+    QRegularExpressionValidator *stockVal = new QRegularExpressionValidator(QRegularExpression(R"(^[\d.,]{0,13}$)"), this);
     ui->lineEdit_code->setValidator(codeVal);
     ui->lineEdit_price->setValidator(priceVal);
     ui->lineEdit_cost->setValidator(priceVal);
@@ -70,7 +70,7 @@ void addItemDialog::fillNamedCombo(QComboBox *combo, const QList<NamedItem> &ite
     combo->clear();
     combo->addItem(QString(), qint64(0));
     for (const NamedItem &item : items)
-        combo->addItem(item.name, item.id);
+        combo->addItem(item.path.isEmpty() ? item.name : item.path, item.id);
     const int idx = combo->findData(current);
     combo->setCurrentIndex(idx >= 0 ? idx : 0);
 }
@@ -102,6 +102,11 @@ void addItemDialog::reloadLists()
         ui->comboBox_vat->addItem(vat.name, vat.rate);
     const int idx = ui->comboBox_vat->findData(currentVat);
     ui->comboBox_vat->setCurrentIndex(idx >= 0 ? idx : 0);   // 0 = highest rate (10%)
+
+    if (ui->comboBox_unit->count() == 0) {
+        for (const StockUnit &unit : products->units())
+            ui->comboBox_unit->addItem(unit.name, unit.id);
+    }
 }
 
 void addItemDialog::showModal()
@@ -130,6 +135,14 @@ void addItemDialog::updateMargin()
         .arg(AguaraStyle::color(margin < 0 ? AguaraStyle::Color::Danger : AguaraStyle::Color::Success).name()));
 }
 
+/// The opening stock is typed here; after that it only changes through
+/// movements (Ajustar stock, compras, recuentos), which leave a record.
+void addItemDialog::setStockEditable(bool editable)
+{
+    ui->lineEdit_stock->setReadOnly(!editable);
+    ui->lineEdit_stock->setToolTip(editable ? QString() : tr("El stock se cambia con Más > Ajustar stock"));
+}
+
 /// Empty form for a new article
 void addItemDialog::clearForm()
 {
@@ -142,7 +155,9 @@ void addItemDialog::clearForm()
     ui->lineEdit_cost->clear();
     ui->lineEdit_stock->clear();
     ui->lineEdit_stockmin->clear();
+    ui->comboBox_unit->setCurrentIndex(0);
     ui->dateEdit->setDate(QDate::currentDate());
+    setStockEditable(true);
 }
 
 /// Prepare Dialog to add a new item and show
@@ -179,8 +194,10 @@ void addItemDialog::editItem(const QString &code)
     selectNamed(ui->comboBox_type, p.categoryId, p.categoryName);
     ui->lineEdit_price->setText(AguaraMoney::format(p.price));
     ui->lineEdit_cost->setText(AguaraMoney::format(p.cost));
-    ui->lineEdit_stock->setText(QString::number(p.stock));
-    ui->lineEdit_stockmin->setText(QString::number(p.stockMin));
+    ui->lineEdit_stock->setText(AguaraQuantity::format(p.stock, p.unit.decimals));
+    ui->lineEdit_stockmin->setText(AguaraQuantity::format(p.stockMin, p.unit.decimals));
+    ui->comboBox_unit->setCurrentIndex(qMax(ui->comboBox_unit->findData(p.unit.id), 0));
+    setStockEditable(false);
     const int vatIdx = ui->comboBox_vat->findData(p.vatRate);
     ui->comboBox_vat->setCurrentIndex(vatIdx >= 0 ? vatIdx : 0);
     ui->dateEdit->setDate(p.purchased.isValid() ? p.purchased : QDate::currentDate());
@@ -199,9 +216,15 @@ bool addItemDialog::readInput(Product *product)
     p.categoryId  = ui->comboBox_type->currentData().toLongLong();
     p.categoryName = ui->comboBox_type->currentText();
     p.vatRate     = ui->comboBox_vat->currentData().toInt();
-    p.stock       = ui->lineEdit_stock->text().toInt();
-    p.stockMin    = ui->lineEdit_stockmin->text().toInt();
     p.purchased   = ui->dateEdit->date();
+    p.unit.id     = ui->comboBox_unit->currentData().toLongLong();
+
+    const QString stockText = ui->lineEdit_stock->text().isEmpty() ? QStringLiteral("0") : ui->lineEdit_stock->text();
+    const QString minimumText = ui->lineEdit_stockmin->text().isEmpty() ? QStringLiteral("0") : ui->lineEdit_stockmin->text();
+    if (!AguaraQuantity::parse(stockText, &p.stock) || !AguaraQuantity::parse(minimumText, &p.stockMin)) {
+        QMessageBox::warning(this, tr("Stock inválido"), tr("El stock debe ser una cantidad, por ejemplo 24 o 2,750."));
+        return false;
+    }
 
     const QString priceText = ui->lineEdit_price->text();
     const QString costText  = ui->lineEdit_cost->text();

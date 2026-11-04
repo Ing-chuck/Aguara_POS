@@ -6,6 +6,7 @@
 #include "logging.h"
 #include "mainwindow.h"
 #include "sessiondialogs.h"
+#include "sqlinventoryservice.h"
 #include "sqlproductservice.h"
 #include "sqluserservice.h"
 #include <aguarastyle.h>
@@ -111,8 +112,11 @@ int main(int argc, char *argv[])
     SqlUserService users(&connection);
     users.setSupervisorPrompt(askSupervisor);
     products.setAuditLog(&users);
+    SqlInventoryService inventory(&connection, &products);
+    inventory.setAuditLog(&users);
     CoreHost host;
     host.registerService(ProductService_iid, &products);
+    host.registerService(InventoryService_iid, &inventory);
     host.registerService(UserService_iid, &users);
 
     // Nothing opens without a user. First run: create the administrator.
@@ -158,6 +162,21 @@ int main(int argc, char *argv[])
     QObject::connect(&connection, &ConnectionMonitor::connectionLost, &w, [&w]() { w.setConnected(false); });
     QObject::connect(&connection, &ConnectionMonitor::reconnected, &w, [&w]() { w.setConnected(true); });
     w.show();
+
+    // Who restocks should know, at the start of the day
+    if (users.can(modulePermission(QStringLiteral("inventory")))) {
+        const QList<Product> low = inventory.lowStock();
+        if (!low.isEmpty()) {
+            QStringList names;
+            for (int i = 0; i < low.size() && i < 5; ++i)
+                names << low.at(i).description;
+            host.notify(ModuleMsg(QStringLiteral("Inventario"), QStringLiteral("stock-bajo"),
+                low.size() == 1 ? QCoreApplication::translate("main", "1 artículo con stock bajo")
+                                : QCoreApplication::translate("main", "%1 artículos con stock bajo").arg(low.size()),
+                names.join(QStringLiteral(", ")) + (low.size() > 5 ? QStringLiteral(", ...") : QString()),
+                MsgPriority::PriorityHigh));
+        }
+    }
 
     if (!backedUp) {    // after the window exists: it shows the notification
         host.notify(ModuleMsg(QStringLiteral("Aguara"), QStringLiteral("backup"),

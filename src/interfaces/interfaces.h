@@ -4,6 +4,8 @@
 #include "aguara_global.h"
 #include "aguarahost.h"
 #include "aguarastyle.h"
+#include "barcode.h"
+#include "inventoryservice.h"
 #include "messages.h"
 #include "money.h"
 #include "productservice.h"

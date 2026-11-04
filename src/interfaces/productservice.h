@@ -2,6 +2,7 @@
 #define PRODUCTSERVICE_H
 
 #include "money.h"
+#include "quantity.h"
 
 #include <QDate>
 #include <QList>
@@ -16,10 +17,21 @@ class QAbstractItemModel;
 class QObject;
 QT_END_NAMESPACE
 
-/// A brand or a category: id plus display name.
+/// A brand or a category: id plus display name. Categories nest: `path` is
+/// "ALMACEN > LACTEOS", and equals `name` for everything else.
 struct NamedItem {
     qint64  id = 0;
     QString name;
+    qint64  parentId = 0;
+    QString path;
+};
+
+/// A unit of sale. `decimals` is 0 for what is counted, 3 for what is weighed.
+struct StockUnit {
+    qint64  id = 1;
+    QString name;           ///< "Kilogramo"
+    QString abbreviation;   ///< "kg"
+    int     decimals = 0;
 };
 
 /// An IVA category: the rate is the key (10, 5, or 0 for "Exenta").
@@ -44,8 +56,11 @@ struct Product {
     Money   price = 0;      ///< sale price, whole guaraníes, IVA included
     Money   cost  = 0;      ///< purchase cost, whole guaraníes
     int     vatRate = 10;   ///< one of vatCategories()
-    int     stock = 0;
-    int     stockMin = 0;
+    /// Saving a different stock leaves a movement in the kardex. To change it
+    /// on purpose use InventoryService::adjustStock(), which asks for a reason.
+    Quantity stock = 0;
+    Quantity stockMin = 0;
+    StockUnit unit;
     QDate   purchased;      ///< date of last purchase
     QDate   modified;       ///< set by the service on every save
     bool    active = true;
@@ -110,15 +125,19 @@ public:
     virtual bool removeBrand(qint64 id) = 0;                ///< hides it; products keep their brand
 
     virtual QList<NamedItem> categories() const = 0;
-    virtual qint64 addCategory(const QString &name) = 0;
+    /// Inside `parentId` (0: at the top). An existing name keeps its place.
+    virtual qint64 addCategory(const QString &name, qint64 parentId = 0) = 0;
+    /// Move a category. Refuses to put it inside itself.
+    virtual bool setCategoryParent(qint64 id, qint64 parentId) = 0;
     virtual bool removeCategory(qint64 id) = 0;
 
     virtual QList<VatCategory> vatCategories() const = 0;   ///< highest rate first
+    virtual QList<StockUnit> units() const = 0;             ///< "Unidad" first
 
     virtual QString lastError() const = 0;
 };
 
-#define ProductService_iid "org.AguaraPOS.ProductService/1.0"
+#define ProductService_iid "org.AguaraPOS.ProductService/1.1"   // 1.1: quantities, units, nested categories
 Q_DECLARE_INTERFACE(ProductService, ProductService_iid)
 
 #endif // PRODUCTSERVICE_H

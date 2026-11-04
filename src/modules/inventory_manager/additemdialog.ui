@@ -456,6 +456,13 @@
        </item>
       </layout>
      </item>
+<item row="8" column="0" colspan="1">
+<layout class="QVBoxLayout" name="unitLayout">
+<property name="spacing"><number>4</number></property>
+<item><widget class="QLabel" name="label_unit"><property name="text"><string>Unidad de venta</string></property><property name="buddy"><cstring>comboBox_unit</cstring></property></widget></item>
+<item><widget class="QComboBox" name="comboBox_unit"/></item>
+</layout>
+</item>
     </layout>
    </item>
    

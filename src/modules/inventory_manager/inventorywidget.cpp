@@ -1,6 +1,8 @@
 #include "inventorywidget.h"
 #include "ui_inventorywidget.h"
 #include "additemdialog.h"
+#include "inventorypages.h"
+#include "stockdialogs.h"
 
 #include <QAbstractProxyModel>
 #include <QEvent>
@@ -8,14 +10,18 @@
 #include <QCompleter>
 #include <QHeaderView>
 #include <QKeySequence>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QTabWidget>
 #include <QShortcut>
 
-inventoryWidget::inventoryWidget(ProductService *products, UserService *users, QWidget *parent)
+inventoryWidget::inventoryWidget(ProductService *products, InventoryService *inventory, UserService *users,
+                                 QWidget *parent)
     : AguaraWidget(parent)
     , ui(new Ui::inventoryWidget)
     , products(products)
+    , inventory(inventory)
     , users(users)
     , addDialog(new addItemDialog(products, this))
     , editDialog(new addItemDialog(products, this))
@@ -62,6 +68,84 @@ inventoryWidget::inventoryWidget(ProductService *products, UserService *users, Q
     updateActions();
 
     setUpKeyboard();
+    buildSections();
+}
+
+/// Artículos (the table) and the rest of the inventory work, in tabs. The
+/// buttons of the header act on the articles, so they go with that tab.
+void inventoryWidget::buildSections()
+{
+    using AguaraStyle::Color;
+    const auto tabIcon = [](const char *name) {
+        return AguaraStyle::icon(QString::fromLatin1(name), AguaraStyle::color(Color::TextMuted));
+    };
+    ui->pageLayout->removeWidget(ui->body);
+    sections = new QTabWidget;
+    sections->setObjectName(QStringLiteral("inventorySections"));
+    sections->setDocumentMode(true);
+    sections->addTab(ui->body, tabIcon("box"), tr("Artículos"));
+    auto purchases = new PurchasesPage(products, inventory, users);
+    auto suppliers = new SuppliersPage(inventory, users);
+    sections->addTab(purchases, tabIcon("cart"), tr("Compras"));
+    sections->addTab(suppliers, tabIcon("users"), tr("Proveedores"));
+    sections->addTab(new CountsPage(products, inventory, users), tabIcon("list"), tr("Recuentos"));
+    ui->pageLayout->addWidget(sections, 1);
+
+    moreButton = new QPushButton(tr("Más"));
+    moreButton->setObjectName(QStringLiteral("moreButton"));
+    moreMenu = new QMenu(moreButton);
+    moreMenu->addAction(AguaraStyle::icon(QStringLiteral("edit")), tr("Ajustar stock..."), this, &inventoryWidget::onAdjustStock);
+    moreMenu->addAction(AguaraStyle::icon(QStringLiteral("list")), tr("Historial del artículo..."), this, &inventoryWidget::onHistory);
+    moreMenu->addSeparator();
+    moreMenu->addAction(AguaraStyle::icon(QStringLiteral("settings")), tr("Cambio de precios..."), this, &inventoryWidget::onPriceChange);
+    moreMenu->addAction(AguaraStyle::icon(QStringLiteral("list")), tr("Etiquetas de góndola..."), this, &inventoryWidget::onLabels);
+    moreButton->setMenu(moreMenu);
+    ui->headerLayout->insertWidget(ui->headerLayout->indexOf(ui->itemRemoveButton), moreButton);
+
+    connect(sections, &QTabWidget::currentChanged, this, [this, purchases, suppliers](int index) {
+        for (QWidget *button : { static_cast<QWidget *>(ui->itemAddButton), static_cast<QWidget *>(ui->itemEditButton),
+                                 static_cast<QWidget *>(ui->itemRemoveButton), static_cast<QWidget *>(moreButton) })
+            button->setVisible(index == 0);
+        if (sections->widget(index) == purchases)
+            purchases->reload();
+        else if (sections->widget(index) == suppliers)
+            suppliers->reload();
+    });
+}
+
+void inventoryWidget::onAdjustStock()
+{
+    const QString code = selectedCode();
+    if (code.isEmpty()) {
+        QMessageBox::information(this, tr("Ajustar stock"), tr("Seleccione un artículo."));
+        return;
+    }
+    if (!authorized(QStringLiteral("inventario.ajustar"), tr("Ajustar el stock de %1").arg(code)))
+        return;
+    if (const auto product = products->product(code))
+        AdjustStockDialog(inventory, *product, this).exec();
+}
+
+void inventoryWidget::onHistory()
+{
+    const QString code = selectedCode();
+    if (code.isEmpty()) {
+        QMessageBox::information(this, tr("Historial"), tr("Seleccione un artículo."));
+        return;
+    }
+    if (const auto product = products->product(code))
+        ArticleHistoryDialog(inventory, users, *product, this).exec();
+}
+
+void inventoryWidget::onPriceChange()
+{
+    if (authorized(QStringLiteral("inventario.precios"), tr("Cambiar precios en masa")))
+        PriceChangeDialog(products, inventory, this).exec();
+}
+
+void inventoryWidget::onLabels()
+{
+    LabelsDialog(products, inventory, selectedCode(), this).exec();
 }
 
 void inventoryWidget::updateSummary()
@@ -149,9 +233,12 @@ void inventoryWidget::onSearchEntered()
     if (text.isEmpty())
         return;
 
+    // the main code, another barcode of the article, or a scale's code
+    const ScanResult scan = inventory->resolveScan(text);
+    const QString wanted = scan.found ? scan.product.code : text;
     int found = -1;
     for (int row = 0; row < model->rowCount() && found < 0; ++row) {
-        if (model->index(row, int(ProductColumn::Code)).data().toString().compare(text, Qt::CaseInsensitive) == 0)
+        if (model->index(row, int(ProductColumn::Code)).data().toString().compare(wanted, Qt::CaseInsensitive) == 0)
             found = row;
     }
     for (int row = 0; row < model->rowCount() && found < 0; ++row) {

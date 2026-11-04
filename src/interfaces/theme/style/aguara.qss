@@ -304,7 +304,7 @@ QTabBar::tab {
     margin-right: 2px;
 }
 QTabBar::tab:hover    { color: {{text}}; background: {{surfaceAlt}}; }
-QTabBar::tab:selected { color: {{text}}; border-bottom: 2px solid {{accent}}; font-weight: 600; }
+QTabBar::tab:selected { color: {{text}}; border-bottom: 2px solid {{accent}}; }
 QTabBar::close-button {
     image: url(:/aguara/qss/close.svg);
     subcontrol-position: right;

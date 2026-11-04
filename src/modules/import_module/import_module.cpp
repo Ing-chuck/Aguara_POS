@@ -156,8 +156,8 @@ bool ImportModule::importFrom(const QString &filename)
             case Field::Category:    p.categoryName = value; break;
             case Field::Price:       ok = AguaraMoney::parse(value, &p.price); break;
             case Field::Cost:        ok = AguaraMoney::parse(value, &p.cost); break;
-            case Field::Stock:       p.stock = value.toInt(&ok); break;
-            case Field::StockMin:    p.stockMin = value.toInt(&ok); break;
+            case Field::Stock:       ok = AguaraQuantity::parse(value, &p.stock); break;
+            case Field::StockMin:    ok = AguaraQuantity::parse(value, &p.stockMin); break;
             case Field::Vat:         p.vatRate = QString(value).remove('%').toInt(&ok); break;
             case Field::Purchased:   p.purchased = parseDate(value); ok = p.purchased.isValid(); break;
             case Field::Ignored:     break;

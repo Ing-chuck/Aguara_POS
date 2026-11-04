@@ -19,6 +19,7 @@ public:
 
     bool refresh();     ///< false if the query failed (see lastError())
 
+    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &item, int role = Qt::DisplayRole) const override;
     QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
 
@@ -53,17 +54,23 @@ public:
     bool removeBrand(qint64 id) override;
 
     QList<NamedItem> categories() const override;
-    qint64 addCategory(const QString &name) override;
+    qint64 addCategory(const QString &name, qint64 parentId = 0) override;
+    bool setCategoryParent(qint64 id, qint64 parentId) override;
     bool removeCategory(qint64 id) override;
 
     QList<VatCategory> vatCategories() const override;
+    QList<StockUnit> units() const override;
+
+    /// Stock or prices changed elsewhere (InventoryService): refresh the
+    /// lists here and on the other tills.
+    void refreshAfterChange() { changed(); }
 
     QString lastError() const override { return m_lastError; }
 
 private:
     QSqlDatabase db() const;
     bool exec(QSqlQuery &q) const;
-    bool saveOne(const Product &product, const QString &previousCode);
+    bool saveOne(const Product &product, const QString &previousCode, const QString &stockReason);
     qint64 findOrCreate(const QString &table, const QString &nameColumn, const QString &name);
     QList<NamedItem> namedItems(const QString &table, const QString &nameColumn) const;
     bool deactivate(const QString &table, qint64 id);

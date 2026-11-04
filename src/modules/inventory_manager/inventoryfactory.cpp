@@ -21,8 +21,9 @@ ModuleInfo InventoryFactory::moduleInfo() const
 bool InventoryFactory::initialize(AguaraHost *host)
 {
     products = host->service<ProductService>();
+    inventory = host->service<InventoryService>();
     users = host->service<UserService>();
-    return products != nullptr;
+    return products != nullptr && inventory != nullptr;
 }
 
 QList<PermissionInfo> InventoryFactory::permissions() const
@@ -31,10 +32,15 @@ QList<PermissionInfo> InventoryFactory::permissions() const
     return {
         { QStringLiteral("inventario.editar"), QStringLiteral("Crear y modificar artículos y precios"), group },
         { QStringLiteral("inventario.baja"), QStringLiteral("Dar de baja artículos"), group },
+        { QStringLiteral("inventario.ajustar"), QStringLiteral("Ajustar el stock"), group },
+        { QStringLiteral("inventario.compras"), QStringLiteral("Cargar compras"), group },
+        { QStringLiteral("inventario.recuento"), QStringLiteral("Aplicar recuentos"), group },
+        { QStringLiteral("inventario.precios"), QStringLiteral("Cambiar precios en masa"), group },
+        { QStringLiteral("inventario.proveedores"), QStringLiteral("Administrar proveedores"), group },
     };
 }
 
 QWidget *InventoryFactory::createWidget(QWidget *parent)
 {
-    return new inventoryWidget(products, users, parent);
+    return new inventoryWidget(products, inventory, users, parent);
 }

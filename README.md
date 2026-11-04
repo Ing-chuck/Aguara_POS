@@ -100,6 +100,38 @@ supervisor escribe sus credenciales ahi mismo, sin cerrar la sesion:
 `host->service<UserService>()` da el servicio; `can()` sirve para ocultar o deshabilitar cosas y
 `audit()` para registrar lo que hizo el modulo.
 
+# Inventario
+
+El stock solo cambia con un **movimiento**: saldo inicial, compra, venta, devolucion, ajuste o
+recuento. Cada uno guarda cantidad, saldo, usuario, fecha y documento, asi que el stock de un
+articulo siempre se explica sumando su kardex (`Mas > Historial`). Por eso el stock no se edita
+en la ficha del articulo: se usa `Mas > Ajustar stock`. `StockLedger` es el unico que escribe
+`productos.stock`, y lo hace en la misma transaccion que el documento.
+
+El stock **puede quedar negativo**: el sistema avisa y lo registra, para que una compra cargada
+tarde no frene la venta.
+
+**Cantidades:** `Quantity` guarda milesimas en un entero (`AguaraQuantity::whole(3)` son 3 unidades,
+`1250` son 1,250 kg). Nunca `double`, igual que `Money`. Al escribir, la coma es siempre decimal y
+el punto con tres cifras separa miles: `2,75` y `1.500`.
+
+**Codigos de balanza:** un EAN-13 con prefijo 20 a 29 se lee como `PPPPPPPVVVVVC`.
+
+| Prefijo | `PPPPPPP` | `VVVVV` | Ejemplo |
+|---|---|---|---|
+| 20 a 27 | codigo del articulo, 7 digitos | peso en gramos | `2012345` y `01250` son 1,250 kg |
+| 28 y 29 | codigo del articulo, 7 digitos | precio en guaranies | `2854321` y `25000` son Gs. 25.000 |
+
+El digito verificador `C` se comprueba: un codigo mal leido no se acepta. Este formato es el mas
+comun, pero cada balanza se configura distinto: **confirmarlo con la balanza real** antes de usarla.
+
+**Permisos:** ademas de `inventario.editar` y `inventario.baja`, estan `inventario.ajustar`,
+`inventario.compras`, `inventario.recuento`, `inventario.precios` e `inventario.proveedores`.
+
+**En un modulo**, `host->service<InventoryService>()` da compras, ajustes, proveedores y
+`resolveScan()`, que convierte lo que manda el lector (codigo, codigo alternativo o balanza) en
+articulo, cantidad y precio.
+
 # Apariencia
 El tema esta en `aguara_interfaces.dll` (`src/interfaces/aguarastyle.h`), asi que el core y todos
 los modulos se ven igual:

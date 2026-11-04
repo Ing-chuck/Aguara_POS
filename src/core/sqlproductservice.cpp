@@ -2,18 +2,23 @@
 #include "errors.h"
 #include "logging.h"
 #include "connectionmonitor.h"
+#include "stockledger.h"
 
 #include <aguarastyle.h>
+#include <inventoryservice.h>
 #include <userservice.h>
 
 #include <QDate>
 #include <QFont>
+#include <QHash>
 #include <QDebug>
 #include <QSqlDatabase>
 #include <QSqlDriver>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QSqlRecord>
+
+#include <algorithm>
 #include <QVariant>
 
 /*
@@ -30,10 +35,12 @@ const char *const kChangesChannel = "aguara_products";
 
 const char *const kProductListSql =
     "SELECT p.codigo, p.descripcion, m.nombre, r.rubro, p.precio, p.costo,"
-    "       p.iva, p.stock, p.stock_min, p.f_compra, p.f_mod"
+    "       p.iva, p.stock, p.stock_min, p.f_compra, p.f_mod,"
+    "       COALESCE(u.decimales, 0), COALESCE(u.abreviatura, 'un')"    // after ProductColumn::Count
     "  FROM productos p"
     "  LEFT JOIN marcas m ON m.id = p.marca_id"
     "  LEFT JOIN rubros r ON r.id = p.rubro_id"
+    "  LEFT JOIN unidades_basicas u ON u.id = p.unidad_id"
     " WHERE p.es_activo = 1"
     " ORDER BY p.codigo";
 
@@ -64,6 +71,11 @@ bool ProductTableModel::refresh()
     return true;
 }
 
+int ProductTableModel::columnCount(const QModelIndex &parent) const
+{
+    return parent.isValid() ? 0 : int(ProductColumn::Count);    // the unit is read through record()
+}
+
 QVariant ProductTableModel::data(const QModelIndex &item, int role) const
 {
     const auto column = static_cast<ProductColumn>(item.column());
@@ -78,8 +90,8 @@ QVariant ProductTableModel::data(const QModelIndex &item, int role) const
     // at or below the minimum: the stock shows in red, and pages can count them
     if (role == ProductLowStockRole || ((role == Qt::ForegroundRole || role == Qt::FontRole)
                                         && column == ProductColumn::Stock)) {
-        const int stock = QSqlQueryModel::data(index(item.row(), int(ProductColumn::Stock))).toInt();
-        const int minimum = QSqlQueryModel::data(index(item.row(), int(ProductColumn::StockMin))).toInt();
+        const Quantity stock = QSqlQueryModel::data(index(item.row(), int(ProductColumn::Stock))).toLongLong();
+        const Quantity minimum = QSqlQueryModel::data(index(item.row(), int(ProductColumn::StockMin))).toLongLong();
         const bool low = minimum > 0 && stock <= minimum;
         if (role == ProductLowStockRole)
             return low;
@@ -102,6 +114,13 @@ QVariant ProductTableModel::data(const QModelIndex &item, int role) const
         return AguaraMoney::format(raw.toLongLong());
     case ProductColumn::Vat:
         return raw.toInt() == 0 ? tr("Exenta") : QStringLiteral("%1%").arg(raw.toInt());
+    case ProductColumn::Stock:
+    case ProductColumn::StockMin: {
+        const QSqlRecord row = record(item.row());
+        const int decimals = row.value(int(ProductColumn::Count)).toInt();
+        const QString text = AguaraQuantity::format(raw.toLongLong(), decimals);
+        return decimals == 0 ? text : text + QLatin1Char(' ') + row.value(int(ProductColumn::Count) + 1).toString();
+    }
     case ProductColumn::Purchased:
     case ProductColumn::Modified: {
         const QDate d = QDate::fromString(raw.toString(), Qt::ISODate);
@@ -150,7 +169,8 @@ QString auditText(const Product &p)
 {
     return QStringLiteral("%1 | precio %2 | costo %3 | IVA %4 | stock %5 | minimo %6")
         .arg(p.description, AguaraMoney::format(p.price), AguaraMoney::format(p.cost))
-        .arg(p.vatRate).arg(p.stock).arg(p.stockMin);
+        .arg(p.vatRate)
+        .arg(AguaraQuantity::format(p.stock, p.unit.decimals), AguaraQuantity::format(p.stockMin, p.unit.decimals));
 }
 } // namespace
 
@@ -275,10 +295,12 @@ std::optional<Product> SqlProductService::product(const QString &code) const
     QSqlQuery q(db());
     q.prepare(QStringLiteral(
         "SELECT p.codigo, p.descripcion, p.marca_id, m.nombre, p.rubro_id, r.rubro,"
-        "       p.precio, p.costo, p.iva, p.stock, p.stock_min, p.f_compra, p.f_mod, p.es_activo"
+        "       p.precio, p.costo, p.iva, p.stock, p.stock_min, p.f_compra, p.f_mod, p.es_activo,"
+        "       COALESCE(u.id, 1), COALESCE(u.unidad, 'Unidad'), COALESCE(u.abreviatura, 'un'), COALESCE(u.decimales, 0)"
         "  FROM productos p"
         "  LEFT JOIN marcas m ON m.id = p.marca_id"
         "  LEFT JOIN rubros r ON r.id = p.rubro_id"
+        "  LEFT JOIN unidades_basicas u ON u.id = p.unidad_id"
         " WHERE p.codigo = ?"));
     q.addBindValue(code);
     if (!exec(q) || !q.next())
@@ -294,11 +316,12 @@ std::optional<Product> SqlProductService::product(const QString &code) const
     p.price        = q.value(6).toLongLong();
     p.cost         = q.value(7).toLongLong();
     p.vatRate      = q.value(8).toInt();
-    p.stock        = q.value(9).toInt();
-    p.stockMin     = q.value(10).toInt();
+    p.stock        = q.value(9).toLongLong();
+    p.stockMin     = q.value(10).toLongLong();
     p.purchased    = QDate::fromString(q.value(11).toString(), Qt::ISODate);
     p.modified     = QDate::fromString(q.value(12).toString(), Qt::ISODate);
     p.active       = q.value(13).toBool();
+    p.unit         = { q.value(14).toLongLong(), q.value(15).toString(), q.value(16).toString(), q.value(17).toInt() };
     return p;
 }
 
@@ -309,7 +332,7 @@ bool SqlProductService::saveProduct(const Product &product, const QString &previ
 
     if (!begin())
         return false;
-    if (!saveOne(product, previousCode)) {
+    if (!saveOne(product, previousCode, tr("Corrección en la ficha del artículo"))) {
         rollback();
         return false;
     }
@@ -333,7 +356,7 @@ bool SqlProductService::importProducts(const QList<Product> &products, int *save
     if (!begin())
         return false;
     for (const Product &p : products) {
-        if (!saveOne(p, QString())) {
+        if (!saveOne(p, QString(), tr("Importación"))) {
             m_lastError = tr("Artículo %1: %2").arg(p.code, m_lastError);
             rollback();
             return false;
@@ -351,7 +374,7 @@ bool SqlProductService::importProducts(const QList<Product> &products, int *save
 }
 
 /// Insert or update one product. Must run inside a transaction.
-bool SqlProductService::saveOne(const Product &in, const QString &previousCode)
+bool SqlProductService::saveOne(const Product &in, const QString &previousCode, const QString &stockReason)
 {
     Product p = in;
     p.code = p.code.trimmed();
@@ -366,6 +389,8 @@ bool SqlProductService::saveOne(const Product &in, const QString &previousCode)
         vatOk = vatOk || v.rate == p.vatRate;
     if (!vatOk) { m_lastError = tr("La tasa de IVA %1% no existe.").arg(p.vatRate); return false; }
 
+    if (p.stockMin < 0) { m_lastError = tr("El stock mínimo no puede ser negativo."); return false; }
+
     if (!p.brandId && !p.brandName.trimmed().isEmpty()) {
         p.brandId = findOrCreate(QStringLiteral("marcas"), QStringLiteral("nombre"), p.brandName);
         if (!p.brandId) return false;
@@ -378,10 +403,25 @@ bool SqlProductService::saveOne(const Product &in, const QString &previousCode)
     // Which row are we writing? (renaming = updating the row under its old code)
     const QString existingCode = previousCode.isEmpty() ? p.code : previousCode;
     QSqlQuery q(db());
-    q.prepare(QStringLiteral("SELECT 1 FROM productos WHERE codigo = ?"));
+    q.prepare(QStringLiteral("SELECT stock, precio, costo FROM productos WHERE codigo = ?"));
     q.addBindValue(existingCode);
     if (!exec(q)) return false;
     const bool exists = q.next();
+    const Quantity oldStock = exists ? q.value(0).toLongLong() : 0;
+    const Money oldPrice = exists ? q.value(1).toLongLong() : 0;
+    const Money oldCost = exists ? q.value(2).toLongLong() : 0;
+    q.finish();
+
+    if (!exists || previousCode != p.code) {        // a code can't also be another article's barcode
+        QSqlQuery alternate(db());
+        alternate.prepare(QStringLiteral("SELECT producto_codigo FROM codigos_barras WHERE codigo = ?"));
+        alternate.addBindValue(p.code);
+        if (!exec(alternate)) return false;
+        if (alternate.next() && alternate.value(0).toString() != existingCode) {
+            m_lastError = tr("El código %1 ya es código de barras de %2.").arg(p.code, alternate.value(0).toString());
+            return false;
+        }
+    }
 
     if (!previousCode.isEmpty() && previousCode != p.code) {
         if (!exists) { m_lastError = tr("El artículo %1 ya no existe.").arg(previousCode); return false; }
@@ -395,29 +435,38 @@ bool SqlProductService::saveOne(const Product &in, const QString &previousCode)
     QSqlQuery w(db());
     if (exists) {
         w.prepare(QStringLiteral(
-            "UPDATE productos SET codigo = ?, descripcion = ?, precio = ?, costo = ?, stock = ?,"
-            " stock_min = ?, f_compra = ?, f_mod = ?, es_activo = 1, marca_id = ?, rubro_id = ?, iva = ?"
-            " WHERE codigo = ?"));
+            "UPDATE productos SET codigo = ?, descripcion = ?, precio = ?, costo = ?,"
+            " stock_min = ?, f_compra = ?, f_mod = ?, es_activo = 1, marca_id = ?, rubro_id = ?, iva = ?,"
+            " unidad_id = ? WHERE codigo = ?"));
     } else {
         w.prepare(QStringLiteral(
-            "INSERT INTO productos (codigo, descripcion, precio, costo, stock, stock_min,"
-            " f_compra, f_mod, es_activo, marca_id, rubro_id, iva)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)"));
+            "INSERT INTO productos (codigo, descripcion, precio, costo, stock_min,"
+            " f_compra, f_mod, es_activo, marca_id, rubro_id, iva, unidad_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)"));
     }
     w.addBindValue(p.code);
     w.addBindValue(p.description);
     w.addBindValue(p.price);
     w.addBindValue(p.cost);
-    w.addBindValue(p.stock);
     w.addBindValue(p.stockMin);
     w.addBindValue(dateOrNull(p.purchased));
     w.addBindValue(QDate::currentDate().toString(Qt::ISODate));
     w.addBindValue(nullIfZero(p.brandId));
     w.addBindValue(nullIfZero(p.categoryId));
     w.addBindValue(p.vatRate);
+    w.addBindValue(p.unit.id > 0 ? p.unit.id : 1);
     if (exists)
         w.addBindValue(existingCode);
-    return exec(w);
+    if (!exec(w))
+        return false;
+
+    // the stock only changes through the ledger
+    StockLedger ledger(m_monitor, m_connectionName, &m_lastError, m_audit);
+    if (p.stock != oldStock
+        && !ledger.move(p.code, exists ? StockMovementType::Adjustment : StockMovementType::Initial,
+                        p.stock - oldStock, p.cost, exists ? stockReason : tr("Saldo inicial")))
+        return false;
+    return !exists || ledger.recordPrice(p.code, oldPrice, p.price, oldCost, p.cost, tr("Ficha del artículo"));
 }
 
 bool SqlProductService::deactivateProduct(const QString &code)
@@ -485,7 +534,7 @@ QList<NamedItem> SqlProductService::namedItems(const QString &table, const QStri
     if (!exec(q))
         return items;
     while (q.next())
-        items.append({ q.value(0).toLongLong(), q.value(1).toString() });
+        items.append({ q.value(0).toLongLong(), q.value(1).toString(), 0, q.value(1).toString() });
     return items;
 }
 
@@ -517,12 +566,76 @@ bool SqlProductService::removeBrand(qint64 id)
 
 QList<NamedItem> SqlProductService::categories() const
 {
-    return namedItems(QStringLiteral("rubros"), QStringLiteral("rubro"));
+    QList<NamedItem> items;
+    QSqlQuery q(db());
+    q.prepare(QStringLiteral("SELECT id, rubro, parent_id FROM rubros WHERE es_activo = 1"));
+    if (!exec(q))
+        return items;
+    QHash<qint64, NamedItem> byId;
+    while (q.next()) {
+        NamedItem item;
+        item.id = q.value(0).toLongLong();
+        item.name = q.value(1).toString();
+        item.parentId = q.value(2).toLongLong();
+        byId.insert(item.id, item);
+    }
+    for (NamedItem item : qAsConst(byId)) {
+        QStringList path = { item.name };
+        int depth = 0;      // a guard: the data can't loop, setCategoryParent refuses it
+        for (qint64 up = item.parentId; byId.contains(up) && depth < 32; up = byId.value(up).parentId, ++depth)
+            path.prepend(byId.value(up).name);
+        item.path = path.join(QStringLiteral(" > "));
+        items << item;
+    }
+    std::sort(items.begin(), items.end(), [](const NamedItem &a, const NamedItem &b) {
+        return a.path.compare(b.path, Qt::CaseInsensitive) < 0;
+    });
+    return items;
 }
 
-qint64 SqlProductService::addCategory(const QString &name)
+bool SqlProductService::setCategoryParent(qint64 id, qint64 parentId)
 {
-    return findOrCreate(QStringLiteral("rubros"), QStringLiteral("rubro"), name);
+    const QList<NamedItem> all = categories();
+    for (qint64 up = parentId; up != 0;) {
+        if (up == id) {
+            m_lastError = tr("Un rubro no puede quedar dentro de sí mismo.");
+            return false;
+        }
+        const auto found = std::find_if(all.cbegin(), all.cend(), [up](const NamedItem &c) { return c.id == up; });
+        up = found != all.cend() ? found->parentId : 0;
+    }
+    QSqlQuery q(db());
+    q.prepare(QStringLiteral("UPDATE rubros SET parent_id = ? WHERE id = ?"));
+    q.addBindValue(nullIfZero(parentId));
+    q.addBindValue(id);
+    if (!exec(q))
+        return false;
+    changed();
+    return true;
+}
+
+QList<StockUnit> SqlProductService::units() const
+{
+    QList<StockUnit> list;
+    QSqlQuery q(db());
+    q.prepare(QStringLiteral("SELECT id, unidad, abreviatura, decimales FROM unidades_basicas ORDER BY id"));
+    if (!exec(q))
+        return list;
+    while (q.next())
+        list.append({ q.value(0).toLongLong(), q.value(1).toString(), q.value(2).toString(), q.value(3).toInt() });
+    return list;
+}
+
+qint64 SqlProductService::addCategory(const QString &name, qint64 parentId)
+{
+    const QList<NamedItem> all = categories();
+    const bool existed = std::any_of(all.cbegin(), all.cend(), [&name](const NamedItem &c) {
+        return c.name.compare(name.trimmed(), Qt::CaseInsensitive) == 0;
+    });
+    const qint64 id = findOrCreate(QStringLiteral("rubros"), QStringLiteral("rubro"), name);
+    if (id && !existed && parentId)
+        setCategoryParent(id, parentId);
+    return id;
 }
 
 bool SqlProductService::removeCategory(qint64 id)
