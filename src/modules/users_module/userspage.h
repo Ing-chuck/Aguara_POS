@@ -49,6 +49,7 @@ private:
     QList<UserRole> roleList;
     QLineEdit *roleName = nullptr;
     QLineEdit *roleDescription = nullptr;
+    class QSpinBox *roleMaxDiscount = nullptr;
     QTreeWidget *rolePermissions = nullptr;
     QPushButton *saveRoleButton = nullptr;
     QPushButton *removeRoleButton = nullptr;

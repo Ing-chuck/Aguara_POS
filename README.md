@@ -132,6 +132,60 @@ comun, pero cada balanza se configura distinto: **confirmarlo con la balanza rea
 `resolveScan()`, que convierte lo que manda el lector (codigo, codigo alternativo o balanza) en
 articulo, cantidad y precio.
 
+# Caja y ventas
+
+Cada computadora es una **caja**: se crea sola la primera vez y se le cambia el nombre en
+`Caja > Nombre de esta caja`. Sin una sesion abierta no se puede vender. La sesion esta en la base
+de datos, asi que si el programa o la PC se caen, al volver sigue abierta. Una sesion de otro dia
+frena las ventas hasta que un supervisor la cierre.
+
+**Teclado de la pantalla de cobro** (el cursor siempre queda en el campo del lector):
+
+| Tecla | Accion |
+|---|---|
+| Enter | Agrega el codigo escrito. `3*codigo` agrega tres; un texto busca por descripcion |
+| Flechas | Eligen la linea |
+| F2 | Cantidad de la linea |
+| F3 | Buscar articulo |
+| F4 / F5 | Descuento de la linea / de la venta, en porcentaje o monto |
+| F6 / F7 | Poner en espera / recuperar |
+| F12 | Cobrar |
+| Supr | Quitar la linea |
+| Esc | Borrar lo escrito; sin nada escrito, cancelar la venta |
+
+Un codigo que no existe avisa en la misma pantalla, sin abrir un dialogo que se coma el proximo
+codigo. Vender mas de lo que hay avisa y sigue (ver *Inventario*).
+
+**Una venta se guarda entera o no se guarda:** venta, lineas, pago, movimientos de stock y numero van
+en una sola transaccion. La numeracion es correlativa por caja, sin saltos ni repetidos entre puestos.
+El IVA se calcula linea por linea y el descuento de la venta se reparte entre las lineas de modo que
+las partes sumen exacto. El total de una venta es **exacto**: solo lo que se paga en efectivo se
+redondea a 50 Gs., la moneda mas chica, y ese redondeo queda guardado. Sin eso, una venta por peso no
+podria cuadrar en el arqueo.
+
+**Tarjeta y transferencia:** se cobran fuera del programa, en la terminal del banco o en la cuenta, y
+AguaraPOS no se conecta con ellas: en `Cobrar` (F12), F2 debito, F3 credito o F4 transferencia piden el
+codigo del comprobante y el monto, que por defecto es lo que falta. Cobran el monto exacto, al guarani,
+y nunca dan vuelto. Se pueden combinar entre si y con efectivo: el efectivo se calcula al final y solo
+esa parte se redondea. Un codigo que ya usa otra venta no anulada necesita autorizacion
+(`ventas.comprobante_repetido`, queda en la auditoria), porque las terminales pueden repetir numeros
+de un lote a otro. No entran en el arqueo: la planilla de cierre los lista en *Comprobantes por
+conciliar*, para compararlos con el cierre de lote de la terminal y con el extracto. Anular una venta
+saca de la caja solo su efectivo; el programa recuerda que la tarjeta o transferencia se revierte aparte.
+
+**Cierre:** el cajero cuenta por denominacion sin ver lo esperado (fondo + ventas en efectivo ±
+movimientos). Si coincide al guarani, la caja se cierra. Si no, solo se le dice que no coincide,
+nunca por cuanto: vuelve a contar, o un supervisor ve las cifras y cierra con la diferencia y un motivo
+obligatorio. Cada intento fallido queda en la auditoria. La planilla de cierre se reimprime en
+`Caja > Planillas anteriores`.
+
+**Permisos:** `ventas.anular`, `ventas.descuento_libre`, `caja.abrir`, `caja.cerrar`,
+`caja.movimientos`, `caja.cerrar_diferencia`, `caja.cerrar_olvidada`, `caja.planillas` y
+`caja.configurar`. El descuento maximo sin supervisor se define por rol en la pantalla de roles
+(de fabrica: Cajero 5 %, Encargado 20 %) y vale tambien para la suma de los descuentos de una venta.
+
+**En un modulo:** `host->service<SalesService>()` y `host->service<CashService>()`.
+
 # Apariencia
 El tema esta en `aguara_interfaces.dll` (`src/interfaces/aguarastyle.h`), asi que el core y todos
 los modulos se ven igual:

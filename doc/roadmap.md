@@ -162,31 +162,36 @@ Es el corazón del sistema.
 
 **Caja (`CashService`)**
 
-- [ ] Las **cajas** se identifican por puesto: cada PC es una caja configurada.
-- [ ] **Apertura:** usuario, caja, fecha y hora, y **fondo inicial** contado por denominación. Billetes: 2.000, 5.000, 10.000, 20.000, 50.000 y 100.000. Monedas: 50, 100, 500 y 1.000.
-- [ ] Mientras la sesión no esté abierta, no se puede vender.
-- [ ] **Movimientos de efectivo** con motivo y permiso: ingresos, egresos (pagos a proveedores, gastos) y **retiros parciales** (sangrías).
-- [ ] **Cierre:**
+- [x] Las **cajas** se identifican por puesto: cada PC es una caja configurada.
+- [x] **Apertura:** usuario, caja, fecha y hora, y **fondo inicial** contado por denominación. Billetes: 2.000, 5.000, 10.000, 20.000, 50.000 y 100.000. Monedas: 50, 100, 500 y 1.000.
+- [x] Mientras la sesión no esté abierta, no se puede vender.
+- [x] **Movimientos de efectivo** con motivo y permiso: ingresos, egresos (pagos a proveedores, gastos) y **retiros parciales** (sangrías).
+- [x] **Cierre:**
   1. El sistema calcula lo esperado por medio de pago: fondo + ventas en efectivo − vuelto ± movimientos ± saldos de proveedores (billeteras, minicarga, ver la fase 7).
   2. El cajero hace un **arqueo ciego**: cuenta por denominación sin ver el monto esperado.
   3. Si el conteo **coincide**, la caja se cierra.
   4. Si **no coincide**, el cierre se bloquea. Puede volver a contar, o un supervisor autoriza el cierre con la diferencia y un motivo obligatorio. Esa diferencia queda registrada y aparece en los reportes.
-- [ ] Planilla de cierre impresa y reimprimible, con el detalle por medio de pago, los movimientos y las diferencias.
-- [ ] Recuperación: si el programa o la PC se caen, al reabrir se retoma la sesión abierta. Una sesión olvidada de otro día solo la puede cerrar un supervisor.
+- [x] Planilla de cierre impresa y reimprimible, con el detalle por medio de pago, los movimientos y las diferencias.
+- [x] Recuperación: si el programa o la PC se caen, al reabrir se retoma la sesión abierta. Una sesión olvidada de otro día solo la puede cerrar un supervisor.
 
 **Venta (`SalesService` y pantalla de ventas)**
 
-- [ ] Pantalla de cobro pensada para teclado y lector:
+- [x] Pantalla de cobro pensada para teclado y lector:
   - código o búsqueda;
   - cantidad (`3*` y código);
   - cambio de cantidad y borrado de línea (con permiso, si ya está impresa);
   - subtotal y total grandes.
-- [ ] Venta en espera: estacionar una venta y atender a otro cliente.
-- [ ] Cobro en efectivo con cálculo de vuelto.
-- [ ] Guardado atómico en una sola transacción: venta, líneas, pagos, movimientos de stock y numeración. La numeración es correlativa por caja y no se repite entre puestos (secuencia en PostgreSQL, tabla de contadores en SQLite).
-- [ ] **Anulación** de una venta de la sesión actual, con permiso y motivo. Revierte el stock y la caja.
-- [ ] **Descuentos** por línea o por total, en porcentaje o monto, con un límite por rol. Pasar el límite requiere supervisor.
-- [ ] Cálculo de IVA por línea con `vatIncluded` y totales por tasa, como pide el comprobante.
+- [x] Venta en espera: estacionar una venta y atender a otro cliente.
+- [x] Cobro en efectivo con cálculo de vuelto. Solo lo que se paga en efectivo se **redondea a 50 Gs.**, la moneda más chica: sin eso, una venta por peso no podría cuadrar en el arqueo. El redondeo queda guardado en la venta.
+- [x] Guardado atómico en una sola transacción: venta, líneas, pagos, movimientos de stock y numeración. La numeración es correlativa por caja y no se repite entre puestos (contador `cajas.ultimo_numero`, dentro de la transacción de la venta: en las dos bases, y sin saltos si una venta falla).
+- [x] **Anulación** de una venta de la sesión actual, con permiso y motivo. Revierte el stock y la caja.
+- [x] **Descuentos** por línea o por total, en porcentaje o monto, con un límite por rol. Pasar el límite requiere supervisor.
+- [x] Cálculo de IVA por línea con `vatIncluded` y totales por tasa, como pide el comprobante.
+
+**Decisiones:**
+- Una sesión es de la caja, no del usuario: cada venta guarda quién la hizo y el relevo sigue en la misma sesión.
+- La venta en pantalla vive en memoria hasta cobrarla. Las ventas en espera sí se guardan y sobreviven a un reinicio.
+- Quitar una línea no pide permiso mientras no haya impresión por línea, pero queda en la auditoría. El permiso llega si la fase 4 imprime líneas antes del cobro.
 
 **Hecho cuando:** un cajero puede abrir la caja, vender todo el día con lector, anular con autorización y cerrar con un arqueo que cuadra. Ese cierre debe coincidir al guaraní con el reporte de ventas.
 
@@ -210,7 +215,10 @@ Es el corazón del sistema.
 
 ### Fase 5: Medios de pago, clientes y devoluciones *(M)*
 
-- [ ] **Pagos mixtos** (`ventas_pagos`): efectivo, tarjeta de débito o crédito, transferencia y QR. Todo con carga manual del comprobante del POS bancario; la integración con el POS del procesador puede venir después, como módulo.
+> **Redondeo:** tarjeta, transferencia y demás medios electrónicos cobran el monto exacto, al guaraní. El total de una venta es exacto y solo se redondea la parte pagada en efectivo (`AguaraSale::cashRounding()`). En un pago mixto, el efectivo es lo último que se calcula: de 15.625 con 10.000 por tarjeta, se redondean los 5.625.
+
+- [x] **Pagos mixtos** (`ventas_pagos`): efectivo, tarjeta de débito o crédito y transferencia, con carga manual del comprobante de la terminal o del número de operación. Un código ya usado en otra venta no anulada necesita autorización (`ventas.comprobante_repetido`), sin índice único, porque las terminales pueden repetir números entre lotes. La planilla de cierre los lista para conciliar.
+- [ ] Pago por QR. La integración con el POS del procesador puede venir después, como módulo.
 - [ ] Medios de pago configurables (`modos_de_pago`). Cada uno indica si cuenta en el arqueo de efectivo o se concilia aparte.
 - [ ] **Clientes:**
   - ABM con RUC o CI y verificación del dígito verificador (módulo 11).

@@ -6,8 +6,10 @@
 #include "logging.h"
 #include "mainwindow.h"
 #include "sessiondialogs.h"
+#include "sqlcashservice.h"
 #include "sqlinventoryservice.h"
 #include "sqlproductservice.h"
+#include "sqlsalesservice.h"
 #include "sqluserservice.h"
 #include <aguarastyle.h>
 #include <version.h>
@@ -114,10 +116,16 @@ int main(int argc, char *argv[])
     products.setAuditLog(&users);
     SqlInventoryService inventory(&connection, &products);
     inventory.setAuditLog(&users);
+    SqlCashService cash(&connection);
+    cash.setUsers(&users);
+    SqlSalesService sales(&connection, &products, &cash);
+    sales.setUsers(&users);
     CoreHost host;
     host.registerService(ProductService_iid, &products);
     host.registerService(InventoryService_iid, &inventory);
     host.registerService(UserService_iid, &users);
+    host.registerService(CashService_iid, &cash);
+    host.registerService(SalesService_iid, &sales);
 
     // Nothing opens without a user. First run: create the administrator.
     if (users.hasUsers()) {

@@ -5,10 +5,12 @@
 #include "aguarahost.h"
 #include "aguarastyle.h"
 #include "barcode.h"
+#include "cashservice.h"
 #include "inventoryservice.h"
 #include "messages.h"
 #include "money.h"
 #include "productservice.h"
+#include "salesservice.h"
 #include "userservice.h"
 
 #include <QIcon>

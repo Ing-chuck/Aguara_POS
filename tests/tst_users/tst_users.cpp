@@ -15,6 +15,8 @@ class tst_Users : public QObject
     Q_OBJECT
 
 private slots:
+    void discountLimitComesFromTheRoles();
+    void lastAuthorizerNamesWhoAnswered();
     void initTestCase_data() { TestSupport::addBackendRows(); }
     void init() { PasswordHash::setDefaultIterations(200); }    // the rules, not the cost
     void cleanup();
@@ -499,6 +501,59 @@ void tst_Users::inactivityWatcher()
     watcher.setInterval(0);                 // off
     QTest::qWait(100);
     QCOMPARE(idle.count(), 0);
+}
+
+void tst_Users::discountLimitComesFromTheRoles()
+{
+    OPEN_USERS();
+    QCOMPARE(m_users->discountLimit(), 100);        // the administrator
+    UserRole cashier;
+    for (const UserRole &r : m_users->roles()) {
+        if (r.name == QLatin1String("Cajero"))
+            cashier = r;
+        if (r.name == QLatin1String("Encargado"))
+            QCOMPARE(r.maxDiscount, 20);
+    }
+    QCOMPARE(cashier.maxDiscount, 5);
+    cashier.maxDiscount = 8;
+    QVERIFY(m_users->saveRole(cashier));
+
+    UserAccount user;
+    user.username = QStringLiteral("nina");
+    user.fullName = QStringLiteral("Nina");
+    user.roleIds << cashier.id;
+    QVERIFY(m_users->saveUser(user, QStringLiteral("clave123")));
+    m_users->logout();
+    QCOMPARE(m_users->discountLimit(), 0);          // nobody signed in
+    QVERIFY(m_users->login(QStringLiteral("nina"), QStringLiteral("clave123")));
+    QCOMPARE(m_users->discountLimit(), 8);
+}
+
+void tst_Users::lastAuthorizerNamesWhoAnswered()
+{
+    OPEN_USERS();
+    QVERIFY(m_users->authorize(QStringLiteral("usuarios.administrar"), QStringLiteral("x"), nullptr));
+    QCOMPARE(m_users->lastAuthorizer(), m_users->currentUser()->username);
+
+    UserAccount user;
+    for (const UserRole &r : m_users->roles()) {
+        if (r.name == QLatin1String("Cajero"))
+            user.roleIds << r.id;
+    }
+    user.username = QStringLiteral("nina");
+    user.fullName = QStringLiteral("Nina");
+    QVERIFY(m_users->saveUser(user, QStringLiteral("clave123")));
+    const QString admin = m_users->currentUser()->username;
+    m_users->logout();
+    QVERIFY(m_users->login(QStringLiteral("nina"), QStringLiteral("clave123")));
+    m_users->setSupervisorPrompt([&](const QString &, const QString &, const QString &, QWidget *,
+                                     QString *username, QString *password) {
+        *username = admin;
+        *password = QStringLiteral("secreto1");
+        return true;
+    });
+    QVERIFY(m_users->authorize(QStringLiteral("usuarios.administrar"), QStringLiteral("x"), nullptr));
+    QCOMPARE(m_users->lastAuthorizer(), admin);
 }
 
 QTEST_GUILESS_MAIN(tst_Users)

@@ -1,9 +1,16 @@
 TARGET = modulo_sales_module
 include(../module.pri)
 
-SOURCES   += salesmodule.cpp \
+QT += printsupport
+
+SOURCES   += cashdialogs.cpp \
+             closingsheet.cpp \
+             saledialogs.cpp \
+             salesmodule.cpp \
              salesmodulefactory.cpp
-HEADERS   += salesmodule.h \
+HEADERS   += cashdialogs.h \
+             closingsheet.h \
+             saledialogs.h \
+             salesmodule.h \
              salesmodulefactory.h
-FORMS     += salesmodule.ui
 DISTFILES += module.json

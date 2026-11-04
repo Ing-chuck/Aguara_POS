@@ -8,6 +8,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QSpinBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -278,6 +279,12 @@ QWidget *UsersPage::buildRolesTab()
     roleDescription = new QLineEdit;
     form->addRow(tr("Nombre:"), roleName);
     form->addRow(tr("Descripción:"), roleDescription);
+    roleMaxDiscount = new QSpinBox;
+    roleMaxDiscount->setObjectName(QStringLiteral("roleMaxDiscount"));
+    roleMaxDiscount->setRange(0, 100);
+    roleMaxDiscount->setSuffix(QStringLiteral(" %"));
+    roleMaxDiscount->setToolTip(tr("Lo que un usuario de este rol puede descontar sin un supervisor."));
+    form->addRow(tr("Descuento máximo:"), roleMaxDiscount);
     right->addLayout(form);
     rolePermissions = new QTreeWidget;
     rolePermissions->setObjectName(QStringLiteral("rolePermissions"));
@@ -320,6 +327,8 @@ void UsersPage::showRole()
     roleName->setEnabled(!role.system);
     roleDescription->setText(role.description);
     roleDescription->setEnabled(!fixed);
+    roleMaxDiscount->setValue(role.maxDiscount);
+    roleMaxDiscount->setEnabled(!fixed);
     saveRoleButton->setEnabled(!fixed);
     removeRoleButton->setEnabled(role.id != 0 && !role.system);
 
@@ -365,6 +374,7 @@ void UsersPage::onSaveRole()
     UserRole role = roleList.at(row);
     role.name = roleName->text();
     role.description = roleDescription->text();
+    role.maxDiscount = roleMaxDiscount->value();
     role.permissions.clear();
     for (int g = 0; g < rolePermissions->topLevelItemCount(); ++g) {
         QTreeWidgetItem *group = rolePermissions->topLevelItem(g);

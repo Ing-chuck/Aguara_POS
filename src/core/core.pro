@@ -24,7 +24,9 @@ SOURCES      +=     \
     pagecero.cpp    \
     passwordhash.cpp \
     sessiondialogs.cpp \
+    sqlcashservice.cpp \
     sqlproductservice.cpp \
+    sqlsalesservice.cpp \
     sqlinventoryservice.cpp \
     sqluserservice.cpp \
     stockledger.cpp
@@ -45,7 +47,9 @@ HEADERS      +=     \
     pagecero.h      \
     passwordhash.h  \
     sessiondialogs.h \
+    sqlcashservice.h \
     sqlproductservice.h \
+    sqlsalesservice.h \
     sqlinventoryservice.h \
     sqluserservice.h \
     stockledger.h

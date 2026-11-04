@@ -2,6 +2,7 @@
 // the same host and services the application gives them, on SQLite.
 #include "testsupport.h"
 
+#include "closingsheet.h"
 #include "labelsheet.h"
 #include "passwordhash.h"
 #include "sqluserservice.h"
@@ -14,6 +15,10 @@
 #include <QLineEdit>
 #include <QPluginLoader>
 #include <QAbstractButton>
+#include <QAction>
+#include <QComboBox>
+#include <QDialogButtonBox>
+#include <QSpinBox>
 #include <QFileInfo>
 #include <QLabel>
 #include <QMenu>
@@ -27,6 +32,8 @@
 #include <QtTest>
 
 using TestSupport::CoreFixture;
+using TestSupport::inCash;
+using TestSupport::byVoucher;
 
 class tst_Modules : public QObject
 {
@@ -53,8 +60,34 @@ private slots:
     void adjustThroughTheScreen();
     void labelsFillPages();
 
+    // modulo_sales_module: a day at the till, through the screen
+    void aDayAtTheTill();
+    void scanningProblemsStayOnThePage();
+    void quantityPrefixAndRepeatedScans();
+    void scaleLabelsAtTheTill();
+    void wrongCountIsBlindAndNeedsASupervisor();
+    void discountOverTheLimitNeedsASupervisor();
+    void voidingFromTheScreen();
+    void cardPaysEverything();
+    void cardAndCashTogether();
+    void cancellingWarnsAboutVouchers();
+    void repeatedVoucherNeedsASupervisor();
+    void voidingACardSaysToReverseIt();
+    void holdAndRecall();
+    void forgottenSessionNeedsASupervisor();
+    void searchByDescription();
+    void closingSheetShowsTheFigures();
+
 private:
     void openUsers();
+    bool showSales();
+    bool openTill(Money hundredThousands = 1);
+    void scan(const QString &text);
+    void press(Qt::Key key);
+    QLabel *label(const char *name) const { return m_page->findChild<QLabel *>(QLatin1String(name)); }
+    QTableWidget *saleLines() const { return m_page->findChild<QTableWidget *>(QStringLiteral("saleLines")); }
+    QLineEdit *saleEntry() const { return m_page->findChild<QLineEdit *>(QStringLiteral("saleEntry")); }
+    void trigger(const char *action) { m_page->findChild<QAction *>(QLatin1String(action))->trigger(); }
     QObject *load(const QString &fileName);
     QString writeFile(const QString &name, const QByteArray &bytes);
     QTableView *showInventory(QLineEdit **search);
@@ -78,6 +111,7 @@ void tst_Modules::init()
 
 void tst_Modules::cleanup()
 {
+    QTest::qWait(0);
     delete m_page;
     m_page = nullptr;
     m_users.reset();
@@ -340,6 +374,576 @@ void tst_Modules::scannerNeverSavesThePurchase()
     QVERIFY(done);
     QCOMPARE(m_page->findChild<QTableWidget *>(QStringLiteral("purchasesTable"))->rowCount(), 0);
     QCOMPARE(m_core.products->product(QStringLiteral("7840002"))->stock, Quantity(0));
+}
+
+// --- the till ----------------------------------------------------------------
+
+/// Signed in as the cashier, on the real sales page, with two articles.
+bool tst_Modules::showSales()
+{
+    openUsers();
+    m_core.cash->setUsers(m_users.get());
+    m_core.sales->setUsers(m_users.get());
+    auto factory = qobject_cast<PermissionProvider *>(load(QStringLiteral("modulo_sales_module.dll")));
+    if (!factory || !m_users->registerPermissions(factory->permissions()))
+        return false;
+    if (!m_users->login(QStringLiteral("cajero"), QStringLiteral("clave123")))
+        return false;
+    for (const auto &article : { std::make_pair("7840001", Money(11000)), std::make_pair("7840002", Money(4950)) }) {
+        Product p;
+        p.code = QLatin1String(article.first);
+        p.description = QStringLiteral("ARTICULO ") + p.code;
+        p.price = article.second;
+        p.cost = article.second / 2;
+        p.stock = AguaraQuantity::whole(10);
+        if (!m_core.products->saveProduct(p))
+            return false;
+    }
+    m_page = dynamic_cast<WidgetModuleInterface *>(factory)->createWidget();
+    m_page->resize(1100, 700);
+    m_page->show();
+    return QTest::qWaitForWindowExposed(m_page);
+}
+
+bool tst_Modules::openTill(Money hundredThousands)
+{
+    whenDialogOpens([=](QDialog *count) {
+        count->findChild<QSpinBox *>(QStringLiteral("countSpin_100000"))->setValue(int(hundredThousands));
+        count->accept();
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("closedButton"))->click();
+    return m_core.cash->currentSession().has_value();
+}
+
+void tst_Modules::scan(const QString &text)
+{
+    QTest::keyClicks(saleEntry(), text);
+    QTest::keyClick(saleEntry(), Qt::Key_Return);
+}
+
+void tst_Modules::press(Qt::Key key)
+{
+    QTest::keyClick(saleEntry(), key);
+}
+
+void tst_Modules::aDayAtTheTill()
+{
+    QVERIFY(showSales());
+    QCOMPARE(label("closedTitle")->text(), QStringLiteral("La caja está cerrada"));
+    QVERIFY(openTill(1));
+
+    scan(QStringLiteral("7840001"));
+    scan(QStringLiteral("7840002"));
+    QCOMPARE(saleLines()->rowCount(), 2);
+    QCOMPARE(label("saleTotal")->text(), QStringLiteral("15.950"));
+
+    whenDialogOpens([](QDialog *payment) {
+        QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentTotal"))->text(), QStringLiteral("Gs. 15.950"));
+        auto tendered = payment->findChild<QLineEdit *>(QStringLiteral("paymentTendered"));
+        QTest::keyClicks(tendered, QStringLiteral("20.000"));
+        QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentChange"))->text(), QStringLiteral("Vuelto: Gs. 4.050"));
+        QTest::keyClick(tendered, Qt::Key_Return);
+    });
+    press(Qt::Key_F12);
+
+    QCOMPARE(saleLines()->rowCount(), 0);
+    QCOMPARE(label("saleTotal")->text(), QStringLiteral("0"));
+    QCOMPARE(label("lastChange")->text(), QStringLiteral("Vuelto: Gs. 4.050"));
+    QVERIFY(label("saleMessage")->text().contains(QStringLiteral("001-000001")));
+    QCOMPARE(m_core.products->product(QStringLiteral("7840001"))->stock, AguaraQuantity::whole(9));
+
+    // closing: 100.000 of float + 15.950 of sales
+    const qint64 sessionId = m_core.cash->currentSession()->id;
+    bool closedAsked = false;
+    whenDialogOpens([&](QDialog *count) {
+        count->findChild<QSpinBox *>(QStringLiteral("countSpin_100000"))->setValue(1);
+        count->findChild<QSpinBox *>(QStringLiteral("countSpin_10000"))->setValue(1);
+        count->findChild<QSpinBox *>(QStringLiteral("countSpin_5000"))->setValue(1);
+        count->findChild<QSpinBox *>(QStringLiteral("countSpin_500"))->setValue(1);
+        count->findChild<QSpinBox *>(QStringLiteral("countSpin_100"))->setValue(4);
+        count->findChild<QSpinBox *>(QStringLiteral("countSpin_50"))->setValue(1);
+        QCOMPARE(count->findChild<QLabel *>(QStringLiteral("countTotal"))->text(), QStringLiteral("Total: Gs. 115.950"));
+        whenDialogOpens([&](QDialog *done) {
+            closedAsked = true;
+            done->reject();                     // no print preview in a test
+        });
+        count->accept();
+    });
+    trigger("actionCloseRegister");
+    QVERIFY(closedAsked);
+    QVERIFY(!m_core.cash->currentSession());
+    QCOMPARE(m_core.cash->sessionReport(sessionId)->session.difference, Money(0));
+    QCOMPARE(m_core.cash->sessionReport(sessionId)->salesTotal, Money(15950));
+    QCOMPARE(label("closedTitle")->text(), QStringLiteral("La caja está cerrada"));
+}
+
+void tst_Modules::scanningProblemsStayOnThePage()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    scan(QStringLiteral("999999"));                     // no dialog in the way of the next scan
+    QVERIFY(!QApplication::activeModalWidget());
+    QVERIFY(label("saleMessage")->text().contains(QStringLiteral("999999")));
+    scan(QStringLiteral("0*7840001"));
+    QVERIFY(label("saleMessage")->text().contains(QStringLiteral("no es válida")));
+    scan(QStringLiteral("2,5*7840001"));                // sold by the unit
+    QVERIFY(label("saleMessage")->text().contains(QStringLiteral("por unidad")));
+    QCOMPARE(saleLines()->rowCount(), 0);
+
+    scan(QStringLiteral("7840001"));
+    QCOMPARE(saleLines()->rowCount(), 1);
+    QVERIFY(label("saleMessage")->isHidden());
+
+    scan(QStringLiteral("10*7840001"));                 // more than there is: a warning, not a refusal
+    QCOMPARE(saleLines()->item(0, 2)->text(), QStringLiteral("11"));
+    QVERIFY(label("saleMessage")->text().contains(QStringLiteral("-1")));
+}
+
+void tst_Modules::quantityPrefixAndRepeatedScans()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    scan(QStringLiteral("3*7840001"));
+    scan(QStringLiteral("7840001"));
+    QCOMPARE(saleLines()->rowCount(), 1);
+    QCOMPARE(saleLines()->item(0, 2)->text(), QStringLiteral("4"));
+    QCOMPARE(label("saleTotal")->text(), QStringLiteral("44.000"));
+
+    whenDialogOpens([](QDialog *dialog) {
+        auto edit = dialog->findChild<QLineEdit *>(QStringLiteral("quantityEdit"));
+        edit->setText(QStringLiteral("2"));
+        dialog->accept();
+    });
+    press(Qt::Key_F2);
+    QCOMPARE(label("saleTotal")->text(), QStringLiteral("22.000"));
+
+    press(Qt::Key_Delete);
+    QCOMPARE(saleLines()->rowCount(), 0);
+    bool found = false;
+    for (const AuditEntry &e : m_users->auditEntries())
+        found = found || e.action == QLatin1String("venta.quitar_linea");
+    QVERIFY(found);
+}
+
+void tst_Modules::scaleLabelsAtTheTill()
+{
+    QVERIFY(showSales());
+    Product weighed;
+    weighed.code = QStringLiteral("2000101");
+    weighed.description = QStringLiteral("MANDIOCA X KG");
+    weighed.price = 4500;
+    weighed.unit = m_core.products->units().at(1);
+    QVERIFY(m_core.products->saveProduct(weighed));
+    weighed.code = QStringLiteral("2800111");
+    weighed.description = QStringLiteral("QUESO X KG");
+    weighed.price = 48000;
+    QVERIFY(m_core.products->saveProduct(weighed));
+    QVERIFY(openTill());
+
+    scan(QStringLiteral("2000101012504"));              // 1,250 kg
+    QCOMPARE(saleLines()->item(0, 2)->text(), QStringLiteral("1,250 kg"));
+    QCOMPARE(saleLines()->item(0, 5)->text(), QStringLiteral("5.625"));
+    QCOMPARE(label("saleTotal")->text(), QStringLiteral("5.625"));      // the exact amount owed
+
+    // only paying in cash rounds it, and the dialog says so
+    whenDialogOpens([](QDialog *payment) {
+        QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentTotal"))->text(), QStringLiteral("Gs. 5.650"));
+        QVERIFY(payment->findChild<QLabel *>(QStringLiteral("paymentRounding"))->text().contains(QStringLiteral("Gs. 5.625")));
+        auto tendered = payment->findChild<QLineEdit *>(QStringLiteral("paymentTendered"));
+        QTest::keyClicks(tendered, QStringLiteral("10.000"));
+        QTest::keyClick(tendered, Qt::Key_Return);
+    });
+    press(Qt::Key_F12);
+    QCOMPARE(label("lastChange")->text(), QStringLiteral("Vuelto: Gs. 4.350"));
+
+    scan(QStringLiteral("2800111345001"));              // the label says 34.500
+    QCOMPARE(saleLines()->rowCount(), 1);
+    QCOMPARE(saleLines()->item(0, 5)->text(), QStringLiteral("34.500"));
+}
+
+void tst_Modules::wrongCountIsBlindAndNeedsASupervisor()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill(1));
+    const qint64 sessionId = m_core.cash->currentSession()->id;
+    int asked = 0;
+    m_users->setSupervisorPrompt([&](const QString &, const QString &, const QString &, QWidget *,
+                                     QString *username, QString *password) {
+        ++asked;
+        *username = QStringLiteral("encargado");
+        *password = QStringLiteral("clave123");
+        return true;
+    });
+
+    QString blindText;
+    QString seenDifference;
+    whenDialogOpens([&](QDialog *count) {
+        count->findChild<QSpinBox *>(QStringLiteral("countSpin_50000"))->setValue(1);   // 50.000 short
+        whenDialogOpens([&](QDialog *mismatch) {
+            for (const QLabel *l : mismatch->findChildren<QLabel *>())
+                blindText += l->text();
+            whenDialogOpens([&](QDialog *recount) {
+                // the second count starts from the first
+                QCOMPARE(recount->findChild<QSpinBox *>(QStringLiteral("countSpin_50000"))->value(), 1);
+                whenDialogOpens([&](QDialog *again) {
+                    whenDialogOpens([&](QDialog *difference) {
+                        seenDifference = difference->findChild<QLabel *>(QStringLiteral("differenceAmount"))->text();
+                        auto buttons = difference->findChild<QDialogButtonBox *>();
+                        QVERIFY(!buttons->button(QDialogButtonBox::Ok)->isEnabled());   // the reason is required
+                        difference->findChild<QLineEdit *>(QStringLiteral("differenceReason"))->setText(QStringLiteral("Vuelto mal dado"));
+                        whenDialogOpens([](QDialog *done) { done->reject(); });
+                        buttons->button(QDialogButtonBox::Ok)->click();
+                    });
+                    again->findChild<QPushButton *>(QStringLiteral("mismatchSupervisor"))->click();
+                });
+                recount->accept();
+            });
+            mismatch->findChild<QPushButton *>(QStringLiteral("mismatchRecount"))->click();
+        });
+        count->accept();
+    });
+    trigger("actionCloseRegister");
+
+    QVERIFY(!blindText.isEmpty());
+    QVERIFY2(!blindText.contains(QStringLiteral("100.000")) && !blindText.contains(QStringLiteral("50.000")),
+             qPrintable(blindText));
+    QCOMPARE(asked, 1);
+    QCOMPARE(seenDifference, QStringLiteral("Gs. -50.000"));
+    const CashSession session = m_core.cash->sessionReport(sessionId)->session;
+    QVERIFY(!session.open);
+    QCOMPARE(session.difference, Money(-50000));
+    QCOMPARE(session.differenceReason, QStringLiteral("Vuelto mal dado"));
+    QCOMPARE(session.authorizedBy, QStringLiteral("encargado"));
+    QCOMPARE(session.closedBy, QStringLiteral("cajero"));
+}
+
+void tst_Modules::discountOverTheLimitNeedsASupervisor()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    int asked = 0;
+    m_users->setSupervisorPrompt([&](const QString &, const QString &, const QString &, QWidget *, QString *, QString *) {
+        ++asked;
+        return false;
+    });
+    scan(QStringLiteral("7840001"));                    // 11.000
+
+    const auto discountOf = [](const QString &percent) {
+        whenDialogOpens([=](QDialog *dialog) {
+            dialog->findChild<QLineEdit *>(QStringLiteral("discountEdit"))->setText(percent);
+            dialog->accept();
+        });
+    };
+    discountOf(QStringLiteral("5"));                    // a cashier's limit
+    press(Qt::Key_F4);
+    QCOMPARE(asked, 0);
+    QCOMPARE(saleLines()->item(0, 4)->text(), QStringLiteral("550"));
+
+    discountOf(QStringLiteral("10"));
+    press(Qt::Key_F4);
+    QCOMPARE(asked, 1);
+    QCOMPARE(saleLines()->item(0, 4)->text(), QStringLiteral("550"));       // refused: as it was
+    QVERIFY(label("saleMessage")->text().contains(QStringLiteral("no se autorizó")));
+
+    discountOf(QStringLiteral("5"));                    // on top of the line's: 10 % of the sale
+    press(Qt::Key_F5);
+    QCOMPARE(asked, 2);
+    QCOMPARE(label("saleDiscount")->text(), QStringLiteral("550"));
+}
+
+void tst_Modules::voidingFromTheScreen()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    m_users->setSupervisorPrompt([](const QString &, const QString &, const QString &, QWidget *,
+                                    QString *username, QString *password) {
+        *username = QStringLiteral("encargado");
+        *password = QStringLiteral("clave123");
+        return true;
+    });
+    scan(QStringLiteral("2*7840001"));
+    whenDialogOpens([](QDialog *payment) { payment->accept(); });
+    press(Qt::Key_F12);
+    QCOMPARE(m_core.products->product(QStringLiteral("7840001"))->stock, AguaraQuantity::whole(8));
+
+    whenDialogOpens([](QDialog *list) {
+        QCOMPARE(list->findChild<QTableWidget *>(QStringLiteral("sessionSalesTable"))->rowCount(), 1);
+        whenDialogOpens([list](QDialog *reason) {
+            reason->findChild<QLineEdit *>(QStringLiteral("reasonEdit"))->setText(QStringLiteral("Error de cobro"));
+            reason->accept();
+            QTimer::singleShot(50, list, [list]() {
+                QCOMPARE(list->findChild<QTableWidget *>(QStringLiteral("sessionSalesTable"))->item(0, 4)->text(),
+                         QStringLiteral("Anulada"));
+                list->reject();
+            });
+        });
+        list->findChild<QPushButton *>(QStringLiteral("voidSaleButton"))->click();
+    });
+    trigger("actionSessionSales");
+
+    QCOMPARE(m_core.products->product(QStringLiteral("7840001"))->stock, AguaraQuantity::whole(10));
+    QCOMPARE(m_core.cash->sessionReport(m_core.cash->currentSession()->id)->expectedCash, Money(100000));
+}
+
+static void fillVoucher(QDialog *voucher, const QString &code, const QString &amount = QString())
+{
+    if (!amount.isEmpty())
+        voucher->findChild<QLineEdit *>(QStringLiteral("voucherAmount"))->setText(amount);
+    auto reference = voucher->findChild<QLineEdit *>(QStringLiteral("voucherReference"));
+    reference->setText(code);
+    QTest::keyClick(reference, Qt::Key_Return);
+}
+
+void tst_Modules::cardPaysEverything()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    scan(QStringLiteral("7840001"));                    // 11.000
+
+    whenDialogOpens([](QDialog *payment) {
+        whenDialogOpens([](QDialog *voucher) {
+            auto reference = voucher->findChild<QLineEdit *>(QStringLiteral("voucherReference"));
+            QCOMPARE(voucher->findChild<QLineEdit *>(QStringLiteral("voucherAmount"))->text(), QStringLiteral("11.000"));
+            QTest::keyClick(reference, Qt::Key_Return);         // no code: the code is the proof
+            QVERIFY(voucher->isVisible());
+            QVERIFY(!voucher->findChild<QLabel *>(QStringLiteral("voucherError"))->text().isEmpty());
+            fillVoucher(voucher, QStringLiteral("448811"));
+        });
+        auto tendered = payment->findChild<QLineEdit *>(QStringLiteral("paymentTendered"));
+        QTest::keyClick(tendered, Qt::Key_F2);
+        QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentCaption"))->text(), QStringLiteral("Pago completo"));
+        QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentTotal"))->text(), QStringLiteral("Gs. 0"));
+        QVERIFY(!tendered->isEnabled());
+        QTest::keyClick(payment, Qt::Key_Return);
+    });
+    press(Qt::Key_F12);
+
+    QCOMPARE(saleLines()->rowCount(), 0);
+    QVERIFY(label("lastChange")->isHidden());           // no cash, no change
+    const auto report = m_core.cash->sessionReport(m_core.cash->currentSession()->id);
+    QCOMPARE(report->salesTotal, Money(11000));
+    QCOMPARE(report->expectedCash, Money(100000));
+    QCOMPARE(report->vouchers.size(), 1);
+    const QString html = ClosingSheet::html(*report);
+    QVERIFY(html.contains(QStringLiteral("Comprobantes por conciliar")));
+    QVERIFY(html.contains(QStringLiteral("Tarjeta de débito - 448811 - 001-000001")));
+}
+
+void tst_Modules::cardAndCashTogether()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    scan(QStringLiteral("7840001"));
+    scan(QStringLiteral("7840002"));                    // 15.950
+
+    whenDialogOpens([](QDialog *payment) {
+        whenDialogOpens([](QDialog *voucher) { fillVoucher(voucher, QStringLiteral("t-77"), QStringLiteral("10.975")); });
+        auto tendered = payment->findChild<QLineEdit *>(QStringLiteral("paymentTendered"));
+        QTest::keyClick(tendered, Qt::Key_F4);
+        QCOMPARE(payment->findChild<QTableWidget *>(QStringLiteral("paymentVouchers"))->item(0, 1)->text(), QStringLiteral("T-77"));
+        // 4.975 left: only this part rounds
+        QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentCaption"))->text(), QStringLiteral("Falta pagar en efectivo"));
+        QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentTotal"))->text(), QStringLiteral("Gs. 5.000"));
+        QVERIFY(payment->findChild<QLabel *>(QStringLiteral("paymentRounding"))->text().contains(QStringLiteral("Gs. 4.975")));
+        QTest::keyClicks(tendered, QStringLiteral("10.000"));
+        QTest::keyClick(tendered, Qt::Key_Return);
+    });
+    press(Qt::Key_F12);
+
+    QCOMPARE(label("lastChange")->text(), QStringLiteral("Vuelto: Gs. 5.000"));
+    const auto report = m_core.cash->sessionReport(m_core.cash->currentSession()->id);
+    QCOMPARE(report->salesTotal, Money(15975));
+    QCOMPARE(report->rounding, Money(25));
+    QCOMPARE(report->expectedCash, Money(105000));
+}
+
+void tst_Modules::cancellingWarnsAboutVouchers()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    scan(QStringLiteral("7840001"));
+
+    whenDialogOpens([](QDialog *payment) {
+        whenDialogOpens([](QDialog *voucher) { fillVoucher(voucher, QStringLiteral("1")); });
+        QTest::keyClick(payment, Qt::Key_F3);
+
+        whenDialogOpens([](QDialog *confirm) { confirm->reject(); });
+        payment->reject();
+        QVERIFY(payment->isVisible());                  // a "no" keeps the voucher
+
+        whenDialogOpens([](QDialog *confirm) { confirm->accept(); });
+        payment->reject();
+        QVERIFY(!payment->isVisible());
+    });
+    press(Qt::Key_F12);
+
+    QCOMPARE(saleLines()->rowCount(), 1);               // not charged: the sale stays
+    QCOMPARE(m_core.sales->sessionSales(m_core.cash->currentSession()->id).size(), 0);
+}
+
+void tst_Modules::repeatedVoucherNeedsASupervisor()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    SaleDraft draft;
+    SaleLine line;
+    line.code = QStringLiteral("7840001");
+    line.description = QStringLiteral("ARTICULO");
+    line.unitPrice = 11000;
+    draft.lines << line;
+    QVERIFY(m_core.sales->checkout(draft, { byVoucher(PaymentMethod::Debit, 11000, QStringLiteral("777")) }));
+
+    int asked = 0;
+    m_users->setSupervisorPrompt([&](const QString &, const QString &reason, const QString &, QWidget *,
+                                     QString *username, QString *password) {
+        if (++asked == 1)
+            return false;
+        [&] { QVERIFY(reason.contains(QStringLiteral("001-000001"))); }();
+        *username = QStringLiteral("encargado");
+        *password = QStringLiteral("clave123");
+        return true;
+    });
+    scan(QStringLiteral("7840001"));
+    whenDialogOpens([](QDialog *payment) {
+        whenDialogOpens([](QDialog *voucher) {
+            fillVoucher(voucher, QStringLiteral("777"));        // refused
+            QVERIFY(voucher->isVisible());
+            QVERIFY(voucher->findChild<QLabel *>(QStringLiteral("voucherError"))->text().contains(QStringLiteral("001-000001")));
+            fillVoucher(voucher, QStringLiteral("777"));        // authorized
+        });
+        QTest::keyClick(payment, Qt::Key_F2);
+        QTest::keyClick(payment, Qt::Key_Return);
+    });
+    press(Qt::Key_F12);
+
+    QCOMPARE(asked, 2);
+    QCOMPARE(saleLines()->rowCount(), 0);
+    bool audited = false;
+    for (const AuditEntry &e : m_users->auditEntries())
+        audited = audited || e.action == QLatin1String("venta.comprobante_repetido");
+    QVERIFY(audited);
+}
+
+void tst_Modules::voidingACardSaysToReverseIt()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    m_users->setSupervisorPrompt([](const QString &, const QString &, const QString &, QWidget *,
+                                    QString *username, QString *password) {
+        *username = QStringLiteral("encargado");
+        *password = QStringLiteral("clave123");
+        return true;
+    });
+    SaleDraft draft;
+    SaleLine line;
+    line.code = QStringLiteral("7840001");
+    line.description = QStringLiteral("ARTICULO");
+    line.unitPrice = 11000;
+    draft.lines << line;
+    QVERIFY(m_core.sales->checkout(draft, { byVoucher(PaymentMethod::Credit, 11000, QStringLiteral("C9")) }));
+
+    QString shown;
+    whenDialogOpens([&shown](QDialog *list) {
+        whenDialogOpens([&shown, list](QDialog *reason) {
+            for (const QLabel *text : reason->findChildren<QLabel *>())
+                shown += text->text() + QLatin1Char('\n');
+            reason->reject();
+            QTimer::singleShot(50, list, [list]() { list->reject(); });
+        });
+        list->findChild<QPushButton *>(QStringLiteral("voidSaleButton"))->click();
+    });
+    trigger("actionSessionSales");
+
+    QVERIFY2(shown.contains(QStringLiteral("Tarjeta de crédito C9")), qPrintable(shown));
+    QVERIFY2(!shown.contains(QStringLiteral("de la caja")), qPrintable(shown));     // no cash leaves
+}
+
+void tst_Modules::holdAndRecall()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    scan(QStringLiteral("7840001"));
+    press(Qt::Key_F6);
+    QCOMPARE(saleLines()->rowCount(), 0);
+    QCOMPARE(m_core.sales->heldSales().size(), 1);
+
+    scan(QStringLiteral("7840002"));                    // the next customer
+    press(Qt::Key_F7);                                  // refused while a sale is on the screen
+    QVERIFY(!QApplication::activeModalWidget());
+    whenDialogOpens([](QDialog *payment) { payment->accept(); });
+    press(Qt::Key_F12);
+
+    whenDialogOpens([](QDialog *held) {
+        QCOMPARE(held->findChild<QTableWidget *>(QStringLiteral("heldTable"))->rowCount(), 1);
+        held->accept();
+    });
+    press(Qt::Key_F7);
+    QCOMPARE(saleLines()->rowCount(), 1);
+    QCOMPARE(saleLines()->item(0, 0)->text(), QStringLiteral("7840001"));
+    QVERIFY(m_core.sales->heldSales().isEmpty());
+}
+
+void tst_Modules::forgottenSessionNeedsASupervisor()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    QSqlQuery q(m_core.connection());
+    QVERIFY(q.exec(QStringLiteral("UPDATE sesiones_caja SET apertura = '%1'")
+                       .arg(QDateTime::currentDateTime().addDays(-1).toString(Qt::ISODate))));
+    m_page->hide();
+    m_page->show();                                     // back on the page: it looks again
+    QVERIFY(label("closedTitle")->text().contains(QStringLiteral("sin cerrar")));
+
+    int asked = 0;
+    m_users->setSupervisorPrompt([&](const QString &, const QString &, const QString &, QWidget *, QString *, QString *) {
+        ++asked;
+        return false;
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("closedButton"))->click();
+    QCOMPARE(asked, 1);
+    QVERIFY(!QApplication::activeModalWidget());        // no count without the supervisor
+    QVERIFY(m_core.cash->currentSession().has_value());
+}
+
+void tst_Modules::searchByDescription()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    whenDialogOpens([](QDialog *search) {
+        QCOMPARE(search->findChild<QLineEdit *>(QStringLiteral("articleFilter"))->text(), QStringLiteral("articulo 7840002"));
+        search->accept();
+    });
+    scan(QStringLiteral("articulo 7840002"));
+    QCOMPARE(saleLines()->rowCount(), 1);
+    QCOMPARE(saleLines()->item(0, 0)->text(), QStringLiteral("7840002"));
+    QCOMPARE(saleEntry()->text(), QString());
+}
+
+void tst_Modules::closingSheetShowsTheFigures()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    SaleDraft draft;
+    SaleLine line;
+    line.code = QStringLiteral("7840001");
+    line.description = QStringLiteral("ARTICULO");
+    line.unitPrice = 11000;
+    draft.lines << line;
+    QVERIFY(m_core.sales->checkout(draft, { inCash(20000) }));
+    QVERIFY(m_core.cash->addMovement(CashMovementType::Withdrawal, 5000, QStringLiteral("Al <cofre>")));
+    DenominationCount count;
+    count.denomination = 100000;
+    count.count = 1;
+    const qint64 id = m_core.cash->currentSession()->id;
+    QVERIFY(m_core.cash->closeWithDifference({ count }, QStringLiteral("Faltó plata"), QStringLiteral("encargado")));
+
+    const QString html = ClosingSheet::html(*m_core.cash->sessionReport(id));
+    QVERIFY(html.contains(QStringLiteral("Efectivo")));
+    QVERIFY(html.contains(QStringLiteral("Gs. 11.000")));           // sold
+    QVERIFY(html.contains(QStringLiteral("Gs. 106.000")));          // expected
+    QVERIFY(html.contains(QStringLiteral("Gs. -6.000")));           // the difference
+    QVERIFY(html.contains(QStringLiteral("Faltó plata")));
+    QVERIFY(html.contains(QStringLiteral("Al &lt;cofre&gt;")));     // escaped
 }
 
 void tst_Modules::countThroughTheScreen()

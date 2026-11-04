@@ -17,6 +17,7 @@ SUBDIRS += \
     tst_productservice \
     tst_users \
     tst_inventory \
+    tst_sales \
     tst_modules \
     tst_reconnect \
     tst_mainwindow

@@ -50,6 +50,8 @@ public:
     std::optional<UserAccount> currentUser() const override { return m_current; }
     bool can(const QString &permission) const override;
     bool authorize(const QString &permission, const QString &reason, QWidget *parent) override;
+    QString lastAuthorizer() const override { return m_lastAuthorizer; }
+    int discountLimit() const override;
     void audit(const QString &action, const QString &entity, const QString &entityId,
                const QString &before = QString(), const QString &after = QString()) override;
     QList<AuditEntry> auditEntries(const AuditFilter &filter = AuditFilter()) const override;
@@ -88,6 +90,7 @@ private:
     bool m_allPermissions = false;
     QSet<QString> m_permissions;
     SupervisorPrompt m_prompt;
+    QString m_lastAuthorizer;
 };
 
 #endif // SQLUSERSERVICE_H

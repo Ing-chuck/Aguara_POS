@@ -54,6 +54,14 @@ QPushButton {
     padding: 6px 16px;
     min-height: 18px;
 }
+QPushButton::menu-indicator {
+    image: url(:/aguara/qss/chevron-down.svg);
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    right: 8px;
+    width: 12px;
+    height: 12px;
+}
 QPushButton:hover    { background: {{surfaceAlt}}; border-color: {{muted}}; }
 QPushButton:pressed  { background: {{border}}; }
 QPushButton:focus    { border-color: {{accent}}; }

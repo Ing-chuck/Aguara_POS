@@ -19,8 +19,16 @@ public:
     explicit SalesModuleFactory(QObject *parent = nullptr);
 
     ModuleInfo moduleInfo() const override;
+    bool initialize(AguaraHost *host) override;
     QWidget *createWidget(QWidget *parent = nullptr) override;
     QList<PermissionInfo> permissions() const override;
+
+private:
+    ProductService *products = nullptr;
+    InventoryService *inventory = nullptr;
+    UserService *users = nullptr;
+    CashService *cash = nullptr;
+    SalesService *sales = nullptr;
 };
 
 #endif // SALESMODULEFACTORY_H

@@ -10,8 +10,10 @@
 #include "connectionmonitor.h"
 #include "corehost.h"
 #include "database.h"
+#include "sqlcashservice.h"
 #include "sqlinventoryservice.h"
 #include "sqlproductservice.h"
+#include "sqlsalesservice.h"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -26,6 +28,23 @@
 #include <memory>
 
 namespace TestSupport {
+
+inline SalePayment inCash(Money tendered)
+{
+    SalePayment p;
+    p.method = QString::fromLatin1(PaymentMethod::Cash);
+    p.amount = tendered;
+    return p;
+}
+
+inline SalePayment byVoucher(const char *method, Money amount, const QString &reference)
+{
+    SalePayment p;
+    p.method = QString::fromLatin1(method);
+    p.amount = amount;
+    p.reference = reference;
+    return p;
+}
 
 inline bool postgresConfigured()
 {
@@ -114,15 +133,21 @@ public:
         monitor->setHealthCheckInterval(0);     // tests drive it explicitly
         products.reset(new SqlProductService(monitor.get()));
         inventory.reset(new SqlInventoryService(monitor.get(), products.get()));
+        cash.reset(new SqlCashService(monitor.get(), QStringLiteral("PC-TEST")));
+        sales.reset(new SqlSalesService(monitor.get(), products.get(), cash.get()));
         host.reset(new CoreHost);
         host->registerService(ProductService_iid, products.get());
         host->registerService(InventoryService_iid, inventory.get());
+        host->registerService(CashService_iid, cash.get());
+        host->registerService(SalesService_iid, sales.get());
         return true;
     }
 
     void close()
     {
         host.reset();
+        sales.reset();
+        cash.reset();
         inventory.reset();
         products.reset();
         monitor.reset();
@@ -136,6 +161,8 @@ public:
     std::unique_ptr<ConnectionMonitor> monitor;
     std::unique_ptr<SqlProductService> products;
     std::unique_ptr<SqlInventoryService> inventory;
+    std::unique_ptr<SqlCashService> cash;
+    std::unique_ptr<SqlSalesService> sales;
     std::unique_ptr<CoreHost> host;
 };
 

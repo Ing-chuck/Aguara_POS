@@ -231,10 +231,26 @@ bool SqlUserService::can(const QString &permission) const
     return m_current && (m_allPermissions || m_permissions.contains(permission));
 }
 
+int SqlUserService::discountLimit() const
+{
+    if (!m_current)
+        return 0;
+    if (m_allPermissions)
+        return 100;
+    QSqlQuery q(db());
+    q.prepare(QStringLiteral("SELECT COALESCE(MAX(r.descuento_max), 0) FROM roles r"
+                             " JOIN usuario_tiene_roles ur ON ur.rol_id = r.id WHERE ur.usuario_id = ?"));
+    q.addBindValue(m_current->id);
+    return exec(q) && q.next() ? q.value(0).toInt() : 0;
+}
+
 bool SqlUserService::authorize(const QString &permission, const QString &reason, QWidget *parent)
 {
-    if (can(permission))
+    m_lastAuthorizer.clear();
+    if (can(permission)) {
+        m_lastAuthorizer = m_current->username;
         return true;
+    }
     if (!m_prompt) {
         m_lastError = tr("Esta acción requiere autorización.");
         return false;
@@ -266,6 +282,7 @@ bool SqlUserService::authorize(const QString &permission, const QString &reason,
         }
         writeAudit(m_current ? m_current->username : QString(), supervisor.username,
                    QStringLiteral("autorizacion"), QStringLiteral("permiso"), permission, QString(), reason);
+        m_lastAuthorizer = supervisor.username;
         return true;
     }
 }
@@ -671,7 +688,7 @@ QList<UserRole> SqlUserService::roles() const
 {
     QList<UserRole> result;
     QSqlQuery q(db());
-    q.prepare(QStringLiteral("SELECT id, nombre, descripcion, todos_los_permisos, es_sistema FROM roles ORDER BY id"));
+    q.prepare(QStringLiteral("SELECT id, nombre, descripcion, todos_los_permisos, es_sistema, descuento_max FROM roles ORDER BY id"));
     if (!exec(q))
         return result;
     while (q.next()) {
@@ -681,6 +698,7 @@ QList<UserRole> SqlUserService::roles() const
         r.description = q.value(2).toString();
         r.allPermissions = q.value(3).toBool();
         r.system = q.value(4).toBool();
+        r.maxDiscount = q.value(5).toInt();
         result << r;
     }
     for (UserRole &r : result) {
@@ -728,13 +746,15 @@ bool SqlUserService::saveRole(const UserRole &role)
     qint64 id = role.id;
     QSqlQuery w(db());
     if (id == 0) {
-        w.prepare(QStringLiteral("INSERT INTO roles (nombre, descripcion) VALUES (?, ?)"));
+        w.prepare(QStringLiteral("INSERT INTO roles (nombre, descripcion, descuento_max) VALUES (?, ?, ?)"));
         w.addBindValue(name);
         w.addBindValue(role.description.trimmed());
+        w.addBindValue(qBound(0, role.maxDiscount, 100));
     } else {
-        w.prepare(QStringLiteral("UPDATE roles SET nombre = ?, descripcion = ? WHERE id = ?"));
+        w.prepare(QStringLiteral("UPDATE roles SET nombre = ?, descripcion = ?, descuento_max = ? WHERE id = ?"));
         w.addBindValue(name);
         w.addBindValue(role.description.trimmed());
+        w.addBindValue(qBound(0, role.maxDiscount, 100));
         w.addBindValue(id);
     }
     if (!exec(w)) {

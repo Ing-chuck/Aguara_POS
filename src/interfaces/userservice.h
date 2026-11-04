@@ -47,6 +47,7 @@ struct UserRole {
     QString description;
     bool    allPermissions = false; ///< Administrador: everything, present and future
     bool    system = false;         ///< created by the program: can't be removed
+    int     maxDiscount = 0;        ///< percent a member may discount without a supervisor
     QStringList permissions;        ///< codes
 };
 
@@ -84,6 +85,10 @@ public:
     /// `parent`, without closing the session. `reason` says what is being
     /// authorized ("Dar de baja LECHE ENTERA 1L"). Recorded in the audit log.
     virtual bool authorize(const QString &permission, const QString &reason, QWidget *parent) = 0;
+    /// Who answered the last authorize(): the signed-in user or the supervisor.
+    virtual QString lastAuthorizer() const = 0;
+    /// The largest discount, in percent, the signed-in user may give alone.
+    virtual int discountLimit() const = 0;
 
     // --- the audit log --------------------------------------------------
     /// Record what the signed-in user just did.
@@ -108,7 +113,7 @@ public:
     virtual QString lastError() const = 0;
 };
 
-#define UserService_iid "org.AguaraPOS.UserService/1.0"
+#define UserService_iid "org.AguaraPOS.UserService/1.1"   // 1.1: discount limits, lastAuthorizer()
 Q_DECLARE_INTERFACE(UserService, UserService_iid)
 
 #endif // USERSERVICE_H
