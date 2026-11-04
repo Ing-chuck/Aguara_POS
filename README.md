@@ -197,6 +197,24 @@ cola, sin bloquear a las demas, y se puede reintentar. Mientras no hay conexion 
 por inactividad: para volver a entrar haria falta el servidor. Tampoco se puede anular ni reimprimir una
 venta que siga en la cola.
 
+**Medios de pago:** efectivo siempre, y en `Caja > Medios de pago` (`caja.medios_pago`) los demas: debito,
+credito, transferencia y QR vienen cargados, y se agregan otros (Tigo Money, cheque). Cada uno indica si
+pide codigo. En `Cobrar` toman las teclas F2, F3, F4 y F6 a F10, en orden. Todos se concilian aparte: en el
+arqueo solo se cuenta efectivo, porque se cuenta billete por billete. Una venta ya cobrada conserva su
+medio aunque despues se saque de uso.
+
+**Clientes:** pagina propia, con RUC (verifica el digito, modulo 11 de la SET) o cedula; un documento no se
+repite y los clientes se dan de baja, no se borran. En la venta, F8 elige el cliente o crea uno; sin elegir,
+es consumidor final. El ticket lo muestra, y la venta guarda su nombre y documento de ese dia.
+
+**Devoluciones:** `Caja > Devolucion` (`ventas.devolver`) busca la venta por numero, de cualquier caja o dia.
+Cada linea devuelve su parte de lo cobrado, con descuentos, y la ultima unidad lo que falta: una venta
+devuelta en partes suma exacto. El dinero sale por un medio de la venta, hasta lo que entro por el, o como
+nota de credito. Vuelve el stock al costo de la venta, sale de la sesion actual e imprime su ticket. Necesita
+conexion y la caja abierta. La venta con devoluciones ya no se puede anular. Una **nota de credito** es
+interna (la fiscal es de la fase 8): su numero `NC-000001` se usa como medio de pago, tambien en parte, hasta
+agotar el saldo; anular esa venta devuelve el saldo. Sin conexion no se usa, porque no se ve su saldo.
+
 **Una venta se guarda entera o no se guarda:** venta, lineas, pago, movimientos de stock y numero van
 en una sola transaccion. La numeracion es correlativa por caja, sin saltos ni repetidos entre puestos.
 El IVA se calcula linea por linea y el descuento de la venta se reparte entre las lineas de modo que

@@ -11,9 +11,11 @@
 #include "corehost.h"
 #include "database.h"
 #include "sqlcashservice.h"
+#include "sqlcustomerservice.h"
 #include "sqlinventoryservice.h"
 #include "sqlprintservice.h"
 #include "sqlproductservice.h"
+#include "sqlreturnservice.h"
 #include "sqlsalesservice.h"
 
 #include <QCoreApplication>
@@ -153,18 +155,24 @@ public:
             printed << data;
             return true;
         });
+        customers.reset(new SqlCustomerService(monitor.get()));
+        returns.reset(new SqlReturnService(monitor.get(), sales.get(), cash.get()));
         host.reset(new CoreHost);
         host->registerService(ProductService_iid, products.get());
         host->registerService(InventoryService_iid, inventory.get());
         host->registerService(CashService_iid, cash.get());
         host->registerService(SalesService_iid, sales.get());
         host->registerService(PrintService_iid, print.get());
+        host->registerService(CustomerService_iid, customers.get());
+        host->registerService(ReturnService_iid, returns.get());
         return true;
     }
 
     void close()
     {
         host.reset();
+        returns.reset();
+        customers.reset();
         print.reset();
         sales.reset();
         cash.reset();
@@ -184,6 +192,8 @@ public:
     std::unique_ptr<SqlCashService> cash;
     std::unique_ptr<SqlSalesService> sales;
     std::unique_ptr<SqlPrintService> print;
+    std::unique_ptr<SqlCustomerService> customers;
+    std::unique_ptr<SqlReturnService> returns;
     std::unique_ptr<CoreHost> host;
     QList<QByteArray> printed;      // what a thermal printer would have received
     bool printerFails = false;

@@ -14,12 +14,18 @@ SOURCES += aguarastyle.cpp \
            interfaces.cpp \
            money.cpp \
            quantity.cpp \
-           salesservice.cpp
+           salesservice.cpp \
+           customerservice.cpp \
+           customerdialog.cpp \
+           returnservice.cpp
 HEADERS += aguara_global.h \
            aguarastyle.h \
            aguarahost.h \
            barcode.h \
            cashservice.h \
+           customerdialog.h \
+           customerservice.h \
+           returnservice.h \
            printservice.h \
            inventoryservice.h \
            quantity.h \

@@ -1,4 +1,5 @@
 #include "salesmodule.h"
+#include "tilldialogs.h"
 #include "cashdialogs.h"
 #include "saledialogs.h"
 
@@ -38,9 +39,10 @@ QLabel *figure(QGridLayout *grid, int row, const QString &name)
 } // namespace
 
 SalesModule::SalesModule(ProductService *products, InventoryService *inventory, UserService *users,
-                         CashService *cash, SalesService *sales, PrintService *print, QWidget *parent)
+                         CashService *cash, SalesService *sales, PrintService *print, CustomerService *customers,
+                         ReturnService *returns, QWidget *parent)
     : AguaraWidget(parent), products(products), inventory(inventory), users(users), cash(cash), sales(sales)
-    , print(print)
+    , print(print), customers(customers), returns(returns)
 {
     auto layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -93,11 +95,13 @@ void SalesModule::buildCashMenu(QPushButton *button)
     };
     add(tr("Ventas de la sesión"), "actionSessionSales", &SalesModule::showSessionSales);
     add(tr("Movimiento de caja"), "actionCashMovement", &SalesModule::cashMovement);
+    add(tr("Devolución"), "actionReturn", &SalesModule::returnSale);
     add(tr("Abrir cajón"), "actionOpenDrawer", &SalesModule::openDrawer);
     add(tr("Ventas por subir"), "actionPending", &SalesModule::showPending);
     add(tr("Cerrar caja"), "actionCloseRegister", &SalesModule::closeRegister);
     menu->addSeparator();
     add(tr("Planillas anteriores"), "actionSessions", &SalesModule::showSessions);
+    add(tr("Medios de pago"), "actionPaymentMethods", &SalesModule::configureMethods);
     add(tr("Nombre de esta caja"), "actionRenameRegister", &SalesModule::renameRegister);
     button->setMenu(menu);
 }
@@ -211,6 +215,11 @@ QWidget *SalesModule::buildSalePage()
     vatLabel = figure(figures, 2, tr("IVA incluido"));
     countLabel = figure(figures, 3, tr("Artículos"));
     cardLayout->addLayout(figures);
+    customerLabel = new QLabel;
+    customerLabel->setObjectName(QStringLiteral("saleCustomer"));
+    customerLabel->setWordWrap(true);
+    AguaraStyle::setRole(customerLabel, AguaraStyle::Muted);
+    cardLayout->addWidget(customerLabel);
     lastChange = new QLabel;
     lastChange->setObjectName(QStringLiteral("lastChange"));
     lastChange->setStyleSheet(QStringLiteral("font-size: 13pt; font-weight: 600;"));
@@ -230,6 +239,7 @@ QWidget *SalesModule::buildSalePage()
     keys->addWidget(recallButton, 2, 1);
     keys->addWidget(addKeyButton(tr("Supr Quitar"), "keyRemove", &SalesModule::removeLine), 3, 0);
     keys->addWidget(addKeyButton(tr("Esc Cancelar"), "keyCancel", &SalesModule::cancelSale), 3, 1);
+    keys->addWidget(addKeyButton(tr("F8 Cliente"), "keyCustomer", &SalesModule::chooseCustomer), 4, 0, 1, 2);
     side->addLayout(keys);
     side->addStretch();
     QPushButton *chargeButton = addKeyButton(tr("F12  Cobrar"), "keyCharge", &SalesModule::charge);
@@ -262,6 +272,7 @@ bool SalesModule::eventFilter(QObject *watched, QEvent *event)
     case Qt::Key_F5:     discountSale(); return true;
     case Qt::Key_F6:     holdSale(); return true;
     case Qt::Key_F7:     recallSale(); return true;
+    case Qt::Key_F8:     chooseCustomer(); return true;
     case Qt::Key_F12:    charge(); return true;
     case Qt::Key_Up:
     case Qt::Key_Down: {
@@ -325,6 +336,10 @@ void SalesModule::refreshSession()
 
 void SalesModule::renderSale()
 {
+    customerLabel->setText(draft.customerName.isEmpty()
+        ? tr("Consumidor final")
+        : QStringLiteral("%1 %2").arg(draft.customerName, draft.customerDocument).trimmed());
+
     // a smaller sale can't keep a larger discount
     Money afterLineDiscounts = 0;
     for (const SaleLine &line : draft.lines)
@@ -670,7 +685,7 @@ void SalesModule::charge()
         complain(tr("La venta no tiene artículos."));
         return;
     }
-    PaymentDialog dialog(AguaraSale::totals(draft).net, sales, users, this);
+    PaymentDialog dialog(AguaraSale::totals(draft).net, sales, users, returns, this);
     if (dialog.exec() == QDialog::Accepted) {
         const qint64 id = sales->checkout(draft, dialog.payments());
         if (id == 0) {
@@ -770,6 +785,64 @@ void SalesModule::closeRegister()
         if (const std::optional<CashSessionReport> report = cash->sessionReport(session->id))
             printClosingSheet(*report, print, this);
     }
+}
+
+void SalesModule::chooseCustomer()
+{
+    if (!mayStartSomething())
+        return;
+    CustomerPickDialog dialog(customers, users, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        const Customer customer = dialog.customer();
+        draft.customerId = customer.id;
+        draft.customerName = customer.name;
+        draft.customerDocument = customer.document;
+        renderSale();
+    }
+    entry->setFocus();
+}
+
+/// A past sale comes back, in whole or in part.
+void SalesModule::returnSale()
+{
+    if (!sales->online()) {
+        complain(tr("Sin conexión con el servidor: las devoluciones esperan a que vuelva."));
+        return;
+    }
+    const std::optional<CashSession> session = cash->currentSession();
+    if (!session || session->isStale()) {
+        complain(tr("Abra la caja para hacer una devolución: su dinero sale de la sesión."));
+        return;
+    }
+    if (!users->authorize(QStringLiteral("ventas.devolver"), tr("Hacer una devolución"), this))
+        return;
+    ReturnDialog dialog(returns, sales, users->lastAuthorizer(), this);
+    if (dialog.exec() == QDialog::Accepted) {
+        const std::optional<ReturnRecord> record = returns->returnRecord(dialog.returnId());
+        const QString number = AguaraReturn::formatNumber(dialog.returnId());
+        QString text = tr("Devolución %1 hecha.").arg(number);
+        if (record && record->method == QLatin1String(PaymentMethod::CreditNote))
+            text = tr("Devolución %1 hecha: nota de crédito %2 por %3.")
+                       .arg(number, record->reference, AguaraMoney::formatWithSymbol(record->paid));
+        else if (record && record->method == QLatin1String(PaymentMethod::Cash))
+            text = tr("Devolución %1 hecha: entregue %2 en efectivo.")
+                       .arg(number, AguaraMoney::formatWithSymbol(record->paid));
+        else if (record)
+            text = tr("Devolución %1 hecha: %2 por %3.")
+                       .arg(number, AguaraMoney::formatWithSymbol(record->paid), AguaraSale::methodName(record->method));
+        if (record && !print->finishReturn(*record))
+            say(AguaraStyle::Warning, text + QLatin1Char(' ') + tr("Sin ticket: %1").arg(print->lastError()));
+        else
+            say(AguaraStyle::Success, text);
+    }
+    refreshSession();
+}
+
+void SalesModule::configureMethods()
+{
+    if (!users->authorize(QStringLiteral("caja.medios_pago"), tr("Configurar los medios de pago"), this))
+        return;
+    PaymentMethodsDialog(sales, this).exec();
 }
 
 /// Without a sale, for change or a mistake: on record.

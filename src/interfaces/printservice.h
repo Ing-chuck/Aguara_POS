@@ -3,6 +3,8 @@
 
 #include <QList>
 #include <QString>
+
+struct ReturnRecord;
 #include <QStringList>
 #include <QtPlugin>
 
@@ -104,6 +106,10 @@ public:
     /// The same ticket as a PDF file.
     virtual bool saveSalePdf(qint64 saleId, const QString &fileName) = 0;
 
+    /// A return just done: its ticket, with the credit note's number if it has
+    /// one, and the drawer if cash went out. Always printed: the customer takes it.
+    virtual bool finishReturn(const ReturnRecord &record) = 0;
+
     /// Anything a module wants on paper.
     virtual bool printReceipt(const Receipt &receipt) = 0;
 
@@ -117,7 +123,7 @@ public:
     virtual QString lastError() const = 0;
 };
 
-#define PrintService_iid "org.AguaraPOS.PrintService/1.0"
+#define PrintService_iid "org.AguaraPOS.PrintService/1.1"
 Q_DECLARE_INTERFACE(PrintService, PrintService_iid)
 
 #endif // PRINTSERVICE_H

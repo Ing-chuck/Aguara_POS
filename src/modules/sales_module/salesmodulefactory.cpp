@@ -26,7 +26,9 @@ bool SalesModuleFactory::initialize(AguaraHost *host)
     cash = host->service<CashService>();
     sales = host->service<SalesService>();
     print = host->service<PrintService>();
-    return products && inventory && users && cash && sales && print;
+    customers = host->service<CustomerService>();
+    returns = host->service<ReturnService>();
+    return products && inventory && users && cash && sales && print && customers && returns;
 }
 
 QList<PermissionInfo> SalesModuleFactory::permissions() const
@@ -40,10 +42,12 @@ QList<PermissionInfo> SalesModuleFactory::permissions() const
         { QStringLiteral("ventas.descuento_libre"), QStringLiteral("Autorizar descuentos sobre el límite del rol"), sale },
         { QStringLiteral("ventas.comprobante_repetido"), QStringLiteral("Aceptar un comprobante ya usado en otra venta"), sale },
         { QStringLiteral("ventas.reimprimir"), QStringLiteral("Reimprimir tickets (salen con la marca COPIA)"), sale },
+        { QStringLiteral("ventas.devolver"), QStringLiteral("Hacer devoluciones"), sale },
         { QStringLiteral("caja.abrir"), QStringLiteral("Abrir la caja"), till, true, true },
         { QStringLiteral("caja.cerrar"), QStringLiteral("Cerrar la caja con arqueo"), till, true, true },
         { QStringLiteral("caja.movimientos"), QStringLiteral("Registrar ingresos, egresos y retiros"), till },
         { QStringLiteral("caja.abrir_cajon"), QStringLiteral("Abrir el cajón sin una venta"), till },
+        { QStringLiteral("caja.medios_pago"), QStringLiteral("Configurar los medios de pago"), till },
         { QStringLiteral("caja.cerrar_diferencia"), QStringLiteral("Autorizar el cierre con diferencia"), till },
         { QStringLiteral("caja.cerrar_olvidada"), QStringLiteral("Cerrar una caja de otro día"), till },
         { QStringLiteral("caja.planillas"), QStringLiteral("Ver planillas de cierre anteriores"), till },
@@ -59,5 +63,5 @@ bool SalesModuleFactory::keepPageOpen() const
 
 QWidget *SalesModuleFactory::createWidget(QWidget *parent)
 {
-    return new SalesModule(products, inventory, users, cash, sales, print, parent);
+    return new SalesModule(products, inventory, users, cash, sales, print, customers, returns, parent);
 }

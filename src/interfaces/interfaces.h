@@ -6,11 +6,13 @@
 #include "aguarastyle.h"
 #include "barcode.h"
 #include "cashservice.h"
+#include "customerservice.h"
 #include "inventoryservice.h"
 #include "messages.h"
 #include "money.h"
 #include "printservice.h"
 #include "productservice.h"
+#include "returnservice.h"
 #include "salesservice.h"
 #include "userservice.h"
 

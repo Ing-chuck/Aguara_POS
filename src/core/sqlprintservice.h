@@ -38,6 +38,8 @@ public:
 
     /// What a sale's ticket says.
     Receipt saleReceipt(const SaleRecord &sale);
+    /// What a return's ticket says.
+    Receipt returnReceipt(const ReturnRecord &record);
     /// The HTML of `receipt`, for QPrinter.
     static QString receiptHtml(const Receipt &receipt);
 
@@ -49,6 +51,7 @@ public:
     bool finishSale(qint64 saleId) override;
     bool printSale(qint64 saleId) override;
     bool saveSalePdf(qint64 saleId, const QString &fileName) override;
+    bool finishReturn(const ReturnRecord &record) override;
     bool printReceipt(const Receipt &receipt) override;
     bool printTest(const PrinterSettings &settings) override;
     bool openDrawer() override;

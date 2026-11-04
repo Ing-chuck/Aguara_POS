@@ -18,7 +18,9 @@ SOURCES      +=     \
     escpos.cpp \
     printersettingsdialog.cpp \
     saleoutbox.cpp \
+    sqlcustomerservice.cpp \
     sqlprintservice.cpp \
+    sqlreturnservice.cpp \
     errors.cpp      \
     inactivitywatcher.cpp \
     logging.cpp     \
@@ -44,7 +46,9 @@ HEADERS      +=     \
     escpos.h \
     printersettingsdialog.h \
     saleoutbox.h \
+    sqlcustomerservice.h \
     sqlprintservice.h \
+    sqlreturnservice.h \
     errors.h        \
     inactivitywatcher.h \
     loadedmodule.h  \

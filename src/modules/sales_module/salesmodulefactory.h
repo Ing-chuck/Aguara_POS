@@ -31,6 +31,8 @@ private:
     CashService *cash = nullptr;
     SalesService *sales = nullptr;
     PrintService *print = nullptr;
+    CustomerService *customers = nullptr;
+    ReturnService *returns = nullptr;
 };
 
 #endif // SALESMODULEFACTORY_H

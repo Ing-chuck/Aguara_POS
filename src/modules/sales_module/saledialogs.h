@@ -7,6 +7,7 @@
 
 class QAbstractItemModel;
 class QDialogButtonBox;
+class QGridLayout;
 class QHBoxLayout;
 class QLabel;
 class QLineEdit;
@@ -72,19 +73,21 @@ class VoucherDialog : public QDialog
     Q_OBJECT
 public:
     /// `limit` is what the sale still owes; `taken`, the codes already in it.
-    VoucherDialog(const QString &method, Money limit, const QStringList &taken,
-                  SalesService *sales, UserService *users, QWidget *parent);
+    VoucherDialog(const PaymentMethodInfo &method, Money limit, const QStringList &taken,
+                  SalesService *sales, UserService *users, ReturnService *returns, QWidget *parent);
     SalePayment payment() const { return result; }
     void accept() override;
 
 private:
     void refuse(const QString &text);
+    bool creditNote() const;
 
-    QString method;
+    PaymentMethodInfo method;
     Money limit;
     QStringList taken;
     SalesService *sales;
     UserService *users;
+    ReturnService *returns;
     QLineEdit *referenceEdit;
     QLineEdit *amountEdit;
     QLabel *error;
@@ -97,7 +100,7 @@ class PaymentDialog : public QDialog
 {
     Q_OBJECT
 public:
-    PaymentDialog(Money net, SalesService *sales, UserService *users, QWidget *parent);
+    PaymentDialog(Money net, SalesService *sales, UserService *users, ReturnService *returns, QWidget *parent);
     QList<SalePayment> payments() const;
     bool paidInCash() const { return value > 0; }
     Money change() const { return value - due; }
@@ -108,8 +111,8 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
 
 private:
-    QPushButton *addMethodButton(QHBoxLayout *row, const QString &text, const char *name, const char *method);
-    void addVoucher(const char *method);
+    void addMethodButtons(QGridLayout *grid);
+    void addVoucher(const PaymentMethodInfo &method);
     void removeVoucher();
     Money electronic() const;
     void refresh();
@@ -118,6 +121,8 @@ private:
     Money net;
     SalesService *sales;
     UserService *users;
+    ReturnService *returns;
+    QList<PaymentMethodInfo> methods;
     QList<SalePayment> vouchers;
     Money due;
     QLabel *caption;

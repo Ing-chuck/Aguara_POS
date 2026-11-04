@@ -35,6 +35,8 @@ public:
 
     qint64 checkout(const SaleDraft &draft, const QList<SalePayment> &payments) override;
     bool online() const override;
+    QList<PaymentMethodInfo> paymentMethods(bool inactive = false) const override;
+    bool savePaymentMethod(const PaymentMethodInfo &method) override;
     QList<PendingSale> pendingSales() const override;
     bool flushPending() override;
     QString referenceUsedBy(const QString &reference) const override;
@@ -65,6 +67,7 @@ private:
 
     bool validate(const SaleDraft &draft, const SaleTotals &totals) const;
     bool validateArticles(const SaleDraft &draft) const;
+    bool checkMethods(const QList<SalePayment> &payments) const;
     bool settle(const QList<SalePayment> &payments, SaleTotals *totals, QList<SalePayment> *settled) const;
     qint64 nextNumber(qint64 registerId);
     qint64 claimNumber(qint64 registerId, qint64 number);
@@ -83,6 +86,7 @@ private:
     SaleOutbox m_outbox;
     QTimer m_retry;
     bool m_flushing = false;
+    mutable QList<PaymentMethodInfo> m_knownMethods;
     mutable QString m_lastError;
 };
 

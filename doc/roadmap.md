@@ -222,13 +222,13 @@ Es el corazón del sistema.
 > **Redondeo:** tarjeta, transferencia y demás medios electrónicos cobran el monto exacto, al guaraní. El total de una venta es exacto y solo se redondea la parte pagada en efectivo (`AguaraSale::cashRounding()`). En un pago mixto, el efectivo es lo último que se calcula: de 15.625 con 10.000 por tarjeta, se redondean los 5.625.
 
 - [x] **Pagos mixtos** (`ventas_pagos`): efectivo, tarjeta de débito o crédito y transferencia, con carga manual del comprobante de la terminal o del número de operación. Un código ya usado en otra venta no anulada necesita autorización (`ventas.comprobante_repetido`), sin índice único, porque las terminales pueden repetir números entre lotes. La planilla de cierre los lista para conciliar.
-- [ ] Pago por QR. La integración con el POS del procesador puede venir después, como módulo.
-- [ ] Medios de pago configurables (`modos_de_pago`). Cada uno indica si cuenta en el arqueo de efectivo o se concilia aparte.
-- [ ] **Clientes:**
+- [x] Pago por QR, como un medio más. La integración con el POS del procesador puede venir después, como módulo.
+- [x] Medios de pago configurables (`modos_de_pago`). Todos menos el efectivo se concilian aparte: el arqueo se cuenta billete por billete, así que ningún otro medio puede contarse en él.
+- [x] **Clientes:**
   - ABM con RUC o CI y verificación del dígito verificador (módulo 11).
   - Búsqueda rápida y "consumidor final" por defecto.
   - Se usan para la factura (fase 8) y la cuenta corriente.
-- [ ] **Devoluciones** de ventas anteriores, buscando la venta por número. La devolución puede ser parcial. Repone el stock, devuelve el dinero por el mismo medio o como nota de crédito, y requiere permiso.
+- [x] **Devoluciones** de ventas anteriores, buscando la venta por número. La devolución puede ser parcial. Repone el stock, devuelve el dinero por el mismo medio o como nota de crédito (interna, con saldo, usable como medio de pago), y requiere permiso.
 - [ ] *(Opcional)* **Cuenta corriente** ("fiado"): venta a crédito para clientes habilitados, con límite, cobro de cuotas o saldos y estado de cuenta.
 
 ### Fase 6: Reportes *(M)*

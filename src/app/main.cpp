@@ -7,9 +7,11 @@
 #include "mainwindow.h"
 #include "sessiondialogs.h"
 #include "sqlcashservice.h"
+#include "sqlcustomerservice.h"
 #include "sqlinventoryservice.h"
 #include "sqlprintservice.h"
 #include "sqlproductservice.h"
+#include "sqlreturnservice.h"
 #include "sqlsalesservice.h"
 #include "sqluserservice.h"
 #include <aguarastyle.h>
@@ -125,6 +127,11 @@ int main(int argc, char *argv[])
     SqlPrintService print(&connection, &sales, &cash);
     print.setUsers(&users);
     print.storeInfo();          // remembered: a ticket must print during an outage
+    sales.paymentMethods();     // the same: the payment screen offers them
+    SqlCustomerService customers(&connection);
+    customers.setUsers(&users);
+    SqlReturnService returns(&connection, &sales, &cash);
+    returns.setUsers(&users);
     CoreHost host;
     host.registerService(ProductService_iid, &products);
     host.registerService(InventoryService_iid, &inventory);
@@ -132,6 +139,8 @@ int main(int argc, char *argv[])
     host.registerService(CashService_iid, &cash);
     host.registerService(SalesService_iid, &sales);
     host.registerService(PrintService_iid, &print);
+    host.registerService(CustomerService_iid, &customers);
+    host.registerService(ReturnService_iid, &returns);
 
     // Nothing opens without a user. First run: create the administrator.
     if (users.hasUsers()) {

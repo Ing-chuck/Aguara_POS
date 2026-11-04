@@ -74,6 +74,13 @@ private slots:
     void repeatedVoucherNeedsASupervisor();
     void voidingACardSaysToReverseIt();
     void outageOnlyFinishesTheSaleInProgress();
+    void customerOfTheSale();
+    void returnThroughTheScreen();
+    void returnNeedsPermission();
+    void creditNoteThroughThePaymentScreen();
+    void paymentKeysFollowTheMethods();
+    void configuringPaymentMethods();
+    void customersPage();
     void chargingPrintsAndOpensTheDrawer();
     void printerFailureDoesNotStopTheSale();
     void copyNeedsASupervisor();
@@ -912,6 +919,235 @@ void tst_Modules::outageOnlyFinishesTheSaleInProgress()
     QCOMPARE(m_core.sales->sessionSales(m_core.cash->currentSession()->id).size(), 1);
     scan(QStringLiteral("7840001"));
     QCOMPARE(saleLines()->rowCount(), 1);               // selling again
+}
+
+void tst_Modules::customerOfTheSale()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    Customer rosa;
+    rosa.name = QStringLiteral("DOÑA ROSA");
+    QVERIFY(m_core.customers->saveCustomer(rosa));
+    QCOMPARE(label("saleCustomer")->text(), QStringLiteral("Consumidor final"));
+
+    whenDialogOpens([](QDialog *pick) {
+        QTest::keyClicks(pick->findChild<QLineEdit *>(QStringLiteral("customerFilter")), QStringLiteral("rosa"));
+        QCOMPARE(pick->findChild<QTableWidget *>(QStringLiteral("customerPickTable"))->rowCount(), 1);
+        pick->accept();
+    });
+    press(Qt::Key_F8);
+    QCOMPARE(label("saleCustomer")->text(), QStringLiteral("DOÑA ROSA"));
+
+    scan(QStringLiteral("7840001"));
+    whenDialogOpens([](QDialog *payment) { payment->accept(); });
+    press(Qt::Key_F12);
+    QCOMPARE(m_core.sales->sessionSales(m_core.cash->currentSession()->id).first().customerName, QStringLiteral("DOÑA ROSA"));
+    QCOMPARE(label("saleCustomer")->text(), QStringLiteral("Consumidor final"));    // the next sale starts clean
+}
+
+/// Up to the point of the sale; the cashier has charged 2 of the 7840001.
+static void chargeTwo(QDialog *payment)
+{
+    payment->accept();
+}
+
+void tst_Modules::returnThroughTheScreen()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    m_users->setSupervisorPrompt([](const QString &, const QString &, const QString &, QWidget *,
+                                    QString *username, QString *password) {
+        *username = QStringLiteral("encargado");
+        *password = QStringLiteral("clave123");
+        return true;
+    });
+    scan(QStringLiteral("2*7840001"));
+    whenDialogOpens(chargeTwo);
+    press(Qt::Key_F12);
+    QCOMPARE(m_core.products->product(QStringLiteral("7840001"))->stock, AguaraQuantity::whole(8));
+
+    whenDialogOpens([](QDialog *dialog) {
+        dialog->findChild<QLineEdit *>(QStringLiteral("returnNumber"))->setText(QStringLiteral("001-000099"));
+        dialog->accept();                               // Enter: it looks the sale up
+        QVERIFY(dialog->isVisible());
+        QVERIFY(dialog->findChild<QLabel *>(QStringLiteral("returnError"))->text().contains(QStringLiteral("ninguna")));
+
+        dialog->findChild<QLineEdit *>(QStringLiteral("returnNumber"))->setText(QStringLiteral("001-000001"));
+        dialog->accept();
+        QVERIFY(dialog->isVisible());
+        auto lines = dialog->findChild<QTableWidget *>(QStringLiteral("returnLines"));
+        QCOMPARE(lines->rowCount(), 1);
+        lines->item(0, 3)->setText(QStringLiteral("1"));
+        QCOMPARE(dialog->findChild<QLabel *>(QStringLiteral("returnAmount"))->text(), QStringLiteral("A devolver: Gs. 11.000"));
+
+        dialog->accept();                               // no reason yet
+        QVERIFY(dialog->isVisible());
+        dialog->findChild<QLineEdit *>(QStringLiteral("returnReason"))->setText(QStringLiteral("Vencido"));
+        dialog->accept();
+    });
+    trigger("actionReturn");
+
+    QCOMPARE(m_core.products->product(QStringLiteral("7840001"))->stock, AguaraQuantity::whole(9));
+    QVERIFY(label("saleMessage")->text().contains(QStringLiteral("entregue Gs. 11.000")));
+    const auto report = m_core.cash->sessionReport(m_core.cash->currentSession()->id);
+    QCOMPARE(report->returns.first().authorizedBy, QStringLiteral("encargado"));
+    QVERIFY(ClosingSheet::html(*report).contains(QStringLiteral("Devoluciones")));
+}
+
+void tst_Modules::returnNeedsPermission()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    int asked = 0;
+    m_users->setSupervisorPrompt([&](const QString &, const QString &, const QString &, QWidget *, QString *, QString *) {
+        ++asked;
+        return false;
+    });
+    trigger("actionReturn");                            // no dialog opens: the test would hang on it
+    QCOMPARE(asked, 1);
+}
+
+void tst_Modules::creditNoteThroughThePaymentScreen()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    scan(QStringLiteral("7840001"));
+    whenDialogOpens([](QDialog *payment) { payment->accept(); });
+    press(Qt::Key_F12);
+
+    ReturnRequest r;
+    r.saleId = m_core.sales->sessionSales(m_core.cash->currentSession()->id).first().id;
+    ReturnLine line;
+    line.line = 1;
+    line.quantity = AguaraQuantity::One;
+    r.lines << line;
+    r.method = QString::fromLatin1(PaymentMethod::CreditNote);
+    r.reason = QStringLiteral("Cambio");
+    QVERIFY(m_core.returns->processReturn(r));
+
+    scan(QStringLiteral("7840001"));
+    scan(QStringLiteral("7840002"));                    // 15.950: the note pays 11.000
+    whenDialogOpens([](QDialog *payment) {
+        whenDialogOpens([](QDialog *voucher) {
+            auto reference = voucher->findChild<QLineEdit *>(QStringLiteral("voucherReference"));
+            reference->setText(QStringLiteral("NC-000099"));
+            QTest::keyClick(reference, Qt::Key_Return);
+            QVERIFY(voucher->isVisible());              // doesn't exist
+            reference->setText(QStringLiteral("nc-000001"));
+            QTest::keyClick(reference, Qt::Key_Return);
+        });
+        // the fifth method, after debit, credit, transfer and QR: F7
+        QTest::keyClick(payment->findChild<QLineEdit *>(QStringLiteral("paymentTendered")), Qt::Key_F7);
+        QCOMPARE(payment->findChild<QTableWidget *>(QStringLiteral("paymentVouchers"))->item(0, 2)->text(), QStringLiteral("11.000"));
+        QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentTotal"))->text(), QStringLiteral("Gs. 4.950"));
+        payment->accept();
+    });
+    press(Qt::Key_F12);
+
+    QCOMPARE(saleLines()->rowCount(), 0);
+    QCOMPARE(m_core.returns->creditNote(QStringLiteral("NC-000001"))->balance, Money(0));
+}
+
+void tst_Modules::paymentKeysFollowTheMethods()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    PaymentMethodInfo debit;
+    debit.code = QString::fromLatin1(PaymentMethod::Debit);
+    debit.active = false;
+    QVERIFY(m_core.sales->savePaymentMethod(debit));
+    PaymentMethodInfo tigo;
+    tigo.code = QStringLiteral("Tigo Money");
+    tigo.needsCode = false;
+    QVERIFY(m_core.sales->savePaymentMethod(tigo));
+
+    scan(QStringLiteral("7840001"));
+    whenDialogOpens([](QDialog *payment) {
+        QVERIFY(!payment->findChild<QPushButton *>(QStringLiteral("paymentMethod_tarjeta_debito")));
+        auto tigoButton = payment->findChild<QPushButton *>(QStringLiteral("paymentMethod_Tigo Money"));
+        QVERIFY(tigoButton);
+        QVERIFY(tigoButton->text().contains(QStringLiteral("Tigo Money")));
+        whenDialogOpens([](QDialog *voucher) {
+            QVERIFY(voucher->findChild<QLineEdit *>(QStringLiteral("voucherReference"))->isHidden());
+            voucher->accept();                          // no code asked
+        });
+        tigoButton->click();
+        QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentCaption"))->text(), QStringLiteral("Pago completo"));
+        payment->accept();
+    });
+    press(Qt::Key_F12);
+    QCOMPARE(saleLines()->rowCount(), 0);
+}
+
+void tst_Modules::configuringPaymentMethods()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    m_users->setSupervisorPrompt([](const QString &, const QString &, const QString &, QWidget *,
+                                    QString *username, QString *password) {
+        *username = QStringLiteral("encargado");
+        *password = QStringLiteral("clave123");
+        return true;
+    });
+    whenDialogOpens([](QDialog *dialog) {
+        auto table = dialog->findChild<QTableWidget *>(QStringLiteral("methodsTable"));
+        QCOMPARE(table->rowCount(), 4);
+        table->item(3, 2)->setCheckState(Qt::Unchecked);        // QR out of use
+        dialog->findChild<QLineEdit *>(QStringLiteral("methodsNew"))->setText(QStringLiteral("Cheque"));
+        dialog->findChild<QPushButton *>(QStringLiteral("methodsAdd"))->click();
+        QCOMPARE(table->rowCount(), 5);
+        dialog->accept();
+    });
+    trigger("actionPaymentMethods");
+
+    QStringList codes;
+    for (const PaymentMethodInfo &m : m_core.sales->paymentMethods())
+        codes << m.code;
+    QVERIFY(codes.contains(QStringLiteral("Cheque")));
+    QVERIFY(!codes.contains(QStringLiteral("qr")));
+}
+
+void tst_Modules::customersPage()
+{
+    openUsers();
+    auto factory = load(QStringLiteral("modulo_customers.dll"));
+    auto provider = qobject_cast<PermissionProvider *>(factory);
+    QVERIFY(provider);
+    QVERIFY(m_users->registerPermissions(provider->permissions()));
+    auto widgets = qobject_cast<WidgetModuleInterface *>(factory);
+    QVERIFY(widgets);
+    QVERIFY(m_users->login(QStringLiteral("cajero"), QStringLiteral("clave123")));
+    m_page = widgets->createWidget();
+    m_page->show();
+
+    whenDialogOpens([](QDialog *dialog) {
+        auto name = dialog->findChild<QLineEdit *>(QStringLiteral("customerName"));
+        name->setText(QStringLiteral("ANDE"));
+        auto type = dialog->findChild<QComboBox *>(QStringLiteral("customerType"));
+        type->setCurrentIndex(1);
+        auto document = dialog->findChild<QLineEdit *>(QStringLiteral("customerDocument"));
+        document->setText(QStringLiteral("80009735-2"));
+        dialog->accept();
+        QVERIFY(dialog->isVisible());                   // a wrong digit: it says so and stays
+        QVERIFY(dialog->findChild<QLabel *>(QStringLiteral("customerError"))->text().contains(QStringLiteral("RUC")));
+        document->setText(QStringLiteral("80009735-1"));
+        dialog->accept();
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("customerAdd"))->click();
+
+    auto table = m_page->findChild<QTableWidget *>(QStringLiteral("customerTable"));
+    QCOMPARE(table->rowCount(), 1);
+    QCOMPARE(table->item(0, 1)->text(), QStringLiteral("80009735-1"));
+
+    // the cashier adds them, but only a supervisor removes them
+    int asked = 0;
+    m_users->setSupervisorPrompt([&](const QString &, const QString &, const QString &, QWidget *, QString *, QString *) {
+        ++asked;
+        return false;
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("customerToggle"))->click();
+    QCOMPARE(asked, 1);
+    QCOMPARE(m_core.customers->customers().size(), 1);
 }
 
 static PrinterSettings thermal()

@@ -19,6 +19,8 @@ SUBDIRS += \
     tst_inventory \
     tst_sales \
     tst_print \
+    tst_customers \
+    tst_returns \
     tst_modules \
     tst_reconnect \
     tst_mainwindow

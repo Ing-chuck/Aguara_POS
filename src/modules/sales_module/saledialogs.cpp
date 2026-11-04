@@ -4,6 +4,7 @@
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QKeyEvent>
@@ -194,8 +195,8 @@ void DiscountDialog::accept()
 
 // --- PaymentDialog -----------------------------------------------------------
 
-PaymentDialog::PaymentDialog(Money net, SalesService *sales, UserService *users, QWidget *parent)
-    : QDialog(parent), net(net), sales(sales), users(users), due(AguaraSale::cashDue(net, 0))
+PaymentDialog::PaymentDialog(Money net, SalesService *sales, UserService *users, ReturnService *returns, QWidget *parent)
+    : QDialog(parent), net(net), sales(sales), users(users), returns(returns), due(AguaraSale::cashDue(net, 0))
 {
     QVBoxLayout *layout = dialogHeader(this, tr("Cobrar"), tr("Sin monto, se cobra en efectivo lo que falta."));
 
@@ -215,12 +216,10 @@ PaymentDialog::PaymentDialog(Money net, SalesService *sales, UserService *users,
     AguaraStyle::setRole(rounded, AguaraStyle::Muted);
     layout->addWidget(rounded);
 
-    auto methods = new QHBoxLayout;
-    methods->setSpacing(8);
-    addMethodButton(methods, tr("F2  Débito"), "paymentDebit", PaymentMethod::Debit);
-    addMethodButton(methods, tr("F3  Crédito"), "paymentCredit", PaymentMethod::Credit);
-    addMethodButton(methods, tr("F4  Transferencia"), "paymentTransfer", PaymentMethod::Transfer);
-    layout->addLayout(methods);
+    auto grid = new QGridLayout;
+    grid->setSpacing(8);
+    addMethodButtons(grid);
+    layout->addLayout(grid);
 
     table = makeSalesTable({ tr("Medio"), tr("Comprobante"), tr("Monto") });
     table->setObjectName(QStringLiteral("paymentVouchers"));
@@ -257,14 +256,35 @@ PaymentDialog::PaymentDialog(Money net, SalesService *sales, UserService *users,
     refresh();
 }
 
-QPushButton *PaymentDialog::addMethodButton(QHBoxLayout *row, const QString &text, const char *name, const char *method)
+namespace {
+
+/// F5 removes a voucher.
+const struct { int key; const char *label; } kMethodKeys[] = {
+    { Qt::Key_F2, "F2" }, { Qt::Key_F3, "F3" }, { Qt::Key_F4, "F4" }, { Qt::Key_F6, "F6" },
+    { Qt::Key_F7, "F7" }, { Qt::Key_F8, "F8" }, { Qt::Key_F9, "F9" }, { Qt::Key_F10, "F10" },
+};
+const int kMethodKeyCount = int(sizeof(kMethodKeys) / sizeof(kMethodKeys[0]));
+
+} // namespace
+
+void PaymentDialog::addMethodButtons(QGridLayout *grid)
 {
-    auto button = new QPushButton(text);
-    button->setObjectName(QString::fromLatin1(name));
-    button->setAutoDefault(false);
-    connect(button, &QPushButton::clicked, this, [this, method]() { addVoucher(method); });
-    row->addWidget(button, 1);
-    return button;
+    methods = sales->paymentMethods();
+    if (sales->online()) {                  // its balance is on the server
+        PaymentMethodInfo note;
+        note.code = QString::fromLatin1(PaymentMethod::CreditNote);
+        methods << note;
+    }
+    methods = methods.mid(0, kMethodKeyCount);
+    for (int i = 0; i < methods.size(); ++i) {
+        const PaymentMethodInfo method = methods.at(i);
+        auto button = new QPushButton(QStringLiteral("%1  %2").arg(QLatin1String(kMethodKeys[i].label),
+                                                                  AguaraSale::methodName(method.code)));
+        button->setObjectName(QStringLiteral("paymentMethod_") + method.code);
+        button->setAutoDefault(false);
+        connect(button, &QPushButton::clicked, this, [this, method]() { addVoucher(method); });
+        grid->addWidget(button, i / 2, i % 2);
+    }
 }
 
 Money PaymentDialog::electronic() const
@@ -277,24 +297,30 @@ Money PaymentDialog::electronic() const
 
 void PaymentDialog::keyPressEvent(QKeyEvent *event)
 {
-    switch (event->key()) {
-    case Qt::Key_F2: addVoucher(PaymentMethod::Debit); return;
-    case Qt::Key_F3: addVoucher(PaymentMethod::Credit); return;
-    case Qt::Key_F4: addVoucher(PaymentMethod::Transfer); return;
-    case Qt::Key_F5: removeVoucher(); return;
-    default: QDialog::keyPressEvent(event);
+    if (event->key() == Qt::Key_F5) {
+        removeVoucher();
+        return;
     }
+    for (int i = 0; i < methods.size(); ++i) {
+        if (event->key() == kMethodKeys[i].key) {
+            addVoucher(methods.at(i));
+            return;
+        }
+    }
+    QDialog::keyPressEvent(event);
 }
 
-void PaymentDialog::addVoucher(const char *method)
+void PaymentDialog::addVoucher(const PaymentMethodInfo &method)
 {
     const Money left = net - electronic();
     if (left <= 0)
         return;
     QStringList taken;
-    for (const SalePayment &p : vouchers)
-        taken << p.reference;
-    VoucherDialog dialog(QString::fromLatin1(method), left, taken, sales, users, this);
+    for (const SalePayment &p : vouchers) {
+        if (!p.reference.isEmpty())
+            taken << p.reference;
+    }
+    VoucherDialog dialog(method, left, taken, sales, users, returns, this);
     if (dialog.exec() == QDialog::Accepted) {
         vouchers << dialog.payment();
         refresh();
@@ -400,19 +426,24 @@ QList<SalePayment> PaymentDialog::payments() const
 
 // --- VoucherDialog -----------------------------------------------------------
 
-VoucherDialog::VoucherDialog(const QString &method, Money limit, const QStringList &taken,
-                             SalesService *sales, UserService *users, QWidget *parent)
-    : QDialog(parent), method(method), limit(limit), taken(taken), sales(sales), users(users)
+VoucherDialog::VoucherDialog(const PaymentMethodInfo &method, Money limit, const QStringList &taken,
+                             SalesService *sales, UserService *users, ReturnService *returns, QWidget *parent)
+    : QDialog(parent), method(method), limit(limit), taken(taken), sales(sales), users(users), returns(returns)
 {
-    const bool transfer = method == QLatin1String(PaymentMethod::Transfer);
-    QVBoxLayout *layout = dialogHeader(this, AguaraSale::methodName(method),
-        transfer ? tr("Confirme que la transferencia llegó y copie su número de operación.")
-                 : tr("Cobre en la terminal y copie el código del comprobante impreso."));
+    const bool transfer = method.code == QLatin1String(PaymentMethod::Transfer);
+    QVBoxLayout *layout = dialogHeader(this, AguaraSale::methodName(method.code),
+        creditNote() ? tr("Escriba el número de la nota de crédito.")
+        : transfer ? tr("Confirme que la transferencia llegó y copie su número de operación.")
+        : method.needsCode ? tr("Cobre en la terminal y copie el código del comprobante impreso.")
+                           : tr("Confirme que el pago llegó."));
     auto form = new QFormLayout;
     form->setHorizontalSpacing(12);
-    referenceEdit = new QLineEdit;
+    referenceEdit = new QLineEdit(this);
     referenceEdit->setObjectName(QStringLiteral("voucherReference"));
-    form->addRow(transfer ? tr("Número de operación:") : tr("Código del comprobante:"), referenceEdit);
+    if (method.needsCode)
+        form->addRow(creditNote() ? tr("Número:") : transfer ? tr("Número de operación:") : tr("Código del comprobante:"), referenceEdit);
+    else
+        referenceEdit->hide();
     amountEdit = new QLineEdit(AguaraMoney::format(limit));
     amountEdit->setObjectName(QStringLiteral("voucherAmount"));
     amountEdit->setAlignment(Qt::AlignRight);
@@ -426,7 +457,15 @@ VoucherDialog::VoucherDialog(const QString &method, Money limit, const QStringLi
     layout->addWidget(error);
     layout->addWidget(acceptCancel(this, tr("Aceptar")));
     setMinimumWidth(420);
-    referenceEdit->setFocus();
+    if (method.needsCode)
+        referenceEdit->setFocus();
+    else
+        amountEdit->setFocus();
+}
+
+bool VoucherDialog::creditNote() const
+{
+    return method.code == QLatin1String(PaymentMethod::CreditNote);
 }
 
 void VoucherDialog::refuse(const QString &text)
@@ -437,15 +476,9 @@ void VoucherDialog::refuse(const QString &text)
 
 void VoucherDialog::accept()
 {
-    const QString reference = AguaraSale::normalizeReference(referenceEdit->text());
-    if (reference.isEmpty()) {
+    QString reference = AguaraSale::normalizeReference(referenceEdit->text());
+    if (method.needsCode && reference.isEmpty()) {
         refuse(tr("Escriba el código: es lo que prueba el pago."));
-        referenceEdit->setFocus();
-        return;
-    }
-    if (taken.contains(reference)) {
-        refuse(tr("Ese código ya está en esta venta."));
-        referenceEdit->selectAll();
         referenceEdit->setFocus();
         return;
     }
@@ -458,7 +491,29 @@ void VoucherDialog::accept()
         return;
     }
 
-    const QString usedBy = sales->referenceUsedBy(reference);
+    if (creditNote()) {
+        const std::optional<CreditNote> note = returns->creditNote(reference);
+        if (!note) {
+            refuse(returns->lastError());
+            referenceEdit->selectAll();
+            referenceEdit->setFocus();
+            return;
+        }
+        if (note->balance <= 0) {
+            refuse(tr("La nota de crédito %1 ya no tiene saldo.").arg(note->number));
+            return;
+        }
+        reference = note->number;
+        amount = qMin(amount, note->balance);       // the rest is paid some other way
+    }
+    if (!reference.isEmpty() && taken.contains(reference)) {
+        refuse(tr("Ese código ya está en esta venta."));
+        referenceEdit->selectAll();
+        referenceEdit->setFocus();
+        return;
+    }
+
+    const QString usedBy = creditNote() || reference.isEmpty() ? QString() : sales->referenceUsedBy(reference);
     if (!usedBy.isEmpty()) {
         const QString what = tr("Comprobante %1, ya usado en la venta %2").arg(reference, usedBy);
         if (!users->authorize(QStringLiteral("ventas.comprobante_repetido"), what, this)) {
@@ -471,7 +526,7 @@ void VoucherDialog::accept()
                      tr("%1, autorizó %2").arg(what, users->lastAuthorizer()));
     }
 
-    result.method = method;
+    result.method = method.code;
     result.amount = amount;
     result.reference = reference;
     QDialog::accept();

@@ -2,6 +2,7 @@
 #include "connectionmonitor.h"
 #include "errors.h"
 
+#include <returnservice.h>
 #include <salesservice.h>
 #include <userservice.h>
 
@@ -353,6 +354,13 @@ Money SqlCashService::expectedCash(qint64 sessionId, Money openingFloat) const
     sales.addBindValue(QString::fromLatin1(PaymentMethod::Cash));
     if (exec(sales) && sales.next())
         expected += sales.value(0).toLongLong();
+    QSqlQuery refunds(db());
+    refunds.prepare(QStringLiteral("SELECT CAST(COALESCE(SUM(pagado), 0) AS BIGINT) FROM devoluciones"
+                                   " WHERE sesion_id = ? AND medio = ?"));
+    refunds.addBindValue(sessionId);
+    refunds.addBindValue(QString::fromLatin1(PaymentMethod::Cash));
+    if (exec(refunds) && refunds.next())
+        expected -= refunds.value(0).toLongLong();
     for (const CashMovement &m : movements(sessionId))
         expected += m.type == QLatin1String(CashMovementType::In) ? m.amount : -m.amount;
     return expected;
@@ -507,6 +515,28 @@ std::optional<CashSessionReport> SqlCashService::sessionReport(qint64 sessionId)
         v.reference = vouchers.value(3).toString();
         v.amount = vouchers.value(4).toLongLong();
         r.vouchers << v;
+    }
+
+    QSqlQuery returned(db());
+    returned.prepare(QStringLiteral(
+        "SELECT d.id, v.caja_id, v.numero, d.medio, d.referencia, d.pagado, d.motivo, d.usuario, d.autorizo"
+        " FROM devoluciones d JOIN ventas v ON v.id = d.venta_id WHERE d.sesion_id = ? ORDER BY d.id"));
+    returned.addBindValue(sessionId);
+    if (!exec(returned))
+        return std::nullopt;
+    while (returned.next()) {
+        SessionReturn s;
+        s.number = AguaraReturn::formatNumber(returned.value(0).toLongLong());
+        s.saleNumber = AguaraSale::formatNumber(returned.value(1).toLongLong(), returned.value(2).toLongLong());
+        s.method = returned.value(3).toString();
+        s.reference = returned.value(4).toString();
+        s.amount = returned.value(5).toLongLong();
+        s.reason = returned.value(6).toString();
+        s.user = returned.value(7).toString();
+        s.authorizedBy = returned.value(8).toString();
+        if (s.method == QLatin1String(PaymentMethod::Cash))
+            r.cashRefunds += s.amount;
+        r.returns << s;
     }
 
     r.movements = movements(sessionId);

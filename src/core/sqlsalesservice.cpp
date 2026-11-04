@@ -16,6 +16,8 @@
 #include <QUuid>
 #include <QVariant>
 
+#include <algorithm>
+
 SqlSalesService::SqlSalesService(ConnectionMonitor *monitor, SqlProductService *products, SqlCashService *cash,
                                  QObject *parent)
     : QObject(parent), m_monitor(monitor), m_products(products), m_cash(cash)
@@ -153,6 +155,95 @@ qint64 SqlSalesService::nextNumber(qint64 registerId)
     return read.value(0).toLongLong();
 }
 
+/// That each method can be used today. Only at the moment of charging: a sale
+/// in the queue was already paid, whatever happens to the method.
+bool SqlSalesService::checkMethods(const QList<SalePayment> &payments) const
+{
+    const QList<PaymentMethodInfo> methods = paymentMethods(true);
+    for (const SalePayment &p : payments) {
+        if (p.method == QLatin1String(PaymentMethod::Cash))
+            continue;
+        bool needsCode = true;
+        if (p.method == QLatin1String(PaymentMethod::CreditNote)) {
+            if (!online()) {
+                m_lastError = tr("Sin conexión no se puede usar una nota de crédito: no se ve su saldo.");
+                return false;
+            }
+        } else if (!methods.isEmpty()) {
+            const auto found = std::find_if(methods.cbegin(), methods.cend(),
+                [&p](const PaymentMethodInfo &m) { return m.code == p.method; });
+            if (found == methods.cend()) {
+                m_lastError = tr("El medio de pago %1 no existe.").arg(p.method);
+                return false;
+            }
+            if (!found->active) {
+                m_lastError = tr("El medio de pago %1 no está en uso.").arg(AguaraSale::methodName(p.method));
+                return false;
+            }
+            needsCode = found->needsCode;
+        }
+        if (needsCode && AguaraSale::normalizeReference(p.reference).isEmpty()) {
+            m_lastError = tr("Falta el código del comprobante.");
+            return false;
+        }
+    }
+    return true;
+}
+
+QList<PaymentMethodInfo> SqlSalesService::paymentMethods(bool inactive) const
+{
+    QList<PaymentMethodInfo> all = m_knownMethods;
+    if (m_monitor->isConnected()) {
+        QSqlQuery q(db());
+        q.prepare(QStringLiteral("SELECT codigo, requiere_codigo, activo FROM modos_de_pago ORDER BY orden, codigo"));
+        if (exec(q)) {
+            all.clear();
+            while (q.next()) {
+                PaymentMethodInfo m;
+                m.code = q.value(0).toString();
+                m.needsCode = q.value(1).toInt() != 0;
+                m.active = q.value(2).toInt() != 0;
+                all << m;
+            }
+            m_knownMethods = all;
+        }
+    }
+    if (inactive)
+        return all;
+    QList<PaymentMethodInfo> inUse;
+    for (const PaymentMethodInfo &m : qAsConst(all)) {
+        if (m.active)
+            inUse << m;
+    }
+    return inUse;
+}
+
+bool SqlSalesService::savePaymentMethod(const PaymentMethodInfo &method)
+{
+    const QString code = method.code.simplified();
+    if (code.isEmpty()) {
+        m_lastError = tr("Escriba el nombre del medio de pago.");
+        return false;
+    }
+    if (code == QLatin1String(PaymentMethod::Cash) || code == QLatin1String(PaymentMethod::CreditNote)
+        || code.compare(AguaraSale::methodName(QString::fromLatin1(PaymentMethod::Cash)), Qt::CaseInsensitive) == 0
+        || code.compare(AguaraSale::methodName(QString::fromLatin1(PaymentMethod::CreditNote)), Qt::CaseInsensitive) == 0) {
+        m_lastError = tr("%1 ya existe: no se configura.").arg(code);
+        return false;
+    }
+    QSqlQuery q(db());
+    q.prepare(QStringLiteral("INSERT INTO modos_de_pago (codigo, requiere_codigo, activo) VALUES (?, ?, ?)"
+                             " ON CONFLICT (codigo) DO UPDATE SET requiere_codigo = excluded.requiere_codigo,"
+                             " activo = excluded.activo"));
+    q.addBindValue(code);
+    q.addBindValue(method.needsCode ? 1 : 0);
+    q.addBindValue(method.active ? 1 : 0);
+    if (!exec(q))
+        return false;
+    audit(QStringLiteral("caja.medio_pago"), code, method.active ? tr("En uso") : tr("Fuera de uso"));
+    return true;
+}
+
 /// Checks the payments against the sale and works out the cash: its rounding
 /// and its change. `settled` is what gets saved.
 bool SqlSalesService::settle(const QList<SalePayment> &payments, SaleTotals *totals,
@@ -174,16 +265,8 @@ bool SqlSalesService::settle(const QList<SalePayment> &payments, SaleTotals *tot
             cash = p;
             continue;
         }
-        if (!AguaraSale::isElectronic(p.method)) {
-            m_lastError = tr("El medio de pago %1 no existe.").arg(p.method);
-            return false;
-        }
         p.reference = AguaraSale::normalizeReference(p.reference);
-        if (p.reference.isEmpty()) {
-            m_lastError = tr("Falta el código del comprobante.");
-            return false;
-        }
-        if (references.contains(p.reference)) {
+        if (!p.reference.isEmpty() && references.contains(p.reference)) {
             m_lastError = tr("El comprobante %1 está dos veces en esta venta.").arg(p.reference);
             return false;
         }
@@ -231,6 +314,8 @@ qint64 SqlSalesService::checkout(const SaleDraft &draft, const QList<SalePayment
     }
     SaleTotals totals = AguaraSale::totals(draft);
     if (!validate(draft, totals))
+        return 0;
+    if (!checkMethods(payments))
         return 0;
     QList<SalePayment> settled;
     if (!settle(payments, &totals, &settled))
@@ -361,7 +446,8 @@ SqlSalesService::Push SqlSalesService::push(const OutboxEntry &entry, qint64 *sa
     // Charged without a server, nobody could check its vouchers then
     QStringList repeated;
     for (const SalePayment &p : settled) {
-        if (entry.number == 0 || !AguaraSale::isElectronic(p.method))
+        if (entry.number == 0 || !AguaraSale::isElectronic(p.method) || p.reference.isEmpty()
+            || p.method == QLatin1String(PaymentMethod::CreditNote))
             continue;
         const QString usedBy = referenceUsedBy(p.reference);
         if (!usedBy.isEmpty())
@@ -380,9 +466,9 @@ SqlSalesService::Push SqlSalesService::push(const OutboxEntry &entry, qint64 *sa
 
     QSqlQuery head(db());
     head.prepare(QStringLiteral(
-        "INSERT INTO ventas (uuid, caja_id, sesion_id, numero, fecha, usuario, estado, impresiones, bruto, descuento,"
-        " neto, redondeo, total, gravado10, iva10, gravado5, iva5, exento)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+        "INSERT INTO ventas (uuid, caja_id, sesion_id, numero, fecha, usuario, estado, impresiones, cliente_id,"
+        " cliente_nombre, cliente_documento, bruto, descuento, neto, redondeo, total, gravado10, iva10, gravado5,"
+        " iva5, exento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
     head.addBindValue(entry.uuid);
     head.addBindValue(entry.registerId);
     head.addBindValue(entry.sessionId);
@@ -391,6 +477,9 @@ SqlSalesService::Push SqlSalesService::push(const OutboxEntry &entry, qint64 *sa
     head.addBindValue(entry.user);
     head.addBindValue(QString::fromLatin1(SaleState::Paid));
     head.addBindValue(entry.printCount);
+    head.addBindValue(entry.draft.customerId > 0 ? QVariant(entry.draft.customerId) : QVariant(QVariant::LongLong));
+    head.addBindValue(entry.draft.customerName);
+    head.addBindValue(entry.draft.customerDocument);
     for (Money value : { totals.gross, totals.discount, totals.net, totals.rounding, totals.total,
                          totals.taxed10, totals.vat10, totals.taxed5, totals.vat5, totals.exempt })
         head.addBindValue(value);
@@ -444,6 +533,22 @@ SqlSalesService::Push SqlSalesService::push(const OutboxEntry &entry, qint64 *sa
         if (!exec(payment)) {
             rollback();
             return failure(generation);
+        }
+        if (p.method != QLatin1String(PaymentMethod::CreditNote))
+            continue;
+        QSqlQuery note(db());
+        note.prepare(QStringLiteral("UPDATE notas_credito SET saldo = saldo - ? WHERE id = ? AND saldo >= ?"));
+        note.addBindValue(p.amount);
+        note.addBindValue(AguaraSale::creditNoteId(p.reference));
+        note.addBindValue(p.amount);
+        if (!exec(note)) {
+            rollback();
+            return failure(generation);
+        }
+        if (note.numRowsAffected() != 1) {
+            m_lastError = tr("La nota de crédito %1 no tiene ese saldo.").arg(p.reference);
+            rollback();
+            return Push::Refused;
         }
     }
     if (!commit())
@@ -533,6 +638,9 @@ std::optional<SaleRecord> SqlSalesService::queuedSale(qint64 id) const
     record.user = entry->user;
     record.state = QString::fromLatin1(SaleState::Paid);
     record.printCount = entry->printCount;
+    record.customerId = entry->draft.customerId;
+    record.customerName = entry->draft.customerName;
+    record.customerDocument = entry->draft.customerDocument;
     record.totals = AguaraSale::totals(entry->draft);
     if (!settle(entry->payments, &record.totals, &record.payments))
         return std::nullopt;
@@ -558,8 +666,8 @@ QList<SaleRecord> SqlSalesService::readSales(const QString &where, const QVarian
     QSqlQuery q(db());
     q.prepare(QStringLiteral(
         "SELECT id, caja_id, sesion_id, numero, fecha, usuario, estado, bruto, descuento, neto, redondeo, total,"
-        " gravado10, iva10, gravado5, iva5, exento, anulada_por, anulada_fecha, motivo, impresiones"
-        " FROM ventas ") + where);
+        " gravado10, iva10, gravado5, iva5, exento, anulada_por, anulada_fecha, motivo, impresiones,"
+        " cliente_id, cliente_nombre, cliente_documento FROM ventas ") + where);
     for (const QVariant &value : values)
         q.addBindValue(value);
     if (!exec(q))
@@ -587,6 +695,9 @@ QList<SaleRecord> SqlSalesService::readSales(const QString &where, const QVarian
         s.voidedAt = q.value(18).toDateTime();
         s.voidReason = q.value(19).toString();
         s.printCount = q.value(20).toInt();
+        s.customerId = q.value(21).toLongLong();
+        s.customerName = q.value(22).toString();
+        s.customerDocument = q.value(23).toString();
         result << s;
     }
     return result;
@@ -670,6 +781,17 @@ bool SqlSalesService::voidSale(qint64 id, const QString &reason)
         return false;
     }
 
+    QSqlQuery returned(db());
+    returned.prepare(QStringLiteral("SELECT COUNT(*) FROM devoluciones WHERE venta_id = ?"));
+    returned.addBindValue(id);
+    if (!exec(returned) || !returned.next())
+        return false;
+    if (returned.value(0).toInt() > 0) {
+        m_lastError = tr("La venta tiene devoluciones: ya no se puede anular.");
+        return false;
+    }
+    returned.finish();
+
     const QString printed = AguaraSale::formatNumber(record->registerId, record->number);
     if (!begin())
         return false;
@@ -690,6 +812,18 @@ bool SqlSalesService::voidSale(qint64 id, const QString &reason)
         m_lastError = tr("La venta ya está anulada.");
         rollback();
         return false;
+    }
+    for (const SalePayment &p : record->payments) {
+        if (p.method != QLatin1String(PaymentMethod::CreditNote))
+            continue;
+        QSqlQuery note(db());
+        note.prepare(QStringLiteral("UPDATE notas_credito SET saldo = saldo + ? WHERE id = ?"));
+        note.addBindValue(p.amount);
+        note.addBindValue(AguaraSale::creditNoteId(p.reference));
+        if (!exec(note)) {
+            rollback();
+            return false;
+        }
     }
     StockLedger ledger(m_monitor, m_connectionName, &m_lastError, m_users);
     for (const SaleItem &item : record->totals.items) {

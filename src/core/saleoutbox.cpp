@@ -206,6 +206,9 @@ QByteArray SaleJson::fromDraft(const SaleDraft &draft)
     QJsonObject root;
     root[QStringLiteral("lines")] = lines;
     root[QStringLiteral("totalDiscount")] = QString::number(draft.totalDiscount);
+    root[QStringLiteral("customerId")] = QString::number(draft.customerId);
+    root[QStringLiteral("customerName")] = draft.customerName;
+    root[QStringLiteral("customerDocument")] = draft.customerDocument;
     return QJsonDocument(root).toJson(QJsonDocument::Compact);
 }
 
@@ -214,6 +217,9 @@ SaleDraft SaleJson::toDraft(const QByteArray &json)
     SaleDraft draft;
     const QJsonObject root = QJsonDocument::fromJson(json).object();
     draft.totalDiscount = root.value(QStringLiteral("totalDiscount")).toString().toLongLong();
+    draft.customerId = root.value(QStringLiteral("customerId")).toString().toLongLong();
+    draft.customerName = root.value(QStringLiteral("customerName")).toString();
+    draft.customerDocument = root.value(QStringLiteral("customerDocument")).toString();
     for (const QJsonValue &value : root.value(QStringLiteral("lines")).toArray()) {
         const QJsonObject o = value.toObject();
         SaleLine l;

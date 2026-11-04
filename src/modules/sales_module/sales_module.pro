@@ -7,10 +7,12 @@ SOURCES   += cashdialogs.cpp \
              closingsheet.cpp \
              saledialogs.cpp \
              salesmodule.cpp \
-             salesmodulefactory.cpp
+             salesmodulefactory.cpp \
+             tilldialogs.cpp
 HEADERS   += cashdialogs.h \
              closingsheet.h \
              saledialogs.h \
              salesmodule.h \
-             salesmodulefactory.h
+             salesmodulefactory.h \
+             tilldialogs.h
 DISTFILES += module.json

@@ -68,8 +68,22 @@ SaleTotals totals(const SaleDraft &draft)
 
 bool isElectronic(const QString &method)
 {
-    return method == QLatin1String(PaymentMethod::Debit) || method == QLatin1String(PaymentMethod::Credit)
-           || method == QLatin1String(PaymentMethod::Transfer);
+    return !method.isEmpty() && method != QLatin1String(PaymentMethod::Cash);
+}
+
+QString formatCreditNote(qint64 id)
+{
+    return QStringLiteral("NC-%1").arg(id, 6, 10, QLatin1Char('0'));
+}
+
+qint64 creditNoteId(const QString &number)
+{
+    QString digits;
+    for (const QChar c : number) {
+        if (c.isDigit())
+            digits += c;
+    }
+    return digits.toLongLong();
 }
 
 QString methodName(const QString &method)
@@ -82,7 +96,11 @@ QString methodName(const QString &method)
         return QCoreApplication::translate("AguaraSale", "Tarjeta de crédito");
     if (method == QLatin1String(PaymentMethod::Transfer))
         return QCoreApplication::translate("AguaraSale", "Transferencia");
-    return method;
+    if (method == QLatin1String(PaymentMethod::Qr))
+        return QCoreApplication::translate("AguaraSale", "QR");
+    if (method == QLatin1String(PaymentMethod::CreditNote))
+        return QCoreApplication::translate("AguaraSale", "Nota de crédito");
+    return method;                      // one added by the store: its code is its name
 }
 
 QString normalizeReference(const QString &reference)

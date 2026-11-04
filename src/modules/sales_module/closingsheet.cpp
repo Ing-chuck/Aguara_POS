@@ -87,6 +87,16 @@ QString ClosingSheet::html(const CashSessionReport &r)
         body += section(tr("Comprobantes por conciliar"), vouchers);
     }
 
+    if (!r.returns.isEmpty()) {
+        QString returns;
+        for (const SessionReturn &d : r.returns) {
+            returns += row(QStringLiteral("%1 de la venta %2 - %3 %4 - %5 (autorizó %6)")
+                               .arg(d.number, d.saleNumber, AguaraSale::methodName(d.method), d.reference, d.reason, d.authorizedBy),
+                           money(-d.amount));
+        }
+        body += section(tr("Devoluciones"), returns);
+    }
+
     if (!r.movements.isEmpty()) {
         QString movements;
         for (const CashMovement &m : r.movements) {
@@ -99,7 +109,8 @@ QString ClosingSheet::html(const CashSessionReport &r)
 
     body += section(tr("Arqueo"),
         row(tr("Fondo inicial"), money(s.openingFloat))
-        + row(tr("Ventas en efectivo y otros ingresos"), money(r.expectedCash - s.openingFloat + r.cashOut))
+        + row(tr("Ventas en efectivo y otros ingresos"), money(r.expectedCash - s.openingFloat + r.cashOut + r.cashRefunds))
+        + row(tr("Devoluciones en efectivo"), money(-r.cashRefunds))
         + row(tr("Egresos y retiros"), money(-r.cashOut))
         + row(tr("Esperado"), money(r.expectedCash), true)
         + row(tr("Contado"), money(s.counted), true)
@@ -150,6 +161,14 @@ Receipt ClosingSheet::receipt(const CashSessionReport &r)
         for (const PaymentVoucher &v : r.vouchers)
             out.add(QStringLiteral("%1 %2 %3").arg(AguaraSale::methodName(v.method), v.reference, v.saleNumber), money(v.amount));
     }
+    if (!r.returns.isEmpty()) {
+        out.rule();
+        out.add(tr("Devoluciones"), QString(), ReceiptLine::Strong);
+        for (const SessionReturn &d : r.returns) {
+            out.add(QStringLiteral("%1 %2 %3").arg(d.number, AguaraSale::methodName(d.method), d.reference), money(-d.amount));
+            out.add(QStringLiteral("  %1 (%2)").arg(d.reason, d.authorizedBy));
+        }
+    }
     if (!r.movements.isEmpty()) {
         out.rule();
         out.add(tr("Movimientos de caja"), QString(), ReceiptLine::Strong);
@@ -161,7 +180,8 @@ Receipt ClosingSheet::receipt(const CashSessionReport &r)
     out.rule();
 
     out.add(tr("Fondo inicial"), money(s.openingFloat));
-    out.add(tr("Ventas en efectivo y otros ingresos"), money(r.expectedCash - s.openingFloat + r.cashOut));
+    out.add(tr("Ventas en efectivo y otros ingresos"), money(r.expectedCash - s.openingFloat + r.cashOut + r.cashRefunds));
+    out.add(tr("Devoluciones en efectivo"), money(-r.cashRefunds));
     out.add(tr("Egresos y retiros"), money(-r.cashOut));
     out.add(tr("Esperado"), money(r.expectedCash), ReceiptLine::Strong);
     out.add(tr("Contado"), money(s.counted), ReceiptLine::Strong);

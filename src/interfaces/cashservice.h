@@ -94,6 +94,18 @@ struct PaymentVoucher {
     Money   amount = 0;
 };
 
+/// A return in this session.
+struct SessionReturn {
+    QString number;                 ///< "D-000012"
+    QString saleNumber;
+    QString method;
+    QString reference;
+    Money   amount = 0;             ///< what was given back
+    QString reason;
+    QString user;
+    QString authorizedBy;
+};
+
 /// Everything the closing sheet shows.
 struct CashSessionReport {
     CashSession session;
@@ -110,6 +122,8 @@ struct CashSessionReport {
     Money exempt = 0;
     QList<PaymentTotal> payments;
     QList<PaymentVoucher> vouchers;
+    QList<SessionReturn> returns;
+    Money cashRefunds = 0;
     QList<CashMovement> movements;
     Money cashIn = 0;
     Money cashOut = 0;              ///< expenses and withdrawals

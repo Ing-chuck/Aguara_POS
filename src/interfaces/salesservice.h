@@ -19,7 +19,19 @@ constexpr const char *Cash     = "efectivo";
 constexpr const char *Debit    = "tarjeta_debito";
 constexpr const char *Credit   = "tarjeta_credito";
 constexpr const char *Transfer = "transferencia";
+constexpr const char *Qr       = "qr";
+/// Store credit from a return (ReturnService): its code is the note's number.
+constexpr const char *CreditNote = "nota_credito";
 }
+
+/// A way of paying besides cash, which is always there. All of them are
+/// reconciled apart: only cash is counted in the drawer. The store adds its
+/// own, and for those the code is the name.
+struct PaymentMethodInfo {
+    QString code;
+    bool    needsCode = true;       ///< a voucher or operation number
+    bool    active = true;
+};
 
 namespace SaleState {
 constexpr const char *Paid   = "cobrada";
@@ -45,6 +57,9 @@ struct SaleLine {
 struct SaleDraft {
     QList<SaleLine> lines;
     Money totalDiscount = 0;        ///< on the whole sale
+    qint64  customerId = 0;         ///< 0: the final consumer
+    QString customerName;
+    QString customerDocument;
 };
 
 /// A line as charged: `discount` includes its share of the sale's discount.
@@ -102,6 +117,9 @@ struct SaleRecord {
     QDateTime  voidedAt;
     QString    voidReason;
     int        printCount = 0;      ///< tickets so far: after the first, copies
+    qint64     customerId = 0;      ///< 0: the final consumer
+    QString    customerName;        ///< as it was on the day of the sale
+    QString    customerDocument;
 };
 
 /// A sale charged on this computer that the database doesn't have yet.
@@ -144,8 +162,11 @@ constexpr Money cashDue(Money net, Money electronic)
     return net - electronic + cashRounding(net - electronic);
 }
 
-/// Card or transfer: an amount with a code, and no change.
+/// Anything but cash: an exact amount, and no change.
 AGUARA_EXPORT bool isElectronic(const QString &method);
+/// "NC-000012", and back. 0 if it isn't one.
+AGUARA_EXPORT QString formatCreditNote(qint64 id);
+AGUARA_EXPORT qint64 creditNoteId(const QString &number);
 /// "Tarjeta de débito", for the screens and the closing sheet.
 AGUARA_EXPORT QString methodName(const QString &method);
 /// As a code is kept and compared: trimmed, in capitals.
@@ -189,6 +210,12 @@ public:
     /// and the screen must not let it: a sale that's on the screen is finished,
     /// and that's all.
     virtual bool online() const = 0;
+    /// In the order to offer them. Without `inactive`, those in use. Without a
+    /// connection, the last ones known. Credit notes aren't here.
+    virtual QList<PaymentMethodInfo> paymentMethods(bool inactive = false) const = 0;
+    /// New or changed. Check caja.medios_pago first.
+    virtual bool savePaymentMethod(const PaymentMethodInfo &method) = 0;
+
     /// What the queue holds, oldest first.
     virtual QList<PendingSale> pendingSales() const = 0;
     /// Try to send the queue now. It also happens by itself. true if it's empty.
@@ -205,8 +232,9 @@ public:
     virtual QList<SaleRecord> sessionSales(qint64 sessionId) const = 0;
 
     /// Void a sale of the current session: its stock comes back and its cash
-    /// leaves the session's expected cash. A card or a transfer is reversed
-    /// outside the program. Check ventas.anular first.
+    /// leaves the session's expected cash. A credit note gets its balance back;
+    /// a card or a transfer is reversed outside the program. A sale with a
+    /// return can't be voided. Check ventas.anular first.
     virtual bool voidSale(qint64 id, const QString &reason) = 0;
 
     /// One more ticket of this sale came out.
@@ -223,7 +251,7 @@ public:
     virtual QString lastError() const = 0;
 };
 
-#define SalesService_iid "org.AguaraPOS.SalesService/1.1"
+#define SalesService_iid "org.AguaraPOS.SalesService/1.2"
 Q_DECLARE_INTERFACE(SalesService, SalesService_iid)
 
 #endif // SALESSERVICE_H

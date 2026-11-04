@@ -170,6 +170,8 @@ Receipt SqlPrintService::saleReceipt(const SaleRecord &sale)
     r.rule();
     r.add(tr("Ticket %1").arg(AguaraSale::formatNumber(sale.registerId, sale.number)), m_cash->currentRegister().name);
     r.add(sale.when.toString(QStringLiteral("dd/MM/yyyy HH:mm")), tr("Cajero: %1").arg(sale.user));
+    if (!sale.customerName.isEmpty())
+        r.add(tr("Cliente: %1").arg(sale.customerName), sale.customerDocument);
     r.rule();
 
     for (const SaleItem &item : t.items) {
@@ -218,6 +220,48 @@ Receipt SqlPrintService::saleReceipt(const SaleRecord &sale)
     r.center(tr("Comprobante interno. No válido como factura."));
     if (sale.printCount > 0)
         r.center(copy, ReceiptLine::Strong);
+    return r;
+}
+
+Receipt SqlPrintService::returnReceipt(const ReturnRecord &record)
+{
+    const StoreInfo store = storeInfo();
+    const auto money = [](Money amount) { return AguaraMoney::format(amount); };
+    const bool creditNote = record.method == QLatin1String(PaymentMethod::CreditNote);
+
+    Receipt r;
+    if (!store.name.isEmpty())
+        r.center(store.name, ReceiptLine::Title);
+    if (!store.ruc.isEmpty())
+        r.center(tr("RUC %1").arg(store.ruc));
+    r.center(tr("DEVOLUCIÓN"), ReceiptLine::Strong);
+    r.rule();
+    r.add(tr("Número %1").arg(AguaraReturn::formatNumber(record.id)), tr("Venta %1").arg(record.saleNumber));
+    r.add(record.when.toString(QStringLiteral("dd/MM/yyyy HH:mm")), tr("Cajero: %1").arg(record.user));
+    if (!record.customerName.isEmpty())
+        r.add(tr("Cliente: %1").arg(record.customerName));
+    r.rule();
+    for (const ReturnedItem &item : record.items) {
+        r.add(item.description);
+        r.add(tr("  %1 %2").arg(AguaraQuantity::format(item.quantity, item.decimals), item.unit), money(item.amount));
+    }
+    r.rule();
+    if (record.paid != record.amount) {
+        r.add(tr("Exacto"), money(record.amount));
+        r.add(tr("Redondeo en efectivo"), money(record.paid - record.amount));
+    }
+    r.add(tr("TOTAL Gs."), money(record.paid), ReceiptLine::Total);
+    r.add(record.reference.isEmpty() ? AguaraSale::methodName(record.method)
+                                     : QStringLiteral("%1 %2").arg(AguaraSale::methodName(record.method), record.reference),
+          money(record.paid));
+    r.add(tr("Motivo: %1").arg(record.reason));
+    r.add(tr("Autorizó: %1").arg(record.authorizedBy));
+    r.rule();
+    if (creditNote) {
+        r.center(record.reference, ReceiptLine::Title);
+        r.center(tr("Guarde este ticket: vale como pago por Gs. %1.").arg(money(record.paid)));
+    }
+    r.center(tr("Comprobante interno. No válido como factura."));
     return r;
 }
 
@@ -368,6 +412,16 @@ bool SqlPrintService::saveSalePdf(qint64 saleId, const QString &fileName)
     }
     markPrinted(*sale);
     return true;
+}
+
+bool SqlPrintService::finishReturn(const ReturnRecord &record)
+{
+    const PrinterSettings settings = printerSettings();
+    if (settings.kind == PrinterKind::None)
+        return true;
+    const bool drawer = record.method == QLatin1String(PaymentMethod::Cash) && settings.openDrawerOnCash
+                        && settings.kind == PrinterKind::Thermal;
+    return send(settings, returnReceipt(record), drawer);
 }
 
 bool SqlPrintService::printReceipt(const Receipt &receipt)
