@@ -2,11 +2,17 @@
 // cards, the status-bar clock, menus and shortcuts.
 #include "corehost.h"
 #include "mainwindow.h"
+#include "passwordhash.h"
+#include "sqluserservice.h"
+#include "testsupport.h"
 #include "notificationdialog.h"
 #include "pagecero.h"
 
 #include <QAbstractButton>
 #include <QAction>
+#include <QDialog>
+#include <QLineEdit>
+#include <QTimer>
 #include <QGridLayout>
 #include <QLabel>
 #include <QMenuBar>
@@ -35,8 +41,12 @@ private slots:
     void sidebarMarksTheCurrentPage();
     void clockIs24Hour();
     void fileMenuActionsHaveWorkingShortcuts();
+    void cashierSeesOnlyWhatTheyMayOpen();
+    void lockedSessionCanBeTakenOverByAnotherUser();
 
 private:
+    struct Session;
+    QPushButton *navButton(MainWindow *window, const QString &text) const;
     QList<NotificationDialog *> cards() const { return m_page->findChildren<NotificationDialog *>(); }
     void notify(const ModuleMsg &m) { emit m_host->notificationRequested(m); }
     NotificationDialog *card(const QString &title) const;
@@ -218,6 +228,109 @@ void tst_MainWindow::fileMenuActionsHaveWorkingShortcuts()
     const int before = tabs->count();
     QTest::keyClick(m_window, Qt::Key_W, Qt::ControlModifier);
     QCOMPARE(tabs->count(), before);
+}
+
+/// A real database with an administrator and a cashier, and the real modules.
+struct tst_MainWindow::Session
+{
+    Session()
+    {
+        PasswordHash::setDefaultIterations(200);
+        QString error;
+        ok = core.open(DatabaseSettings::SQLite, tmp.path(), &error);
+        users.reset(new SqlUserService(core.monitor.get()));
+        core.host->registerService(UserService_iid, users.get());
+        ok = ok && users->createFirstAdmin(QStringLiteral("admin"), QStringLiteral("La Jefa"), QStringLiteral("secreto1"));
+        window.reset(new MainWindow(core.host.get(), nullptr, nullptr, QStringLiteral(AGUARA_TEST_MODULES_DIR)));
+        window->setUsers(users.get(), 0);       // registers the modules' permissions
+        UserAccount cashier;
+        cashier.username = QStringLiteral("maria");
+        cashier.fullName = QStringLiteral("Maria Cajera");
+        for (const UserRole &r : users->roles()) {
+            if (r.name == QLatin1String("Cajero"))
+                cashier.roleIds << r.id;
+        }
+        ok = ok && users->saveUser(cashier, QStringLiteral("clave123"));
+        ok = ok && users->login(QStringLiteral("maria"), QStringLiteral("clave123"));
+        ok = ok && users->changePassword(QStringLiteral("clave123"), QStringLiteral("propia123"));
+    }
+    ~Session()
+    {
+        window.reset();
+        users.reset();
+        core.close();
+    }
+
+    QTemporaryDir tmp;
+    TestSupport::CoreFixture core{ QStringLiteral("session") };
+    std::unique_ptr<SqlUserService> users;
+    std::unique_ptr<MainWindow> window;
+    bool ok = false;
+};
+
+QPushButton *tst_MainWindow::navButton(MainWindow *window, const QString &text) const
+{
+    for (QPushButton *b : window->findChildren<QPushButton *>()) {
+        if (b->text() == text && b->property("role").toString() == QLatin1String("nav"))
+            return b;
+    }
+    return nullptr;
+}
+
+void tst_MainWindow::cashierSeesOnlyWhatTheyMayOpen()
+{
+    Session s;
+    QVERIFY(s.ok);
+    s.window->setUsers(s.users.get(), 0);       // the session now belongs to the cashier
+    s.window->show();
+
+    QVERIFY(navButton(s.window.get(), QStringLiteral("Ventas")));
+    QVERIFY(!navButton(s.window.get(), QStringLiteral("Ventas"))->isHidden());
+    QVERIFY(navButton(s.window.get(), QStringLiteral("Inventario"))->isHidden());
+    QVERIFY(navButton(s.window.get(), QStringLiteral("Usuarios"))->isHidden());
+
+    // not through a shortcut either: the modules load in file-name order
+    auto tabs = s.window->findChild<QTabWidget *>();
+    const int before = tabs->count();
+    QMetaObject::invokeMethod(s.window.get(), "openModulePage", Q_ARG(int, 0));     // Inventario
+    QCOMPARE(tabs->count(), before);
+
+    QCOMPARE(s.window->findChild<QLabel *>(QStringLiteral("userLabel"))->text(), QStringLiteral("Maria Cajera"));
+
+    // the administrator sees everything
+    QVERIFY(s.users->login(QStringLiteral("admin"), QStringLiteral("secreto1")));
+    s.window->setUsers(s.users.get(), 0);
+    QVERIFY(!navButton(s.window.get(), QStringLiteral("Inventario"))->isHidden());
+    QVERIFY(!navButton(s.window.get(), QStringLiteral("Usuarios"))->isHidden());
+}
+
+void tst_MainWindow::lockedSessionCanBeTakenOverByAnotherUser()
+{
+    Session s;
+    QVERIFY(s.ok);
+    QVERIFY(s.users->login(QStringLiteral("admin"), QStringLiteral("secreto1")));
+    s.window->setUsers(s.users.get(), 0);
+    s.window->show();
+    auto tabs = s.window->findChild<QTabWidget *>();
+    const int base = tabs->count();
+    navButton(s.window.get(), QStringLiteral("Inventario"))->click();
+    QCOMPARE(tabs->count(), base + 1);
+
+    // type into the lock dialog once it is up
+    QTimer::singleShot(100, [&]() {
+        auto dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        QTest::keyClick(dialog, Qt::Key_Escape);        // Esc doesn't get past it
+        QVERIFY(dialog->isVisible());
+        dialog->findChild<QLineEdit *>(QStringLiteral("username"))->setText(QStringLiteral("maria"));
+        dialog->findChild<QLineEdit *>(QStringLiteral("password"))->setText(QStringLiteral("propia123"));
+        dialog->accept();
+    });
+    QMetaObject::invokeMethod(s.window.get(), "lockSession");
+
+    QCOMPARE(s.users->currentUser()->username, QStringLiteral("maria"));
+    QCOMPARE(tabs->count(), base);              // the administrator's page is gone
+    QVERIFY(navButton(s.window.get(), QStringLiteral("Inventario"))->isHidden());
 }
 
 QTEST_MAIN(tst_MainWindow)

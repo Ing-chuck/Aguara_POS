@@ -4,6 +4,7 @@
 #include "connectionmonitor.h"
 
 #include <aguarastyle.h>
+#include <userservice.h>
 
 #include <QDate>
 #include <QFont>
@@ -142,6 +143,16 @@ QVariant ProductTableModel::headerData(int section, Qt::Orientation orientation,
 }
 
 // --- SqlProductService ------------------------------------------------------
+
+namespace {
+/// What the audit log keeps of a product
+QString auditText(const Product &p)
+{
+    return QStringLiteral("%1 | precio %2 | costo %3 | IVA %4 | stock %5 | minimo %6")
+        .arg(p.description, AguaraMoney::format(p.price), AguaraMoney::format(p.cost))
+        .arg(p.vatRate).arg(p.stock).arg(p.stockMin);
+}
+} // namespace
 
 SqlProductService::SqlProductService(ConnectionMonitor *monitor, QObject *parent)
     : QObject(parent), m_monitor(monitor), m_connectionName(monitor->connectionName())
@@ -293,6 +304,9 @@ std::optional<Product> SqlProductService::product(const QString &code) const
 
 bool SqlProductService::saveProduct(const Product &product, const QString &previousCode)
 {
+    const QString oldCode = previousCode.isEmpty() ? product.code.trimmed() : previousCode;
+    const std::optional<Product> before = m_audit ? this->product(oldCode) : std::nullopt;
+
     if (!begin())
         return false;
     if (!saveOne(product, previousCode)) {
@@ -301,6 +315,12 @@ bool SqlProductService::saveProduct(const Product &product, const QString &previ
     }
     if (!commit())
         return false;
+    if (m_audit) {
+        const std::optional<Product> after = this->product(product.code.trimmed());
+        m_audit->audit(before ? QStringLiteral("producto.modificar") : QStringLiteral("producto.crear"),
+                       QStringLiteral("producto"), product.code.trimmed(),
+                       before ? auditText(*before) : QString(), after ? auditText(*after) : QString());
+    }
     changed();
     return true;
 }
@@ -323,6 +343,9 @@ bool SqlProductService::importProducts(const QList<Product> &products, int *save
         return false;
     if (saved)
         *saved = products.size();
+    if (m_audit)
+        m_audit->audit(QStringLiteral("producto.importar"), QStringLiteral("producto"), QString(),
+                       QString(), tr("%1 artículos").arg(products.size()));
     changed();
     return true;
 }
@@ -408,6 +431,11 @@ bool SqlProductService::deactivateProduct(const QString &code)
     if (q.numRowsAffected() == 0) {
         m_lastError = tr("El artículo %1 no existe.").arg(code);
         return false;
+    }
+    if (m_audit) {
+        const std::optional<Product> gone = product(code);
+        m_audit->audit(QStringLiteral("producto.baja"), QStringLiteral("producto"), code,
+                       gone ? auditText(*gone) : QString());
     }
     changed();
     return true;

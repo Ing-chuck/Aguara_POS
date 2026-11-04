@@ -27,6 +27,7 @@ private:
 };
 
 class ConnectionMonitor;
+class UserService;
 
 /// ProductService on the core's database (SQLite or PostgreSQL).
 class SqlProductService : public QObject, public ProductService
@@ -37,6 +38,9 @@ class SqlProductService : public QObject, public ProductService
 public:
     /// `monitor` provides the connection and must outlive the service.
     explicit SqlProductService(ConnectionMonitor *monitor, QObject *parent = nullptr);
+
+    /// Where changes are recorded (may stay null: nothing is recorded).
+    void setAuditLog(UserService *users) { m_audit = users; }
 
     QAbstractItemModel *createProductTableModel(QObject *parent) override;
     std::optional<Product> product(const QString &code) const override;
@@ -71,6 +75,7 @@ private:
     void rollback();
 
     ConnectionMonitor *m_monitor;
+    UserService *m_audit = nullptr;
     bool m_inTransaction = false;
     QString m_connectionName;
     bool m_notifications = false;   // PostgreSQL LISTEN/NOTIFY active

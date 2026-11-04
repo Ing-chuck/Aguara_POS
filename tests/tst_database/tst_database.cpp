@@ -1,6 +1,7 @@
 // Opening the database and the migrations, on SQLite and PostgreSQL.
 #include "testsupport.h"
 
+#include <QFile>
 #include <QSqlQuery>
 #include <QtTest>
 
@@ -16,6 +17,7 @@ private slots:
 
     void migratesToCurrentVersion();
     void migrationIsIdempotent();
+    void existingDataSurvivesUpgrade();
     void otherOwnersHaveTheirOwnVersion();
     void failedMigrationRollsBack();
     void sqlitePragmas();
@@ -49,6 +51,53 @@ void tst_Database::migrationIsIdempotent()
     QSqlQuery q(m_core.connection());
     QVERIFY(q.exec(QStringLiteral("SELECT COUNT(*) FROM schema_migrations WHERE owner = 'core'")) && q.next());
     QCOMPARE(q.value(0).toInt(), coreMigrations().size());
+}
+
+/// A database from before users existed, with data in it, reaches the
+/// current version and keeps the data.
+void tst_Database::existingDataSurvivesUpgrade()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    const DatabaseSettings settings = m_core.settings;
+    m_core.close();
+
+    Database old(QStringLiteral("old"));
+    QVERIFY2(old.open(settings), qPrintable(old.lastError()));
+    QSqlDatabase connection = QSqlDatabase::database(old.connectionName());
+    {
+        QSqlQuery q(connection);
+        if (old.backend() == DatabaseSettings::PostgreSQL)
+            QVERIFY(q.exec(QStringLiteral("DROP OWNED BY CURRENT_USER CASCADE")));
+        else
+            QVERIFY(q.exec(QStringLiteral("DROP TABLE IF EXISTS auditoria")));
+    }
+    if (old.backend() == DatabaseSettings::SQLite) {        // a new file: this one is already current
+        connection = QSqlDatabase();
+        old.close();
+        DatabaseSettings fresh = settings;
+        fresh.sqlitePath = m_tmp.filePath(QStringLiteral("v1.db"));
+        QFile::remove(fresh.sqlitePath);
+        QVERIFY(old.open(fresh));
+        connection = QSqlDatabase::database(old.connectionName());
+    }
+
+    QVERIFY2(old.migrate(QStringLiteral("core"), coreMigrations().mid(0, 1)), qPrintable(old.lastError()));
+    QCOMPARE(old.schemaVersion(QStringLiteral("core")), 1);
+    QSqlQuery q(connection);
+    QVERIFY(q.exec(QStringLiteral("INSERT INTO productos (codigo, descripcion, precio) VALUES ('777', 'GASEOSA', 15000)")));
+
+    QVERIFY2(old.migrate(QStringLiteral("core"), coreMigrations()), qPrintable(old.lastError()));
+    QCOMPARE(old.schemaVersion(QStringLiteral("core")), coreMigrations().last().version);
+    QVERIFY(q.exec(QStringLiteral("SELECT precio FROM productos WHERE codigo = '777'")) && q.next());
+    QCOMPARE(q.value(0).toLongLong(), qint64(15000));
+    QVERIFY(q.exec(QStringLiteral("SELECT COUNT(*) FROM roles")) && q.next());
+    QCOMPARE(q.value(0).toInt(), 3);
+    QVERIFY(q.exec(QStringLiteral("SELECT COUNT(*) FROM usuarios")) && q.next());
+    QCOMPARE(q.value(0).toInt(), 0);                        // the first-run dialog creates the administrator
+    q.finish();
+    q = QSqlQuery();
+    connection = QSqlDatabase();
+    old.close();
 }
 
 void tst_Database::otherOwnersHaveTheirOwnVersion()

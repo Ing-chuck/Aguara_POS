@@ -5,6 +5,8 @@
 #include "logging.h"
 #include "module_dialog.h"
 #include "notificationdialog.h"
+#include "sessiondialogs.h"
+#include "sqluserservice.h"
 #include <version.h>
 
 #include <QAction>
@@ -27,7 +29,10 @@
 #include <QStandardPaths>
 #include <QTabBar>
 #include <QTabWidget>
+#include <QToolButton>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 using AguaraStyle::Color;
 
@@ -50,11 +55,12 @@ QIcon sidebarIcon(const QString &name)
 
 } // namespace
 
-MainWindow::MainWindow(CoreHost *host, Backup *backup, QWidget *parent)
+MainWindow::MainWindow(CoreHost *host, Backup *backup, QWidget *parent, const QString &modulesDirectory)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , host(host)
     , backup(backup)
+    , modulesDirectory(modulesDirectory)
 {
     ui->setupUi(this);
 
@@ -72,8 +78,119 @@ MainWindow::MainWindow(CoreHost *host, Backup *backup, QWidget *parent)
 
     // modules without a page (e.g. importers) notify through the host
     connect(host, &CoreHost::notificationRequested, this, &MainWindow::onModuleNotification);
+    connect(&idleWatcher, &InactivityWatcher::idle, this, &MainWindow::lockSession);
     loadPlugins();
     syncNavigation();
+}
+
+void MainWindow::setUsers(SqlUserService *service, int lockMinutes)
+{
+    users = service;
+
+    QList<PermissionInfo> permissions = {
+        { QStringLiteral("articulos.importar"), tr("Importar artículos desde archivos"), tr("Inventario") },
+        { QStringLiteral("datos.respaldar"), tr("Hacer copias de seguridad"), tr("Sistema") },
+    };
+    for (const LoadedModule &module : qAsConst(modules)) {
+        if (auto provider = qobject_cast<PermissionProvider *>(module.instance))
+            permissions += provider->permissions();
+    }
+    for (const LoadedModule &module : qAsConst(modules)) {
+        if (!module.widgets)
+            continue;
+        const QString code = modulePermission(module.info.id);
+        const bool declared = std::any_of(permissions.cbegin(), permissions.cend(),
+            [&code](const PermissionInfo &p) { return p.code == code; });
+        if (!declared)
+            permissions.append({ code, tr("Abrir %1").arg(module.info.name), tr("Módulos") });
+    }
+    users->registerPermissions(permissions);
+
+    sidebarUser->show();
+    sessionMenu->menuAction()->setVisible(true);
+    idleWatcher.setInterval(lockMinutes * 60 * 1000);
+    applySession();
+}
+
+bool MainWindow::canOpen(int moduleIndex) const
+{
+    return !users || users->can(modulePermission(modules.at(moduleIndex).info.id));
+}
+
+/// Show the signed-in user and only what they may open.
+void MainWindow::applySession()
+{
+    if (!users)
+        return;
+
+    bool anyModule = false;
+    for (int i = 0; i < moduleButtons.size(); ++i) {
+        if (moduleButtons.at(i)) {
+            moduleButtons.at(i)->setVisible(canOpen(i));
+            anyModule = anyModule || canOpen(i);
+        }
+    }
+    noModulesLabel->setVisible(!anyModule);
+
+    // Pages were built for whoever opened them (which tabs, which actions):
+    // a different user starts clean.
+    const auto user = users->currentUser();
+    const qint64 userId = user ? user->id : 0;
+    for (int i = ui->tabWidget->count() - 1; i >= 0; --i) {
+        const int module = pageModule.value(ui->tabWidget->widget(i), -1);
+        if (module >= 0 && (userId != sessionUserId || !canOpen(module)))
+            onTabCloseRequested(i);
+    }
+    sessionUserId = userId;
+
+    const QString name = user ? user->fullName : tr("Sin sesión");
+    userLabel->setText(name);
+    sidebarUserName->ensurePolished();
+    sidebarUserName->setText(sidebarUserName->fontMetrics().elidedText(name, Qt::ElideRight, 112));
+    sidebarUserName->setToolTip(name);
+    sidebarUserRole->setText(user ? user->roleNames.join(QStringLiteral(", ")) : QString());
+    syncNavigation();
+}
+
+/// Cover the window and wait for a password. Whoever signs in takes over.
+void MainWindow::lockSession()
+{
+    if (locked || !users)
+        return;
+    locked = true;
+    idleWatcher.pause();
+
+    QWidget cover(this);
+    cover.setAttribute(Qt::WA_StyledBackground);
+    cover.setStyleSheet(QStringLiteral("background: %1;").arg(AguaraStyle::color(Color::Sidebar).name()));
+    cover.setGeometry(rect());
+    cover.show();
+    cover.raise();
+
+    LoginDialog dialog(users, LoginDialog::Locked, this);
+    const int result = dialog.exec();
+    locked = false;
+    if (result != QDialog::Accepted) {
+        close();
+        return;
+    }
+    idleWatcher.resume();
+    applySession();
+}
+
+void MainWindow::switchUser()
+{
+    if (!users)
+        return;
+    LoginDialog dialog(users, LoginDialog::Switch, this);
+    if (dialog.exec() == QDialog::Accepted)
+        applySession();
+}
+
+void MainWindow::changeOwnPassword()
+{
+    if (users)
+        ChangePasswordDialog(users, false, this).exec();
 }
 
 MainWindow::~MainWindow()
@@ -160,6 +277,35 @@ void MainWindow::buildSidebar()
     connect(modulesButton, &QPushButton::clicked, this, &MainWindow::aboutModules);
     layout->addWidget(modulesButton);
 
+    // who is signed in, and the padlock (shown once users are on: setUsers)
+    sidebarUser = new QWidget;
+    sidebarUser->setObjectName(QStringLiteral("sidebarUser"));
+    auto userRow = new QHBoxLayout(sidebarUser);
+    userRow->setContentsMargins(18, 10, 10, 2);
+    userRow->setSpacing(10);
+    auto userIcon = new QLabel;
+    userIcon->setPixmap(AguaraStyle::icon(QStringLiteral("user"), AguaraStyle::color(Color::SidebarText)).pixmap(20, 20));
+    userRow->addWidget(userIcon);
+    auto userNames = new QVBoxLayout;
+    userNames->setSpacing(0);
+    sidebarUserName = new QLabel;
+    sidebarUserName->setObjectName(QStringLiteral("sidebarUserName"));
+    sidebarUserRole = new QLabel;
+    sidebarUserRole->setObjectName(QStringLiteral("brandTagline"));
+    userNames->addWidget(sidebarUserName);
+    userNames->addWidget(sidebarUserRole);
+    userRow->addLayout(userNames, 1);
+    auto lockButton = new QToolButton;
+    lockButton->setObjectName(QStringLiteral("sidebarLock"));
+    lockButton->setIcon(AguaraStyle::icon(QStringLiteral("lock"), AguaraStyle::color(Color::SidebarText)));
+    lockButton->setIconSize(QSize(18, 18));
+    lockButton->setToolTip(tr("Bloquear (Ctrl+L)"));
+    lockButton->setCursor(Qt::PointingHandCursor);
+    connect(lockButton, &QToolButton::clicked, this, &MainWindow::lockSession);
+    userRow->addWidget(lockButton);
+    sidebarUser->hide();
+    layout->addWidget(sidebarUser);
+
     connect(&pageCero, &PageCero::countChanged, this, [this](int count) {
         notificationsBadge->setVisible(count > 0);
         notificationsBadge->setText(count > 99 ? QStringLiteral("99+") : QString::number(count));
@@ -196,7 +342,6 @@ void MainWindow::buildStatusBar()
     dataLayout->addWidget(connectionLabel);
     ui->statusbar->addWidget(data);
 
-    // The signed-in user arrives with phase 1 (users and permissions)
     auto user = new QWidget;
     auto userLayout = new QHBoxLayout(user);
     userLayout->setContentsMargins(0, 0, 0, 0);
@@ -204,6 +349,7 @@ void MainWindow::buildStatusBar()
     auto userIcon = new QLabel;
     userIcon->setPixmap(AguaraStyle::icon(QStringLiteral("user"), AguaraStyle::color(Color::TextMuted)).pixmap(16, 16));
     userLabel = new QLabel(tr("Sin sesión"));
+    userLabel->setObjectName(QStringLiteral("userLabel"));
     userLayout->addWidget(userIcon);
     userLayout->addWidget(userLabel);
     ui->statusbar->addPermanentWidget(user);
@@ -247,6 +393,9 @@ void MainWindow::setUpPageCero()
 /// the module.
 void MainWindow::Import(ImportArticlesInterface *only)
 {
+    if (users && !users->authorize(QStringLiteral("articulos.importar"), tr("Importar artículos"), this))
+        return;
+
     QStringList patterns;
     for (const LoadedModule &module : qAsConst(modules)) {
         if (module.importer && (!only || module.importer == only)) {
@@ -291,6 +440,8 @@ void MainWindow::backupNow()
                "(ver la guía de instalación de varios puestos)."));
         return;
     }
+    if (users && !users->authorize(QStringLiteral("datos.respaldar"), tr("Copia de seguridad"), this))
+        return;
     const QString suggested = QDir(Backup::defaultDirectory()).filePath(Backup::fileNameFor(QDateTime::currentDateTime()));
     const QString file = QFileDialog::getSaveFileName(this, tr("Guardar copia de seguridad"), suggested,
                                                       tr("Copia de AguaraPOS (*.db)"));
@@ -396,6 +547,16 @@ void MainWindow::createMenus()
     fileMenu->addSeparator();
     fileMenu->addAction(quitAct);
 
+    sessionMenu = menuBar()->addMenu(tr("&Sesión"));
+    auto lockAct = sessionMenu->addAction(AguaraStyle::icon(QStringLiteral("lock")), tr("&Bloquear"),
+                                          this, &MainWindow::lockSession, QKeySequence(Qt::CTRL + Qt::Key_L));
+    lockAct->setObjectName(QStringLiteral("lockAction"));
+    sessionMenu->addAction(AguaraStyle::icon(QStringLiteral("users")), tr("Cambiar de &usuario..."),
+                           this, &MainWindow::switchUser, QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_L));
+    sessionMenu->addAction(AguaraStyle::icon(QStringLiteral("key")), tr("Cambiar &contraseña..."),
+                           this, &MainWindow::changeOwnPassword);
+    sessionMenu->menuAction()->setVisible(false);       // until setUsers()
+
     helpMenu = menuBar()->addMenu(tr("A&yuda"));
     helpMenu->addAction(aboutModulesAct);
     helpMenu->addSeparator();
@@ -442,9 +603,10 @@ void MainWindow::createShortcuts()
 /// Load every module from the "modules" folder next to the executable.
 void MainWindow::loadPlugins()
 {
-    pluginsDir = QDir(QCoreApplication::applicationDirPath());
-    if (!pluginsDir.cd("modules")) {
-        qCWarning(lcModules) << "Modules folder not found:" << pluginsDir.absoluteFilePath("modules");
+    pluginsDir = QDir(modulesDirectory.isEmpty() ? QCoreApplication::applicationDirPath() + QStringLiteral("/modules")
+                                                 : modulesDirectory);
+    if (!pluginsDir.exists()) {
+        qCWarning(lcModules) << "Modules folder not found:" << pluginsDir.absolutePath();
         return;
     }
 
@@ -608,6 +770,8 @@ void MainWindow::dateTimeUpdate() {
 void MainWindow::openModulePage(int moduleIndex) {
     if (moduleIndex < 0 || moduleIndex >= modules.size() || !modules.at(moduleIndex).widgets)
         return;                     // not a module with a page
+    if (!canOpen(moduleIndex))
+        return;                     // e.g. Ctrl+2 for a module this user can't see
     LoadedModule &module = modules[moduleIndex];
     const bool multi = module.widgets->allowsMultipleInstances();
 

@@ -59,6 +59,9 @@ QPushButton:pressed  { background: {{border}}; }
 QPushButton:focus    { border-color: {{accent}}; }
 QPushButton:disabled { color: {{disabled}}; border-color: {{border}}; background: {{window}}; }
 
+/* room for the bold default button, which is measured before it turns bold */
+QDialogButtonBox QPushButton { min-width: 84px; }
+
 /* the main action: a dialog's default button, or role="primary" */
 QPushButton:default, QPushButton[role="primary"] {
     background: {{accent}};
@@ -187,6 +190,30 @@ QCalendarWidget QAbstractItemView {
 }
 
 QCheckBox, QRadioButton { spacing: 8px; }
+QCheckBox::indicator, QTreeView::indicator, QTableView::indicator, QListView::indicator {
+    width: 16px;
+    height: 16px;
+    background: {{surface}};
+    border: 1px solid {{borderStrong}};
+    border-radius: 3px;
+}
+QCheckBox::indicator:hover, QTreeView::indicator:hover, QTableView::indicator:hover, QListView::indicator:hover {
+    border-color: {{accent}};
+}
+QCheckBox::indicator:checked, QTreeView::indicator:checked, QTableView::indicator:checked, QListView::indicator:checked {
+    background: {{accent}};
+    border-color: {{accent}};
+    image: url(:/aguara/qss/check.svg);
+}
+QCheckBox::indicator:disabled, QTreeView::indicator:disabled {
+    background: {{window}};
+    border-color: {{border}};
+}
+QCheckBox::indicator:checked:disabled, QTreeView::indicator:checked:disabled {
+    background: {{borderStrong}};
+    border-color: {{borderStrong}};
+    image: url(:/aguara/qss/check.svg);
+}
 
 /* ---- tables and lists --------------------------------------------------- */
 
@@ -200,7 +227,8 @@ QTableView, QTreeView, QListView {
     selection-color: {{text}};
     outline: none;
 }
-QTableView::item, QListView::item { padding: 0 8px; border: none; }
+QTableView::item { padding: 0 8px; border: none; }
+QListView::item { padding: 6px 8px; border: none; }
 QTreeView::item { padding: 4px 4px; }
 QTableView::item:selected, QTreeView::item:selected, QListView::item:selected {
     background: {{accentSoft}};
@@ -338,6 +366,11 @@ QLabel[role="badge"] {
     padding: 0 6px;
     min-width: 6px;
 }
+
+QLabel#sidebarUserName { color: #FFFFFF; font-weight: 600; }
+QWidget#sidebarUser { border-top: 1px solid {{sidebarHover}}; }
+QToolButton#sidebarLock { background: transparent; border: none; padding: 5px; }
+QToolButton#sidebarLock:hover { background: {{sidebarHover}}; }
 
 /* ---- notifications (core) ------------------------------------------------ */
 

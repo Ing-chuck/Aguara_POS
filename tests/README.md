@@ -12,9 +12,10 @@ un subproyecto de `Aguara_POS.pro`). Los ejecutables quedan en `<compilación>/t
 | `tst_backup` | Copia de seguridad de SQLite: copia en caliente, copia diaria y retención |
 | `tst_database` | Apertura y migraciones *(SQLite y PostgreSQL)* |
 | `tst_productservice` | `ProductService`, lo que usan los módulos *(SQLite y PostgreSQL)* |
-| `tst_modules` | Los plugins reales: importación de CSV, y teclado y lector de códigos en inventario |
+| `tst_users` | Usuarios, roles, permisos, autorización de supervisor y auditoría *(SQLite y PostgreSQL)* |
+| `tst_modules` | Los plugins reales: importación de CSV, teclado y lector en inventario, autorización y pantalla de usuarios |
 | `tst_reconnect` | Varias cajas en un servidor: avisos entre cajas, reinicio y caída del servidor *(solo PostgreSQL)* |
-| `tst_mainwindow` | Ventana principal: avisos, reloj, menús y atajos |
+| `tst_mainwindow` | Ventana principal: avisos, reloj, menús, atajos, y lo que ve cada usuario, con los módulos reales |
 
 ## Ejecutar
 

@@ -12,10 +12,11 @@
 #include <QPushButton>
 #include <QShortcut>
 
-inventoryWidget::inventoryWidget(ProductService *products, QWidget *parent)
+inventoryWidget::inventoryWidget(ProductService *products, UserService *users, QWidget *parent)
     : AguaraWidget(parent)
     , ui(new Ui::inventoryWidget)
     , products(products)
+    , users(users)
     , addDialog(new addItemDialog(products, this))
     , editDialog(new addItemDialog(products, this))
     , model(products->createProductTableModel(this))   // refreshes itself on every change
@@ -23,7 +24,7 @@ inventoryWidget::inventoryWidget(ProductService *products, QWidget *parent)
     ui->setupUi(this);
 
     // Connect add and edit buttons
-    QObject::connect(ui->itemAddButton, &QPushButton::clicked, addDialog, &addItemDialog::addItem);
+    QObject::connect(ui->itemAddButton, &QPushButton::clicked, this, &inventoryWidget::onItemAddPressed);
     QObject::connect(ui->itemEditButton, &QPushButton::clicked, this, &inventoryWidget::onItemEditPressed);
 
     loadTable();
@@ -127,9 +128,16 @@ void inventoryWidget::focusSearch()
     ui->itemSearch->selectAll();
 }
 
+/// Ask UserService: the signed-in user, or a supervisor on the spot.
+bool inventoryWidget::authorized(const QString &permission, const QString &reason)
+{
+    return !users || users->authorize(permission, reason, this);
+}
+
 void inventoryWidget::onItemAddPressed()
 {
-    addDialog->addItem();
+    if (authorized(QStringLiteral("inventario.editar"), tr("Nuevo artículo")))
+        addDialog->addItem();
 }
 
 /// Enter in the search box: an exact code (what a scanner sends) selects
@@ -231,7 +239,7 @@ void inventoryWidget::onItemAddedEdited(QString id)
 void inventoryWidget::onItemEditPressed()
 {
     const QString code = selectedCode();
-    if (!code.isEmpty())
+    if (!code.isEmpty() && authorized(QStringLiteral("inventario.editar"), tr("Modificar el artículo %1").arg(code)))
         editDialog->editItem(code);
 }
 
@@ -252,7 +260,10 @@ void inventoryWidget::onItemRemovePressed()
     QPushButton *cancel = box.addButton(tr("Cancelar"), QMessageBox::RejectRole);
     box.setDefaultButton(cancel);           // Enter must not delete by accident
     box.exec();
-    if (box.clickedButton() == confirm && !products->deactivateProduct(code))
+    if (box.clickedButton() != confirm
+        || !authorized(QStringLiteral("inventario.baja"), tr("Dar de baja: %1").arg(name)))
+        return;
+    if (!products->deactivateProduct(code))
         QMessageBox::warning(this, tr("No se pudo dar de baja"), products->lastError());
 }
 

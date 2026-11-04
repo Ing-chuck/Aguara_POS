@@ -1,6 +1,7 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include "inactivitywatcher.h"
 #include "interfaces.h"
 #include "loadedmodule.h"
 #include "pagecero.h"
@@ -14,6 +15,7 @@
 class Backup;
 class CoreHost;
 class NotificationDialog;
+class SqlUserService;
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -40,8 +42,16 @@ class MainWindow : public QMainWindow
 
 public:
     /// `backup` may be null (Archivo > Copia de seguridad then says it's unavailable).
-    explicit MainWindow(CoreHost *host, Backup *backup = nullptr, QWidget *parent = nullptr);
+    /// `modulesDirectory`: empty is the "modules" folder next to the program.
+    explicit MainWindow(CoreHost *host, Backup *backup = nullptr, QWidget *parent = nullptr,
+                        const QString &modulesDirectory = QString());
     ~MainWindow();
+
+    /// Turn on users and permissions: registers the permissions of the core
+    /// and the modules, hides what the signed-in user can't open, and locks
+    /// the session after `lockMinutes` without activity (0: never).
+    /// Without it (tests) nothing is restricted.
+    void setUsers(SqlUserService *users, int lockMinutes);
 
 public slots:
     /// Status bar: where the data lives ("Este equipo", "Servidor 192.168.1.10").
@@ -62,8 +72,13 @@ private slots:
     void onTabCloseRequested(int indx);
     void onModuleNotification(ModuleMsg msg);
     void syncNavigation();
+    void lockSession();
+    void switchUser();
+    void changeOwnPassword();
 
 private:
+    void applySession();
+    bool canOpen(int moduleIndex) const;
     void prepareWindow();
     void buildSidebar();
     void buildStatusBar();
@@ -83,8 +98,13 @@ private:
     CoreHost *host;
     Backup *backup;
     QDir pluginsDir;
+    QString modulesDirectory;
     QString lastImportDir;
     QString dataDescription;
+    SqlUserService *users = nullptr;
+    InactivityWatcher idleWatcher;
+    bool locked = false;
+    qint64 sessionUserId = 0;
 
     QList<LoadedModule> modules;
     QList<QPushButton *> moduleButtons;     // index = module index (nullptr: no page)
@@ -96,6 +116,9 @@ private:
     QLabel *noModulesLabel = nullptr;
     QPushButton *notificationsButton = nullptr;
     QLabel *notificationsBadge = nullptr;
+    QWidget *sidebarUser = nullptr;
+    QLabel *sidebarUserName = nullptr;
+    QLabel *sidebarUserRole = nullptr;
 
     // status bar
     QLabel *dataIcon = nullptr;
@@ -108,6 +131,7 @@ private:
 
     QMenu* fileMenu = nullptr;
     QMenu* importMenu = nullptr;
+    QMenu* sessionMenu = nullptr;
     QMenu* helpMenu = nullptr;
     QAction* importAct = nullptr;
     QAction* backupAct = nullptr;

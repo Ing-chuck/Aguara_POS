@@ -16,6 +16,11 @@
         <file>icons/help.svg</file>
         <file>icons/import.svg</file>
         <file>icons/info.svg</file>
+        <file>icons/users.svg</file>
+        <file>icons/lock.svg</file>
+        <file>icons/key.svg</file>
+        <file>icons/shield.svg</file>
+        <file>icons/list.svg</file>
         <file>icons/logo.svg</file>
         <file>icons/logout.svg</file>
         <file>icons/neutral.svg</file>
@@ -27,6 +32,7 @@
         <file>icons/trash.svg</file>
         <file>icons/user.svg</file>
         <file>icons/warning.svg</file>
+        <file>qss/check.svg</file>
         <file>qss/chevron-down.svg</file>
         <file>qss/chevron-up.svg</file>
         <file>qss/close.svg</file>

@@ -5,7 +5,7 @@ include($$AGUARA_SRC_ROOT/aguara.pri)
 TEMPLATE = lib
 CONFIG  += staticlib
 TARGET   = aguara_core
-QT      += sql widgets
+QT      += sql widgets network    # network: QPasswordDigestor
 
 DESTDIR  = $$AGUARA_LIB_DIR
 
@@ -16,12 +16,16 @@ SOURCES      +=     \
     database.cpp    \
     databasesettingsdialog.cpp \
     errors.cpp      \
+    inactivitywatcher.cpp \
     logging.cpp     \
     mainwindow.cpp  \
     module_dialog.cpp \
     notificationdialog.cpp \
     pagecero.cpp    \
-    sqlproductservice.cpp
+    passwordhash.cpp \
+    sessiondialogs.cpp \
+    sqlproductservice.cpp \
+    sqluserservice.cpp
 
 HEADERS      +=     \
     backup.h        \
@@ -30,13 +34,17 @@ HEADERS      +=     \
     database.h      \
     databasesettingsdialog.h \
     errors.h        \
+    inactivitywatcher.h \
     loadedmodule.h  \
     logging.h       \
     mainwindow.h    \
     module_dialog.h \
     notificationdialog.h \
     pagecero.h      \
-    sqlproductservice.h
+    passwordhash.h  \
+    sessiondialogs.h \
+    sqlproductservice.h \
+    sqluserservice.h
 
 FORMS        +=     \
     mainwindow.ui   \

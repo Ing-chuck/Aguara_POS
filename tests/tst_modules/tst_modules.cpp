@@ -2,13 +2,20 @@
 // the same host and services the application gives them, on SQLite.
 #include "testsupport.h"
 
+#include "passwordhash.h"
+#include "sqluserservice.h"
+
 #include <interfaces.h>
 
+#include <QDialog>
 #include <QDir>
 #include <QFile>
 #include <QLineEdit>
 #include <QPluginLoader>
+#include <QPushButton>
 #include <QTableView>
+#include <QTableWidget>
+#include <QTabWidget>
 #include <QtTest>
 
 using TestSupport::CoreFixture;
@@ -30,14 +37,18 @@ private slots:
     void inventoryScannerSelectsCode();
     void inventorySearchByDescription();
     void inventoryNotFoundNotifies();
+    void inventoryAsksForAuthorization();
+    void usersPageShowsWhatTheRoleAllows();
 
 private:
+    void openUsers();
     QObject *load(const QString &fileName);
     QString writeFile(const QString &name, const QByteArray &bytes);
     QTableView *showInventory(QLineEdit **search);
 
     QTemporaryDir m_tmp;
     CoreFixture m_core;
+    std::unique_ptr<SqlUserService> m_users;
     QList<QPluginLoader *> m_loaders;
     QWidget *m_page = nullptr;
     QString m_lastNote;
@@ -56,6 +67,7 @@ void tst_Modules::cleanup()
 {
     delete m_page;
     m_page = nullptr;
+    m_users.reset();
     m_core.close();
     // plugins stay loaded (Qt shares one instance per file); just forget the loaders
     qDeleteAll(m_loaders);
@@ -145,6 +157,73 @@ void tst_Modules::importExcelWindows1252()
     QVERIFY(p.has_value());
     QCOMPARE(p->description, QString::fromUtf8("CAÑA DE AZÚCAR"));
     QCOMPARE(p->price, Money(8000));
+}
+
+void tst_Modules::openUsers()
+{
+    PasswordHash::setDefaultIterations(200);
+    m_users.reset(new SqlUserService(m_core.monitor.get()));
+    m_core.host->registerService(UserService_iid, m_users.get());
+    m_users->createFirstAdmin(QStringLiteral("admin"), QStringLiteral("Admin"), QStringLiteral("secreto1"));
+    auto provider = qobject_cast<PermissionProvider *>(load(QStringLiteral("modulo_control_inventario.dll")));
+    QVERIFY(provider);
+    QList<PermissionInfo> permissions = provider->permissions();
+    permissions += qobject_cast<PermissionProvider *>(load(QStringLiteral("modulo_usuarios.dll")))->permissions();
+    QVERIFY(m_users->registerPermissions(permissions));
+
+    UserAccount cashier, manager;
+    cashier.username = QStringLiteral("cajero");
+    cashier.fullName = QStringLiteral("Cajero");
+    manager.username = QStringLiteral("encargado");
+    manager.fullName = QStringLiteral("Encargado");
+    for (const UserRole &r : m_users->roles()) {
+        if (r.name == QLatin1String("Cajero"))
+            cashier.roleIds << r.id;
+        if (r.name == QLatin1String("Encargado"))
+            manager.roleIds << r.id;
+    }
+    QVERIFY(m_users->saveUser(cashier, QStringLiteral("clave123")));
+    QVERIFY(m_users->saveUser(manager, QStringLiteral("clave123")));
+}
+
+void tst_Modules::inventoryAsksForAuthorization()
+{
+    openUsers();
+    QVERIFY(m_users->login(QStringLiteral("cajero"), QStringLiteral("clave123")));
+    int asked = 0;
+    m_users->setSupervisorPrompt([&](const QString &, const QString &, const QString &, QWidget *,
+                                     QString *, QString *) {
+        ++asked;
+        return false;                           // the supervisor does not come
+    });
+
+    QLineEdit *search = nullptr;
+    QTableView *table = showInventory(&search);
+    QVERIFY(table);
+    m_page->findChild<QPushButton *>(QStringLiteral("itemAddButton"))->click();
+    QCOMPARE(asked, 1);
+    table->selectRow(0);
+    m_page->findChild<QPushButton *>(QStringLiteral("itemEditButton"))->click();
+    QCOMPARE(asked, 2);
+    for (QDialog *d : m_page->findChildren<QDialog *>())
+        QVERIFY(!d->isVisible());               // no form opened
+}
+
+void tst_Modules::usersPageShowsWhatTheRoleAllows()
+{
+    openUsers();
+    auto widgets = qobject_cast<WidgetModuleInterface *>(load(QStringLiteral("modulo_usuarios.dll")));
+    QVERIFY(widgets);
+
+    std::unique_ptr<QWidget> page(widgets->createWidget());     // administrator
+    QCOMPARE(page->findChild<QTabWidget *>(QStringLiteral("usersTabs"))->count(), 3);
+    QCOMPARE(page->findChild<QTableWidget *>(QStringLiteral("usersTable"))->rowCount(), 3);
+
+    QVERIFY(m_users->login(QStringLiteral("encargado"), QStringLiteral("clave123")));
+    page.reset(widgets->createWidget());
+    QCOMPARE(page->findChild<QTabWidget *>(QStringLiteral("usersTabs"))->count(), 1);     // the audit log only
+    QVERIFY(!page->findChild<QTableWidget *>(QStringLiteral("usersTable")));
+    QVERIFY(page->findChild<QTableWidget *>(QStringLiteral("auditTable"))->rowCount() > 0);
 }
 
 QTableView *tst_Modules::showInventory(QLineEdit **search)

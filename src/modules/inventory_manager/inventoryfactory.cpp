@@ -21,10 +21,20 @@ ModuleInfo InventoryFactory::moduleInfo() const
 bool InventoryFactory::initialize(AguaraHost *host)
 {
     products = host->service<ProductService>();
+    users = host->service<UserService>();
     return products != nullptr;
+}
+
+QList<PermissionInfo> InventoryFactory::permissions() const
+{
+    const QString group = QStringLiteral("Inventario");
+    return {
+        { QStringLiteral("inventario.editar"), QStringLiteral("Crear y modificar artículos y precios"), group },
+        { QStringLiteral("inventario.baja"), QStringLiteral("Dar de baja artículos"), group },
+    };
 }
 
 QWidget *InventoryFactory::createWidget(QWidget *parent)
 {
-    return new inventoryWidget(products, parent);
+    return new inventoryWidget(products, users, parent);
 }

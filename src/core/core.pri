@@ -4,7 +4,7 @@
 
 INCLUDEPATH += $$AGUARA_SRC_ROOT/src/core
 DEPENDPATH  += $$AGUARA_SRC_ROOT/src/core
-QT          += sql widgets
+QT          += sql widgets network
 
 LIBS += -L$$AGUARA_LIB_DIR -laguara_core -laguara_interfaces
 win32: LIBS += -lcrypt32                # DPAPI: CryptProtectData (database.cpp)

@@ -5,7 +5,9 @@
 #include "databasesettingsdialog.h"
 #include "logging.h"
 #include "mainwindow.h"
+#include "sessiondialogs.h"
 #include "sqlproductservice.h"
+#include "sqluserservice.h"
 #include <aguarastyle.h>
 #include <version.h>
 
@@ -14,6 +16,7 @@
 #include <QDir>
 #include <QLibraryInfo>
 #include <QLocale>
+#include <QSettings>
 #include <QSysInfo>
 #include <QTranslator>
 
@@ -105,8 +108,23 @@ int main(int argc, char *argv[])
 
     // Services modules can use, looked up through the host.
     SqlProductService products(&connection);
+    SqlUserService users(&connection);
+    users.setSupervisorPrompt(askSupervisor);
+    products.setAuditLog(&users);
     CoreHost host;
     host.registerService(ProductService_iid, &products);
+    host.registerService(UserService_iid, &users);
+
+    // Nothing opens without a user. First run: create the administrator.
+    if (users.hasUsers()) {
+        LoginDialog login(&users, LoginDialog::Start);
+        if (login.exec() != QDialog::Accepted)
+            return 0;
+    } else {
+        FirstAdminDialog firstRun(&users);
+        if (firstRun.exec() != QDialog::Accepted)
+            return 0;
+    }
 
     // Tell the user when the server is unreachable and when it's back
     // (same sender+id, so the second message replaces the first). The
@@ -133,6 +151,10 @@ int main(int argc, char *argv[])
     const bool server = database.backend() == DatabaseSettings::PostgreSQL;
     w.setDataSource(server ? QCoreApplication::translate("main", "Servidor %1").arg(settings.host)
                            : QCoreApplication::translate("main", "Datos en este equipo"), server);
+    // [session] lock_minutes in aguara.ini: 0 never locks
+    const int lockMinutes = QSettings(DatabaseSettings::settingsPath(), QSettings::IniFormat)
+                                .value(QStringLiteral("session/lock_minutes"), 10).toInt();
+    w.setUsers(&users, lockMinutes);
     QObject::connect(&connection, &ConnectionMonitor::connectionLost, &w, [&w]() { w.setConnected(false); });
     QObject::connect(&connection, &ConnectionMonitor::reconnected, &w, [&w]() { w.setConnected(true); });
     w.show();
@@ -146,6 +168,7 @@ int main(int argc, char *argv[])
     }
 
     const int result = a.exec();
+    users.logout();
     qCInfo(lcApp) << "Exiting, code" << result;
     return result;
 }

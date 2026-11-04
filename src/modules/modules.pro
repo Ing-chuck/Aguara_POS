@@ -5,4 +5,5 @@ TEMPLATE = subdirs
 SUBDIRS += \
     import_module \
     inventory_manager \
-    sales_module
+    sales_module \
+    users_module

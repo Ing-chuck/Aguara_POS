@@ -16,12 +16,14 @@ class inventoryWidget : public AguaraWidget
     Q_OBJECT
 
 public:
-    explicit inventoryWidget(ProductService *products, QWidget *parent = nullptr);
+    /// `users` may be null (nothing is restricted then).
+    explicit inventoryWidget(ProductService *products, UserService *users, QWidget *parent = nullptr);
     ~inventoryWidget();
 
 private:
     Ui::inventoryWidget *ui = nullptr;
     ProductService *products = nullptr;
+    UserService *users = nullptr;
     addItemDialog *addDialog = nullptr;
     addItemDialog *editDialog = nullptr;
     QAbstractItemModel *model = nullptr;
@@ -32,6 +34,7 @@ private:
     void fitColumns();
     bool eventFilter(QObject *watched, QEvent *event) override;
     QString selectedCode() const;
+    bool authorized(const QString &permission, const QString &reason);
 
 private slots:
     void focusSearch();

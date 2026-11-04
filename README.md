@@ -68,6 +68,38 @@ datos no se puede abrir). La eleccion se guarda en `%APPDATA%\Aguara\AguaraPOS\a
 * **Montos** en guaranies enteros (ISO 4217: PYG no tiene decimales), con IVA incluido.
   Ver `src/interfaces/money.h`.
 
+# Usuarios y permisos
+La primera vez que se abre el programa pide crear el administrador; despues, siempre pide usuario
+y contraseña. Se administran en el modulo **Usuarios** (usuarios, roles y permisos, auditoria).
+
+* **Roles**: Administrador (todo, siempre), Encargado y Cajero, y los que se creen. Cada usuario
+  tiene uno o mas. Los cambios en un rol valen desde el proximo ingreso de cada usuario.
+* **Contraseñas**: se guardan como hash PBKDF2-SHA256 (`src/core/passwordhash.h`). La que asigna un
+  administrador se debe cambiar en el primer ingreso. Tras 5 intentos fallidos, la cuenta espera un
+  minuto.
+* **Sesion**: *Sesion > Bloquear* (Ctrl+L) o el candado de la barra lateral. Se bloquea sola tras
+  10 minutos sin actividad; se cambia con `lock_minutes` en la seccion `[session]` de `aguara.ini`
+  (0: nunca). Otro usuario puede tomar la caja desde la pantalla de bloqueo.
+* **Auditoria**: quien hizo que, cuando y desde que puesto, con los valores de antes y despues. En
+  PostgreSQL la fecha es la del servidor. Ingresos, intentos fallidos, autorizaciones, usuarios,
+  roles y articulos ya quedan registrados.
+
+**En un modulo**: la pagina de un modulo necesita el permiso `modulo.<id>`, que se crea solo
+(Encargado si, Cajero no). Para permisos propios, implementar `PermissionProvider`:
+
+    QList<PermissionInfo> permissions() const override {
+        return { { "caja.anular", "Anular ventas", "Caja" } };      // Encargado si, Cajero no
+    }
+
+Y antes de una accion sensible, pedir la autorizacion. Si el usuario no tiene el permiso, un
+supervisor escribe sus credenciales ahi mismo, sin cerrar la sesion:
+
+    if (!users->authorize("caja.anular", tr("Anular la venta %1").arg(numero), this))
+        return;
+
+`host->service<UserService>()` da el servicio; `can()` sirve para ocultar o deshabilitar cosas y
+`audit()` para registrar lo que hizo el modulo.
+
 # Apariencia
 El tema esta en `aguara_interfaces.dll` (`src/interfaces/aguarastyle.h`), asi que el core y todos
 los modulos se ven igual:
@@ -103,8 +135,8 @@ Un modulo **no define colores propios**: le da un *rol* a cada widget con
   icono generico que usan los modulos nuevos del wizard.
 * El inventario (`src/modules/inventory_manager`) sirve de ejemplo de pagina completa.
 
-Para instalar: ademas de las DLL de Qt habituales, el programa usa **Qt5Svg** y los plugins
-`imageformats/qsvg` e `iconengines/qsvgicon`, que `windeployqt` copia solo.
+Para instalar: ademas de las DLL de Qt habituales, el programa usa **Qt5Svg**, **Qt5Network** y los
+plugins `imageformats/qsvg` e `iconengines/qsvgicon`, que `windeployqt` copia solo.
 
 # Registro y errores
 * El usuario ve mensajes cortos en español (`src/core/errors.h`).
@@ -126,6 +158,7 @@ el codigo y presiona Enter.
 | Ctrl+W | cerrar la pagina actual |
 | F1 | avisos |
 | Ctrl+I | importar articulos |
+| Ctrl+L / Ctrl+Shift+L | bloquear la sesion / cambiar de usuario |
 | Ctrl+Q | salir |
 | Inventario: Ctrl+F o F3 | buscar por codigo o descripcion; Enter selecciona el articulo |
 | Inventario: Ins o Ctrl+N | articulo nuevo |

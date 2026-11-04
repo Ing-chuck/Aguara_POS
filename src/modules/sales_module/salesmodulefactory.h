@@ -8,17 +8,19 @@
 /// Plugin root object: describes the sales module and creates its page.
 class SalesModuleFactory : public QObject,
                            public AguaraModuleInterface,
-                           public WidgetModuleInterface
+                           public WidgetModuleInterface,
+                           public PermissionProvider
 {
     Q_OBJECT
     Q_PLUGIN_METADATA(IID AguaraModuleInterface_iid FILE "module.json")
-    Q_INTERFACES(AguaraModuleInterface WidgetModuleInterface)
+    Q_INTERFACES(AguaraModuleInterface WidgetModuleInterface PermissionProvider)
 
 public:
     explicit SalesModuleFactory(QObject *parent = nullptr);
 
     ModuleInfo moduleInfo() const override;
     QWidget *createWidget(QWidget *parent = nullptr) override;
+    QList<PermissionInfo> permissions() const override;
 };
 
 #endif // SALESMODULEFACTORY_H

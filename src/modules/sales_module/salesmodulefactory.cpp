@@ -18,6 +18,14 @@ ModuleInfo SalesModuleFactory::moduleInfo() const
     return info;
 }
 
+QList<PermissionInfo> SalesModuleFactory::permissions() const
+{
+    return {
+        { modulePermission(QStringLiteral("sales")), QStringLiteral("Abrir Ventas"), QStringLiteral("Módulos"),
+          true, true },     // cashiers too
+    };
+}
+
 QWidget *SalesModuleFactory::createWidget(QWidget *parent)
 {
     return new SalesModule(parent);

@@ -7,6 +7,7 @@
 #include "messages.h"
 #include "money.h"
 #include "productservice.h"
+#include "userservice.h"
 
 #include <QIcon>
 #include <QString>
@@ -96,6 +97,14 @@ public:
     virtual bool importFrom(const QString &fileName) = 0;
 };
 
+/// Capability: the module has permissions of its own. They appear in the
+/// roles screen; check them with UserService::can() / authorize().
+class PermissionProvider {
+public:
+    virtual ~PermissionProvider() = default;
+    virtual QList<PermissionInfo> permissions() const = 0;
+};
+
 /// Optional base class for module pages that send notifications to the user.
 class AGUARA_EXPORT AguaraWidget : public QWidget {
     Q_OBJECT
@@ -112,9 +121,11 @@ signals:
 #define AguaraModuleInterface_iid    "org.AguaraPOS.ModuleInterface/1.1"   // 1.1: ModuleInfo::iconName
 #define WidgetModuleInterface_iid    "org.AguaraPOS.WidgetModuleInterface/1.0"
 #define ImportArticlesInterface_iid  "org.AguaraPOS.ImportArticlesInterface/1.0"
+#define PermissionProvider_iid       "org.AguaraPOS.PermissionProvider/1.0"
 
 Q_DECLARE_INTERFACE(AguaraModuleInterface,   AguaraModuleInterface_iid)
 Q_DECLARE_INTERFACE(WidgetModuleInterface,   WidgetModuleInterface_iid)
 Q_DECLARE_INTERFACE(ImportArticlesInterface, ImportArticlesInterface_iid)
+Q_DECLARE_INTERFACE(PermissionProvider,      PermissionProvider_iid)
 
 #endif // INTERFACES_H

@@ -121,16 +121,19 @@ Sin esto, cada fase siguiente rompe algo sin que nadie se entere.
 
 Va primero porque todo lo demás necesita saber **quién** hizo cada cosa.
 
-- [ ] `UserService`, con las tablas `usuarios`, `roles`, `permisos`, `rol_tiene_permisos` y `usuario_tiene_roles`. El diagrama asigna permisos directo al usuario; con roles se administra más fácil, y se pueden mantener excepciones por usuario.
-- [ ] Pantalla de inicio de sesión al abrir el programa, con usuario y contraseña. Opcionalmente, un **PIN** corto para el cambio rápido de cajero.
-- [ ] Bloqueo por inactividad y cambio de usuario sin cerrar el programa. El nombre del usuario se muestra en la barra superior, como en `gui_basico_general.drawio`.
-- [ ] Registro de permisos: los del core más los que declara cada módulo (`PermissionProvider`). El core oculta o deshabilita los módulos y acciones no permitidos.
-- [ ] **Autorización de supervisor:** las acciones sensibles piden credenciales de un usuario con permiso, sin cerrar la sesión del cajero. Son anular, descontar más del límite, abrir el cajón sin venta, cerrar caja con diferencia y modificar precios.
-- [ ] Roles iniciales: Administrador, Encargado y Cajero.
-- [ ] Asistente de primer uso: crear el administrador cuando la base está vacía.
-- [ ] Tabla `auditoria`, que llenan todos los servicios.
+- [x] `UserService` (`src/interfaces/userservice.h`), con las tablas `usuarios`, `roles`, `permisos`, `rol_tiene_permisos` y `usuario_tiene_roles` (migración 2). Los permisos van por rol.
+- [x] Inicio de sesión al abrir el programa, con hash PBKDF2-SHA256 y espera de un minuto tras 5 intentos fallidos. La contraseña que asigna un administrador se cambia en el primer ingreso.
+- [x] Bloqueo por inactividad (`lock_minutes` en `aguara.ini`, 10 por defecto), bloqueo manual (Ctrl+L) y cambio de usuario sin cerrar el programa. El usuario se muestra en la barra lateral y en la barra de estado.
+- [x] Registro de permisos: los del core más los que declara cada módulo (`PermissionProvider`). Cada página tiene un permiso `modulo.<id>` automático, y la barra lateral oculta lo que el usuario no puede abrir.
+- [x] **Autorización de supervisor:** `UserService::authorize()` pide las credenciales de un usuario con permiso sin cerrar la sesión. Hoy la usan importar, respaldar, crear y modificar artículos y darlos de baja. Anular, descontar, abrir el cajón y cerrar caja con diferencia la usarán al llegar sus fases.
+- [x] Roles iniciales: Administrador, Encargado y Cajero.
+- [x] Asistente de primer uso: crea el administrador cuando la base no tiene usuarios.
+- [x] Tabla `auditoria`, con ingresos, intentos fallidos, autorizaciones, usuarios, roles y artículos. Los servicios de las próximas fases deben registrar también lo suyo.
+- [x] Módulo **Usuarios**: usuarios, roles y permisos, y consulta de la auditoría.
+- [ ] *(Opcional, pendiente)* **PIN** corto para el cambio rápido de cajero.
+- [ ] *(Opcional, pendiente)* Excepciones de permisos por usuario.
 
-**Hecho cuando:** un cajero no puede entrar a Inventario ni anular una venta sin que un encargado lo autorice, y todo queda en la auditoría.
+**Hecho cuando:** un cajero no puede entrar a Inventario ni anular una venta sin que un encargado lo autorice, y todo queda en la auditoría. *(Inventario y el mecanismo de autorización ya están hechos; anular llega con las ventas, en la fase 3.)*
 
 ### Fase 2: Inventario completo *(L)*
 
