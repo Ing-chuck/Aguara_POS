@@ -6,7 +6,8 @@
 #   BUILD_DIR       a release build (its bin/ has aguara.exe)
 #   PG_CLIENT_BIN   pgsql/bin of the 32-bit PostgreSQL 10 zip
 #
-# Needs Qt and MinGW on PATH. Without ISCC (Inno Setup 6) it leaves the staging
+# Stops if autoVersion.py says this can't be released as it is.
+# Needs Python 3, and Qt and MinGW on PATH. Without ISCC (Inno Setup 6) it leaves the staging
 # folder ready and stops: set ISCC to its path if it isn't on PATH.
 # Run it on a computer with the 32-bit Visual C++ 2013 runtime, or put
 # msvcr120.dll and msvcp120.dll in installer/redist/.
@@ -22,7 +23,9 @@ BIN="$BUILD_DIR/bin"
 STAGE="$BUILD_DIR/stage"
 
 [ -f "$BIN/aguara.exe" ] || { echo "no aguara.exe in $BIN"; exit 1; }
-python -B "$ROOT/autoVersion.py" check --release
+. "$ROOT/scripts/find-python.sh"
+[ -n "$PYTHON" ] || { echo "Python 3 not found"; exit 1; }
+$PYTHON -B "$ROOT/autoVersion.py" check --release
 
 number() { sed -n "s/^#define VERSION_$1 //p" "$ROOT/src/interfaces/version.h" | tr -d '\r'; }
 VERSION="$(number MAJOR).$(number MINOR).$(number PATCH)"

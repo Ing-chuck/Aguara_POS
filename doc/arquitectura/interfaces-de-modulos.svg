@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="980" viewBox="0 0 1400 980">
+<rect width="1400" height="980" fill="#FFFFFF"/>
+<text x="40" y="42" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="bold" fill="#B84A0A" text-anchor="start">Interfaces de módulos</text>
+<text x="40" y="64" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#52606D" text-anchor="start">src/interfaces/interfaces.h: un módulo implementa AguaraModuleInterface más sus capacidades.</text>
+<rect x="40" y="90" width="1320" height="435" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="60" y="116" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#1F2933" text-anchor="start">aguara_interfaces.dll</text>
+<rect x="70" y="135" width="300" height="94" rx="6" ry="6" fill="#FFFFFF" stroke="#B84A0A" stroke-width="1.2"/>
+<text x="220.0" y="152" font-family="Arial, Helvetica, sans-serif" font-size="10" font-style="italic" fill="#52606D" text-anchor="middle">obligatoria</text>
+<text x="220.0" y="170" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#B84A0A" text-anchor="middle">AguaraModuleInterface</text>
+<line x1="70" y1="179" x2="370" y2="179" stroke="#CBD2D9"/>
+<text x="80" y="197" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">moduleInfo(): ModuleInfo</text>
+<text x="80" y="217" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">initialize(host): bool</text>
+<rect x="440" y="135" width="300" height="94" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="590.0" y="152" font-family="Arial, Helvetica, sans-serif" font-size="10" font-style="italic" fill="#52606D" text-anchor="middle">datos</text>
+<text x="590.0" y="170" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">ModuleInfo</text>
+<line x1="440" y1="179" x2="740" y2="179" stroke="#CBD2D9"/>
+<text x="450" y="197" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">id, name, description</text>
+<text x="450" y="217" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">version, icon, iconName</text>
+<rect x="810" y="135" width="300" height="114" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="960.0" y="152" font-family="Arial, Helvetica, sans-serif" font-size="10" font-style="italic" fill="#52606D" text-anchor="middle">lo que el core ofrece</text>
+<text x="960.0" y="170" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">AguaraHost</text>
+<line x1="810" y1="179" x2="1110" y2="179" stroke="#CBD2D9"/>
+<text x="820" y="197" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">service&lt;T&gt;(): T*</text>
+<text x="820" y="217" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">serviceObject(iid): QObject*</text>
+<text x="820" y="237" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">notify(msg)</text>
+<polyline points="370,165 440,165" fill="none" stroke="#7B8794" stroke-width="1.4"/>
+<polygon points="431.0,160.5 440,165 431.0,169.5" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
+<rect x="380.21550008654594" y="147" width="49.56899982690811" height="16" fill="#FFFFFF"/>
+<text x="405" y="158" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">describe</text>
+<polyline points="370,195 400,195 400,268 960,268 960,249" fill="none" stroke="#7B8794" stroke-width="1.4"/>
+<polygon points="955.5,258.0 960,249 964.5,258.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
+<rect x="502.8205001652241" y="261" width="114.35899966955185" height="16" fill="#FFFFFF"/>
+<text x="560" y="272" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">la recibe en initialize()</text>
+<text x="70" y="304" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">Capacidades: un módulo implementa las que necesita</text>
+<rect x="70" y="315" width="243" height="114" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="191.5" y="332" font-family="Arial, Helvetica, sans-serif" font-size="10" font-style="italic" fill="#52606D" text-anchor="middle">capacidad</text>
+<text x="191.5" y="350" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">WidgetModuleInterface</text>
+<line x1="70" y1="359" x2="313" y2="359" stroke="#CBD2D9"/>
+<text x="80" y="377" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">createWidget(parent)</text>
+<text x="80" y="397" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">allowsMultipleInstances()</text>
+<text x="80" y="417" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">keepPageOpen()</text>
+<rect x="324" y="315" width="243" height="94" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="445.5" y="332" font-family="Arial, Helvetica, sans-serif" font-size="10" font-style="italic" fill="#52606D" text-anchor="middle">capacidad</text>
+<text x="445.5" y="350" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">ImportArticlesInterface</text>
+<line x1="324" y1="359" x2="567" y2="359" stroke="#CBD2D9"/>
+<text x="334" y="377" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">fileTypes()</text>
+<text x="334" y="397" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">importFrom(fileName)</text>
+<rect x="578" y="315" width="243" height="74" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="699.5" y="332" font-family="Arial, Helvetica, sans-serif" font-size="10" font-style="italic" fill="#52606D" text-anchor="middle">capacidad</text>
+<text x="699.5" y="350" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">PermissionProvider</text>
+<line x1="578" y1="359" x2="821" y2="359" stroke="#CBD2D9"/>
+<text x="588" y="377" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">permissions()</text>
+<rect x="832" y="315" width="243" height="94" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="953.5" y="332" font-family="Arial, Helvetica, sans-serif" font-size="10" font-style="italic" fill="#52606D" text-anchor="middle">capacidad</text>
+<text x="953.5" y="350" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">ReportProvider</text>
+<line x1="832" y1="359" x2="1075" y2="359" stroke="#CBD2D9"/>
+<text x="842" y="377" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">reports()</text>
+<text x="842" y="397" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">runReport(id, filter, ...)</text>
+<rect x="1090" y="315" width="240" height="94" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="1210.0" y="332" font-family="Arial, Helvetica, sans-serif" font-size="10" font-style="italic" fill="#52606D" text-anchor="middle">base opcional de una página (QWidget)</text>
+<text x="1210.0" y="350" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">AguaraWidget</text>
+<line x1="1090" y1="359" x2="1330" y2="359" stroke="#CBD2D9"/>
+<text x="1100" y="377" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">notify(msg)</text>
+<text x="1100" y="397" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">keepOpenChanged()</text>
+<text x="70" y="465" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">Cada interfaz tiene un ID que termina en el nivel de API: org.AguaraPOS.ModuleInterface/1.</text>
+<text x="70" y="485" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">El core lee ese ID de los metadatos del plugin: con otro nivel lo salta, sin cargar su código.</text>
+<text x="70" y="505" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">Servicios por service&lt;T&gt;(): Product, Inventory, User, Cash, Sales, Print, Customer, Return y Report.</text>
+<rect x="40" y="545" width="1320" height="95" rx="6" ry="6" fill="#FFFFFF" stroke="#B84A0A" stroke-width="1.2"/>
+<text x="60" y="571" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#B84A0A" text-anchor="start">En el core</text>
+<text x="60" y="595" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2933" text-anchor="start">CoreHost implementa AguaraHost y lleva los avisos a la ventana. MainWindow::loadPlugins() revisa el nivel de API,</text>
+<text x="60" y="617" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2933" text-anchor="start">carga cada DLL, llama a initialize() y pide las capacidades con qobject_cast.</text>
+<text x="40" y="675" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="bold" fill="#1F2933" text-anchor="start">Quién implementa qué</text>
+<rect x="40" y="693" width="1320" height="32" rx="0" ry="0" fill="#1F2933" stroke="#1F2933" stroke-width="1.2"/>
+<text x="60" y="714" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">Módulo</text>
+<text x="240" y="714" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">Clase raíz</text>
+<text x="640" y="714" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Widget</text>
+<text x="820" y="714" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Importar</text>
+<text x="1000" y="714" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Permisos</text>
+<text x="1180" y="714" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Reportes</text>
+<rect x="40" y="725" width="1320" height="34" rx="0" ry="0" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="0.6"/>
+<text x="60" y="747" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">Clientes</text>
+<text x="240" y="747" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2933" text-anchor="start">CustomersFactory</text>
+<circle cx="640" cy="742" r="6" fill="#B84A0A"/>
+<circle cx="1000" cy="742" r="6" fill="#B84A0A"/>
+<rect x="40" y="759" width="1320" height="34" rx="0" ry="0" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="0.6"/>
+<text x="60" y="781" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">Importar</text>
+<text x="240" y="781" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2933" text-anchor="start">ImportModule</text>
+<circle cx="820" cy="776" r="6" fill="#B84A0A"/>
+<rect x="40" y="793" width="1320" height="34" rx="0" ry="0" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="0.6"/>
+<text x="60" y="815" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">Inventario</text>
+<text x="240" y="815" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2933" text-anchor="start">InventoryFactory</text>
+<circle cx="640" cy="810" r="6" fill="#B84A0A"/>
+<circle cx="1000" cy="810" r="6" fill="#B84A0A"/>
+<rect x="40" y="827" width="1320" height="34" rx="0" ry="0" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="0.6"/>
+<text x="60" y="849" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">Reportes</text>
+<text x="240" y="849" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2933" text-anchor="start">ReportsFactory</text>
+<circle cx="640" cy="844" r="6" fill="#B84A0A"/>
+<circle cx="1000" cy="844" r="6" fill="#B84A0A"/>
+<rect x="40" y="861" width="1320" height="34" rx="0" ry="0" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="0.6"/>
+<text x="60" y="883" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">Usuarios</text>
+<text x="240" y="883" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2933" text-anchor="start">UsersFactory</text>
+<circle cx="640" cy="878" r="6" fill="#B84A0A"/>
+<circle cx="1000" cy="878" r="6" fill="#B84A0A"/>
+<rect x="40" y="895" width="1320" height="34" rx="0" ry="0" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="0.6"/>
+<text x="60" y="917" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">Ventas</text>
+<text x="240" y="917" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2933" text-anchor="start">SalesModuleFactory</text>
+<circle cx="640" cy="912" r="6" fill="#B84A0A"/>
+<circle cx="1000" cy="912" r="6" fill="#B84A0A"/>
+<text x="40" y="955" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">ReportProvider queda para módulos futuros: los reportes de hoy los da el core y el módulo Reportes solo los muestra.</text>
+</svg>

@@ -231,6 +231,7 @@ qint64 SqlReturnService::processReturn(const ReturnRequest &r)
                        AguaraSale::formatNumber(sale->sale.registerId, sale->sale.number), QString(),
                        tr("Gs. %1 por %2, autorizó %3: %4").arg(AguaraMoney::format(amount), AguaraSale::methodName(r.method),
                                                                  r.authorizedBy, r.reason.trimmed()));
+    m_sales->stockChanged();
     return id;
 }
 

@@ -67,6 +67,11 @@ public:
 
     QString lastError() const override { return m_lastError; }
 
+signals:
+    /// Articles or stock may have changed: here, on another till, or while
+    /// the connection was down.
+    void listsRefreshed();
+
 private:
     QSqlDatabase db() const;
     bool exec(QSqlQuery &q) const;

@@ -36,6 +36,7 @@ SOURCES      +=     \
     sqlsalesservice.cpp \
     sqlinventoryservice.cpp \
     sqluserservice.cpp \
+    lowstockwatcher.cpp \
     stockledger.cpp
 
 HEADERS      +=     \
@@ -66,6 +67,7 @@ HEADERS      +=     \
     sqlsalesservice.h \
     sqlinventoryservice.h \
     sqluserservice.h \
+    lowstockwatcher.h \
     stockledger.h
 
 FORMS        +=     \

@@ -9,8 +9,9 @@ namespace Ui {
 class PageCero;
 }
 
-/// The permanent "Avisos" (notifications) page: a column of cards, newest
-/// first, or an empty state when there are none.
+/// The "Avisos" (notifications) page: a column of cards, newest first, or an
+/// empty state when there are none. It lives as long as the window: closing
+/// its tab only hides it, and cards keep arriving.
 class PageCero : public QWidget
 {
     Q_OBJECT

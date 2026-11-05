@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900">
+<rect width="1400" height="900" fill="#FFFFFF"/>
+<text x="40" y="42" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="bold" fill="#B84A0A" text-anchor="start">Estructura general</text>
+<text x="40" y="64" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#52606D" text-anchor="start">Qué corre en cada caja y con qué habla.</text>
+<rect x="40" y="90" width="900" height="770" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="60" y="118" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="bold" fill="#1F2933" text-anchor="start">Cada caja (Windows 7 SP1, 32 bits)</text>
+<rect x="70" y="135" width="840" height="110" rx="6" ry="6" fill="#FDF0E7" stroke="#B84A0A" stroke-width="1.2"/>
+<text x="490.0" y="178.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#B84A0A" text-anchor="middle">aguara.exe</text>
+<text x="490.0" y="196.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">src/app + src/core, una biblioteca estática</text>
+<text x="490.0" y="212.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">Ventana principal, servicios, acceso a datos y carga de módulos</text>
+<rect x="70" y="300" width="840" height="90" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="490.0" y="341.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">aguara_interfaces.dll</text>
+<text x="490.0" y="359.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">src/interfaces: interfaces, tipos de datos y estilo, compartidos. Nivel de API 1</text>
+<polyline points="490,245 490,300" fill="none" stroke="#7B8794" stroke-width="1.4"/>
+<polygon points="494.5,291.0 490,300 485.5,291.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
+<rect x="477.1340000629425" y="265" width="25.73199987411499" height="16" fill="#FFFFFF"/>
+<text x="490" y="276" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">usa</text>
+<rect x="70" y="445" width="840" height="165" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="90" y="470" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">modules\  (un plugin modulo_*.dll por módulo)</text>
+<rect x="90" y="485" width="125" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="152.5" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Inventario</text>
+<text x="152.5" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">control_inventario</text>
+<rect x="225" y="485" width="125" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="287.5" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Clientes</text>
+<text x="287.5" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">customers</text>
+<rect x="360" y="485" width="125" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="422.5" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Importar</text>
+<text x="422.5" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">importar</text>
+<rect x="495" y="485" width="125" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="557.5" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Ventas</text>
+<text x="557.5" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">sales_module</text>
+<rect x="630" y="485" width="125" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="692.5" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Reportes</text>
+<text x="692.5" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">stats</text>
+<rect x="765" y="485" width="125" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="827.5" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Usuarios</text>
+<text x="827.5" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">usuarios</text>
+<text x="90" y="588" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">Un módulo no usa SQL: pide servicios al core en initialize().</text>
+<polyline points="490,445 490,390" fill="none" stroke="#7B8794" stroke-width="1.4"/>
+<polygon points="485.5,399.0 490,390 494.5,399.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
+<rect x="474.07600009441376" y="410" width="31.847999811172485" height="16" fill="#FFFFFF"/>
+<text x="490" y="421" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">usan</text>
+<line x1="70.0" y1="190.0" x2="64.0" y2="190.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="60.0" y1="190.0" x2="54.0" y2="190.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="190.0" x2="52.0" y2="196.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="200.0" x2="52.0" y2="206.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="210.0" x2="52.0" y2="216.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="220.0" x2="52.0" y2="226.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="230.0" x2="52.0" y2="236.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="240.0" x2="52.0" y2="246.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="250.0" x2="52.0" y2="256.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="260.0" x2="52.0" y2="266.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="270.0" x2="52.0" y2="276.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="280.0" x2="52.0" y2="286.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="290.0" x2="52.0" y2="296.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="300.0" x2="52.0" y2="306.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="310.0" x2="52.0" y2="316.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="320.0" x2="52.0" y2="326.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="330.0" x2="52.0" y2="336.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="340.0" x2="52.0" y2="346.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="350.0" x2="52.0" y2="356.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="360.0" x2="52.0" y2="366.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="370.0" x2="52.0" y2="376.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="380.0" x2="52.0" y2="386.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="390.0" x2="52.0" y2="396.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="400.0" x2="52.0" y2="406.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="410.0" x2="52.0" y2="416.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="420.0" x2="52.0" y2="426.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="430.0" x2="52.0" y2="436.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="440.0" x2="52.0" y2="446.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="450.0" x2="52.0" y2="456.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="460.0" x2="52.0" y2="466.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="470.0" x2="52.0" y2="476.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="480.0" x2="52.0" y2="486.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="490.0" x2="52.0" y2="496.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="500.0" x2="52.0" y2="506.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="510.0" x2="52.0" y2="516.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="520.0" x2="52.0" y2="526.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="52.0" y1="527.0" x2="58.0" y2="527.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="62.0" y1="527.0" x2="68.0" y2="527.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="72.0" y1="527.0" x2="78.0" y2="527.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="82.0" y1="527.0" x2="88.0" y2="527.0" stroke="#7B8794" stroke-width="1.4"/>
+<polygon points="79.0,522.5 88,527 79.0,531.5" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
+<text x="47" y="360" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle" transform="rotate(-90 47 360)">carga los de su nivel de API</text>
+<rect x="70" y="645" width="840" height="190" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="90" y="670" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">En %APPDATA%\Aguara\AguaraPOS</text>
+<rect x="90" y="685" width="192" height="90" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="186.0" y="718.0" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">aguara.ini</text>
+<text x="186.0" y="736.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">conexión e impresora</text>
+<text x="186.0" y="752.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">contraseña cifrada</text>
+<rect x="292" y="685" width="192" height="90" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="388.0" y="718.0" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">ventas-pendientes-aguara.db</text>
+<text x="388.0" y="736.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">cola: cada venta se guarda</text>
+<text x="388.0" y="752.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">aquí antes de subir</text>
+<rect x="494" y="685" width="192" height="90" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="590.0" y="718.0" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">aguara.db</text>
+<text x="590.0" y="736.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">datos, solo con</text>
+<text x="590.0" y="752.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">un puesto (SQLite)</text>
+<rect x="696" y="685" width="192" height="90" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="792.0" y="718.0" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">logs\aguara.log</text>
+<text x="792.0" y="736.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">detalle técnico</text>
+<text x="792.0" y="752.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">de los errores</text>
+<text x="90" y="805" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">La cola sigue funcionando sin servidor: la venta en curso se cobra y sube al volver la conexión.</text>
+<rect x="1040" y="135" width="320" height="110" rx="6" ry="6" fill="#FDF0E7" stroke="#B84A0A" stroke-width="1.2"/>
+<text x="1200.0" y="178.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#B84A0A" text-anchor="middle">PostgreSQL 10.23</text>
+<text x="1200.0" y="196.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">en una de las cajas, con IP fija</text>
+<text x="1200.0" y="212.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">base de datos aguara</text>
+<polyline points="910,175 1040,175" fill="none" stroke="#7B8794" stroke-width="1.4"/>
+<polygon points="1031.0,170.5 1040,175 1031.0,179.5" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
+<polyline points="1040,205 910,205" fill="none" stroke="#7B8794" stroke-width="1.4"/>
+<polygon points="919.0,209.5 910,205 919.0,200.5" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
+<rect x="946.2390001416206" y="158" width="57.52199971675873" height="16" fill="#FFFFFF"/>
+<text x="975" y="169" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">TCP 5432</text>
+<rect x="950.8315000236034" y="213" width="48.33699995279312" height="16" fill="#FFFFFF"/>
+<text x="975" y="224" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">NOTIFY</text>
+<rect x="1040" y="330" width="320" height="80" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="1200.0" y="366.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Las demás cajas</text>
+<text x="1200.0" y="384.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">AguaraPOS, igual que esta</text>
+<polyline points="1200,330 1200,245" fill="none" stroke="#7B8794" stroke-width="1.4"/>
+<polygon points="1195.5,254.0 1200,245 1204.5,254.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
+<rect x="1137.6285001337528" y="281" width="124.74299973249435" height="16" fill="#FFFFFF"/>
+<text x="1200" y="292" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">misma base, misma red</text>
+<rect x="1040" y="500" width="320" height="90" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="1200.0" y="533.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Impresora y cajón</text>
+<text x="1200.0" y="551.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">ESC/POS o impresora común</text>
+<text x="1200.0" y="567.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">por la cola de Windows</text>
+<polyline points="940,545 1040,545" fill="none" stroke="#7B8794" stroke-width="1.4"/>
+<polygon points="1031.0,540.5 1040,545 1031.0,549.5" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
+<rect x="1040" y="680" width="320" height="110" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="1200.0" y="723.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Terminal de tarjetas y banco</text>
+<text x="1200.0" y="741.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">fuera del sistema: el cajero</text>
+<text x="1200.0" y="757.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">copia el código del comprobante</text>
+<line x1="1040.0" y1="735.0" x2="1034.0" y2="735.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="1030.0" y1="735.0" x2="1024.0" y2="735.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="1020.0" y1="735.0" x2="1014.0" y2="735.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="1010.0" y1="735.0" x2="1004.0" y2="735.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="1000.0" y1="735.0" x2="994.0" y2="735.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="990.0" y1="735.0" x2="984.0" y2="735.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="980.0" y1="735.0" x2="974.0" y2="735.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="970.0" y1="735.0" x2="964.0" y2="735.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="960.0" y1="735.0" x2="954.0" y2="735.0" stroke="#7B8794" stroke-width="1.4"/>
+<line x1="950.0" y1="735.0" x2="944.0" y2="735.0" stroke="#7B8794" stroke-width="1.4"/>
+<polygon points="949.0,739.5 940,735 949.0,730.5" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
+</svg>

@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1300" height="930" viewBox="0 0 1300 930">
+<rect width="1300" height="930" fill="#FFFFFF"/>
+<text x="40" y="42" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="bold" fill="#B84A0A" text-anchor="start">Estructura del core</text>
+<text x="40" y="64" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#52606D" text-anchor="start">src/core por capas: cada una usa la de abajo.</text>
+<rect x="40" y="85" width="1220" height="120" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="60" y="109" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#1F2933" text-anchor="start">Interfaz</text>
+<rect x="60.0" y="119.0" width="188.33333333333334" height="80.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="154.16666666666669" y="147.0" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">MainWindow</text>
+<text x="154.16666666666669" y="165.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">menús, sesión, páginas</text>
+<text x="154.16666666666669" y="181.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">carga los módulos</text>
+<rect x="258.33333333333337" y="119.0" width="188.33333333333334" height="80.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="352.50000000000006" y="155.0" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">PageCero</text>
+<text x="352.50000000000006" y="173.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">la página Avisos</text>
+<rect x="456.6666666666667" y="119.0" width="188.33333333333334" height="80.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="550.8333333333334" y="155.0" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">NotificationDialog</text>
+<text x="550.8333333333334" y="173.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">cada aviso</text>
+<rect x="655.0" y="119.0" width="188.33333333333334" height="80.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="749.1666666666666" y="147.0" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">sessiondialogs</text>
+<text x="749.1666666666666" y="165.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">ingreso, bloqueo,</text>
+<text x="749.1666666666666" y="181.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">supervisor</text>
+<rect x="853.3333333333334" y="119.0" width="188.33333333333334" height="80.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="947.5" y="155.0" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">Preferencias</text>
+<text x="947.5" y="173.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">conexión e impresora</text>
+<rect x="1051.6666666666667" y="119.0" width="188.33333333333334" height="80.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="1145.8333333333335" y="155.0" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">ModuleDialog</text>
+<text x="1145.8333333333335" y="173.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">módulos instalados</text>
+<rect x="40" y="235" width="1220" height="120" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="60" y="259" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#1F2933" text-anchor="start">Para los módulos</text>
+<rect x="60.0" y="269.0" width="585.0" height="80.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="352.5" y="305.0" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">CoreHost</text>
+<text x="352.5" y="323.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">implementa AguaraHost: registro de servicios y avisos</text>
+<rect x="655.0" y="269.0" width="585.0" height="80.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="947.5" y="305.0" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">LowStockWatcher</text>
+<text x="947.5" y="323.0" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">aviso de stock bajo al cambiar el stock</text>
+<rect x="40" y="385" width="1220" height="210" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="60" y="409" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#1F2933" text-anchor="start">Servicios</text>
+<rect x="60.0" y="419.0" width="228.0" height="67.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="174.0" y="448.5" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">SqlProductService</text>
+<text x="174.0" y="466.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">artículos, marcas, rubros</text>
+<rect x="298.0" y="419.0" width="228.0" height="67.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="412.0" y="448.5" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">SqlInventoryService</text>
+<text x="412.0" y="466.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">compras, recuentos, proveedores</text>
+<rect x="536.0" y="419.0" width="228.0" height="67.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="650.0" y="448.5" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">SqlUserService</text>
+<text x="650.0" y="466.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">usuarios, permisos, auditoría</text>
+<rect x="774.0" y="419.0" width="228.0" height="67.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="888.0" y="448.5" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">SqlCashService</text>
+<text x="888.0" y="466.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">cajas, sesiones, arqueo</text>
+<rect x="1012.0" y="419.0" width="228.0" height="67.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="1126.0" y="448.5" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">SqlSalesService</text>
+<text x="1126.0" y="466.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">cobro y cola de ventas</text>
+<rect x="60.0" y="496.0" width="287.5" height="67.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="203.75" y="525.5" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">SqlPrintService</text>
+<text x="203.75" y="543.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">tickets, cajón, PDF</text>
+<rect x="357.5" y="496.0" width="287.5" height="67.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="501.25" y="525.5" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">SqlCustomerService</text>
+<text x="501.25" y="543.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">clientes</text>
+<rect x="655.0" y="496.0" width="287.5" height="67.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="798.75" y="525.5" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">SqlReturnService</text>
+<text x="798.75" y="543.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">devoluciones, notas de crédito</text>
+<rect x="952.5" y="496.0" width="287.5" height="67.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="1096.25" y="525.5" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">SqlReportService</text>
+<text x="1096.25" y="543.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">reportes, CSV y PDF</text>
+<text x="60" y="584" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">Sales usa Product y Cash. Return y Print usan Sales y Cash. Inventory y Report usan Product.</text>
+<rect x="40" y="615" width="1220" height="105" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="60" y="639" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#1F2933" text-anchor="start">Piezas de los servicios</text>
+<rect x="60.0" y="649.0" width="287.5" height="65.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="203.75" y="677.5" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">StockLedger</text>
+<text x="203.75" y="695.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">único que cambia productos.stock</text>
+<rect x="357.5" y="649.0" width="287.5" height="65.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="501.25" y="677.5" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">SaleOutbox</text>
+<text x="501.25" y="695.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">la cola local, en SQLite</text>
+<rect x="655.0" y="649.0" width="287.5" height="65.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="798.75" y="677.5" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">EscPos</text>
+<text x="798.75" y="695.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">arma los tickets</text>
+<rect x="952.5" y="649.0" width="287.5" height="65.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="1096.25" y="677.5" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">PasswordHash</text>
+<text x="1096.25" y="695.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">PBKDF2-SHA256</text>
+<rect x="40" y="750" width="1220" height="105" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="60" y="774" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#1F2933" text-anchor="start">Datos</text>
+<rect x="60.0" y="784.0" width="386.6666666666667" height="65.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="253.33333333333334" y="812.5" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">ConnectionMonitor</text>
+<text x="253.33333333333334" y="830.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">detecta cortes y reconecta</text>
+<rect x="456.6666666666667" y="784.0" width="386.6666666666667" height="65.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="650.0" y="812.5" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">Database</text>
+<text x="650.0" y="830.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">abre la base y aplica migraciones</text>
+<rect x="853.3333333333334" y="784.0" width="386.6666666666667" height="65.0" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="1046.6666666666667" y="812.5" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="middle">Backup</text>
+<text x="1046.6666666666667" y="830.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">copia de seguridad diaria</text>
+<text x="40" y="885" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">En todas las capas: logging (registro), errors (mensajes para el usuario) e InactivityWatcher (bloqueo por inactividad).</text>
+<polyline points="650,205 650,235" fill="none" stroke="#B84A0A" stroke-width="1.4"/>
+<polygon points="654.5,226.0 650,235 645.5,226.0" fill="#B84A0A" stroke="#B84A0A" stroke-width="1.2"/>
+<polyline points="650,355 650,385" fill="none" stroke="#B84A0A" stroke-width="1.4"/>
+<polygon points="654.5,376.0 650,385 645.5,376.0" fill="#B84A0A" stroke="#B84A0A" stroke-width="1.2"/>
+<polyline points="650,595 650,615" fill="none" stroke="#B84A0A" stroke-width="1.4"/>
+<polygon points="654.5,606.0 650,615 645.5,606.0" fill="#B84A0A" stroke="#B84A0A" stroke-width="1.2"/>
+<polyline points="650,720 650,750" fill="none" stroke="#B84A0A" stroke-width="1.4"/>
+<polygon points="654.5,741.0 650,750 645.5,741.0" fill="#B84A0A" stroke="#B84A0A" stroke-width="1.2"/>
+</svg>

@@ -1,8 +1,10 @@
 #!/bin/sh
 # Stops a commit that changes the public headers without raising the API level.
 # Turn it on once in each clone: git config core.hooksPath .githooks
-if ! command -v python > /dev/null; then
-    echo "python not found: API level not checked"
+root="$(git rev-parse --show-toplevel)"
+. "$root/scripts/find-python.sh"
+if [ -z "$PYTHON" ]; then
+    echo "Python 3 not found: API level not checked"
     exit 0
 fi
-exec python -B "$(git rev-parse --show-toplevel)/autoVersion.py" check
+exec $PYTHON -B "$root/autoVersion.py" check

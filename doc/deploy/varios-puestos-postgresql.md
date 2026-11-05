@@ -68,17 +68,10 @@ version con soporte vigente; el servidor tambien puede ser Linux. Los puestos so
 
 ## 2. Cada puesto
 
-AguaraPOS es de 32 bits, asi que necesita el **cliente PostgreSQL de 32 bits**. La ultima
-version publicada para Windows de 32 bits es PostgreSQL 10.x (compatible con Windows 7 y con
-servidores PostgreSQL actuales):
-
-1. Descargar `postgresql-10.23-1-windows-binaries.zip`
-   (https://get.enterprisedb.com/postgresql/postgresql-10.23-1-windows-binaries.zip) y copiar
-   de su carpeta `pgsql\bin` al lado de `aguara.exe`:
-   `libpq.dll`, `libssl-1_1.dll`, `libcrypto-1_1.dll`, `libintl-8.dll`, `libiconv-2.dll`.
-2. Instalar el **Visual C++ 2013 Redistributable (x86)** de Microsoft (lo requiere `libpq.dll`).
-   Con el instalador de AguaraPOS estos dos pasos no hacen falta: ya trae esas DLL y el runtime.
-3. Abrir **Preferencias > Conexion a los datos** como administrador (o iniciar `aguara.exe --configure-database`), elegir **Servidor en la red**, completar
+1. Ejecutar `aguarapos-X.Y.Z.exe` como administrador. Necesita Windows 7 SP1 o mas nuevo. Instala el
+   programa, los modulos, el cliente PostgreSQL de 32 bits y el runtime de Visual C++ que este
+   necesita: no hay que copiar nada mas. La caja del servidor lo instala como las demas.
+2. Abrir **Preferencias > Conexion a los datos** como administrador (o iniciar `aguara.exe --configure-database`), elegir **Servidor en la red**, completar
    servidor, puerto, base de datos, usuario y contraseña, y **Probar conexion**.
    La configuracion se guarda en `%APPDATA%\Aguara\AguaraPOS\aguara.ini`.
    La contraseña queda **cifrada** con DPAPI de Windows: solo el mismo usuario de Windows en el
@@ -90,7 +83,8 @@ servidores PostgreSQL actuales):
    `%APPDATA%\postgresql\pgpass.conf` (linea `192.168.1.10:5432:aguara:aguara:contraseña`),
    que queda en texto plano en el perfil del usuario de Windows.
 
-Cuando un puesto modifica productos, los demas actualizan sus listas automaticamente.
+Cuando un puesto modifica productos o su stock, los demas actualizan sus listas automaticamente, y el
+aviso de stock bajo llega en el momento a quien pueda abrir Inventario en cualquiera de los puestos.
 
 ## Actualizar con un parche
 
@@ -107,6 +101,16 @@ ventas en cola esperan a salvo hasta que reciba el parche. Si una caja se actual
 que las demas, no hay daño: solo hay que aplicar el parche al resto.
 
 ## Para desarrolladores
+
+Sin instalador, por ejemplo al probar una compilacion en otro equipo, AguaraPOS necesita el **cliente
+PostgreSQL de 32 bits**: la ultima version publicada para Windows de 32 bits es la 10.x, compatible con
+Windows 7 y con servidores PostgreSQL actuales.
+
+1. Descargar `postgresql-10.23-1-windows-binaries.zip`
+   (https://get.enterprisedb.com/postgresql/postgresql-10.23-1-windows-binaries.zip) y copiar
+   de su carpeta `pgsql\bin` al lado de `aguara.exe`:
+   `libpq.dll`, `libssl-1_1.dll`, `libcrypto-1_1.dll`, `libintl-8.dll`, `libiconv-2.dll`.
+2. Instalar el **Visual C++ 2013 Redistributable (x86)** de Microsoft (lo requiere `libpq.dll`).
 
 Para que la compilacion copie las DLL del cliente junto a `aguara.exe`, definir la variable
 `AGUARA_LIBPQ_DIR` (variable de entorno, o argumento de qmake en Qt Creator) con la carpeta

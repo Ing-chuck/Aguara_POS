@@ -46,12 +46,14 @@ for exe in tst_*; do
     fi
 done
 # versions: the public headers match the API level, and the tool itself
-if command -v python > /dev/null; then
-    python -B "$ROOT/autoVersion.py" check || status=1
-    python -B "$ROOT/tests/test_autoversion.py" 2>&1 | tail -3 | sed 's/^/    /'
+. "$ROOT/scripts/find-python.sh"
+if [ -n "$PYTHON" ]; then
+    $PYTHON -B "$ROOT/autoVersion.py" check || status=1
+    $PYTHON -B "$ROOT/tests/test_autoversion.py" 2>&1 | tail -3 | sed 's/^/    /'
     [ "${PIPESTATUS[0]}" -eq 0 ] || status=1
 else
-    echo "python not found: autoVersion.py not checked"
+    echo "Python 3 not found: autoVersion.py not checked"
+    [ -z "${CI:-}" ] || status=1            # CI must not skip it quietly
 fi
 [ $status -eq 0 ] && echo "All suites passed." || echo "FAILED: see $OUT"
 exit $status

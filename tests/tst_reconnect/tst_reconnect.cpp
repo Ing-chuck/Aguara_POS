@@ -7,6 +7,7 @@
 //
 // The functions run in order and share the two tills, like a shop does.
 #include "testsupport.h"
+#include "lowstockwatcher.h"
 
 #include <QAbstractItemModel>
 #include <QProcess>
@@ -25,6 +26,7 @@ private slots:
     void cleanupTestCase();
 
     void otherTillHearsChanges();
+    void otherTillHearsLowStock();
     void readRetriesAfterServerRestart();
     void transactionAfterServerRestart();
     void idleTillRecoversAndListensAgain();
@@ -115,6 +117,33 @@ void tst_Reconnect::otherTillHearsChanges()
     QVERIFY(saveProduct(QStringLiteral("5005"), QStringLiteral("GALLETITAS"), 4500));   // till 1 writes and NOTIFYs
     QVERIFY(till2Shows(++m_rows));                                                       // till 2 refreshes by itself
     QCOMPARE(m_products2->product(QStringLiteral("5005"))->price, Money(4500));
+}
+
+/// A sale or an adjustment at one till reaches who's signed in at the other.
+void tst_Reconnect::otherTillHearsLowStock()
+{
+    Product p;
+    p.code = QStringLiteral("5006");
+    p.description = QStringLiteral("YERBA");
+    p.price = 10000;
+    p.stock = AguaraQuantity::whole(10);
+    p.stockMin = AguaraQuantity::whole(5);
+    QVERIFY(m_till1.products->saveProduct(p));
+    QVERIFY(till2Shows(++m_rows));
+
+    SqlInventoryService inventory2(m_monitor2.get(), m_products2.get());
+    CoreHost host2;
+    QStringList titles;
+    connect(&host2, &CoreHost::notificationRequested, this,
+            [&titles](const ModuleMsg &msg) { titles << msg.title; });
+    LowStockWatcher watcher(m_products2.get(), &inventory2, nullptr, &host2);
+    watcher.check();
+    QCOMPARE(titles, QStringList());
+
+    QVERIFY(m_till1.inventory->adjustStock(p.code, -AguaraQuantity::whole(6), QStringLiteral("rotura")));
+    QVERIFY(waitFor([&titles] { return !titles.isEmpty(); }, 8000));
+    QCOMPARE(titles, QStringList { QStringLiteral("1 artículo con stock bajo") });
+    QVERIFY(m_till1.inventory->adjustStock(p.code, AguaraQuantity::whole(6), QStringLiteral("hallado")));
 }
 
 void tst_Reconnect::readRetriesAfterServerRestart()

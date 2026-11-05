@@ -8,27 +8,28 @@ Objetivo: llevar AguaraPOS a una **primera versión usable en un comercio real**
 
 ## 1. Dónde estamos
 
-**Lo que ya funciona**
+**Lo que ya funciona** (versión 1.0.0, todavía sin etiquetar: falta probarla en una caja real)
 
 | Área | Estado |
 |---|---|
 | Arquitectura | Core, `aguara_interfaces.dll` y módulos (plugins con `QPluginLoader`). Compilación SUBDIRS. Wizard de Qt Creator para crear módulos. |
 | Plataforma | Qt 5.15.2, MinGW de 32 bits. Compatible con Windows 7. |
-| Datos | SQLite (un puesto) o PostgreSQL (varios puestos en LAN). Migraciones por dueño, `NOTIFY` entre cajas y reconexión automática en segundo plano. |
+| Datos | SQLite (un puesto) o PostgreSQL (varios puestos en LAN). Migraciones por dueño, `NOTIFY` entre cajas, reconexión en segundo plano y cola local de ventas, para no perder ninguna sin conexión. |
 | Dinero | `Money = qint64` en guaraníes enteros, con IVA incluido (10 %, 5 % y exenta). Formato `es_PY`. |
-| Productos | `ProductService` en el core: ABM de artículos, marcas y rubros, más importación desde CSV o Excel. |
-| UI | Ventana principal, páginas de módulo y notificaciones. |
+| Usuarios | Roles, permisos, autorización de supervisor, bloqueo y auditoría. |
+| Inventario | Stock como libro de movimientos, compras, proveedores, recuentos, cambio de precios, etiquetas y aviso de stock bajo en el momento. |
+| Ventas | Caja con arqueo a ciegas, pagos combinados, comprobantes por conciliar, clientes, devoluciones y notas de crédito. |
+| Salidas | Ticket interno ESC/POS, cajón, planilla de cierre y reportes con exportación a PDF y CSV. |
+| Versiones | Versión del programa y nivel de API separados, con `autoVersion.py`. Un módulo de otra API no carga. |
+| Instalación | Instalador y parches con Inno Setup. Manuales del cajero y del encargado en PDF. |
+| Calidad | Pruebas en el repositorio, en SQLite y PostgreSQL, y CI en GitHub Actions. |
 
-**Lo que falta o es provisorio**
+**Lo que falta para usarlo en un comercio**
 
-- **Ventas:** el módulo de ventas está vacío.
-- **Usuarios:** no hay usuarios ni permisos; cualquiera puede hacer cualquier cosa.
-- **Inventario:** el stock es un número que se edita a mano. No hay movimientos, compras ni ajustes.
-- **Salidas:** no hay caja, impresión ni reportes.
-- **Contraseñas:** la de la base de datos se guarda en texto plano, en `aguara.ini`.
-- **Errores:** algunos mensajes muestran el texto crudo del driver (por ejemplo, `QPSQL: Unable to send query`).
-- **Calidad:** las pruebas viven fuera del repositorio y no hay CI.
-- **Instalador:** no existe.
+- **Probar en el equipo real:** ni el instalador ni el parche se ejecutaron todavía, y el programa no corrió en Windows 7 de 32 bits.
+- **PostgreSQL 10.23:** las pruebas corren contra PostgreSQL 17, no contra el servidor de 32 bits que usará la caja.
+- **Hardware:** no se probó una impresora térmica ni un cajón reales.
+- **Piloto:** falta elegir el comercio, y la impresora y el cajón (decisión 3 de la sección 5).
 
 ---
 
@@ -49,15 +50,17 @@ Servicios nuevos:
 |---|---|
 | `UserService` | Inicio de sesión, usuarios, roles, permisos, autorización de supervisor y auditoría |
 | `InventoryService` | Movimientos de stock, compras, ajustes, recuentos y proveedores |
-| `SalesService` | Venta abierta (carrito), cobro, anulación, devolución y numeración |
+| `SalesService` | Cobro, cola local de ventas, anulación y numeración. La venta abierta vive en la pantalla |
 | `CashService` | Cajas, sesiones de caja, movimientos de efectivo, arqueo y cierre |
 | `PrintService` | Comprobantes, reimpresión y apertura del cajón |
 | `ReportService` | Consultas de reportes, exportación a CSV o PDF, e impresión |
-| `SchemaService` | Permite a los módulos registrar **sus propias migraciones** (el mecanismo por dueño ya existe; falta publicarlo) |
+| `CustomerService` | Clientes |
+| `ReturnService` | Devoluciones y notas de crédito |
+| `SchemaService` | *(Pendiente, para la fase 7)* Permite a los módulos registrar **sus propias migraciones** (el mecanismo por dueño ya existe; falta publicarlo) |
 
 ### 2.2 Extensión por plugins: nuevas interfaces
 
-El diagrama de base de datos tiene muchos tipos de línea de venta:
+El diseño original de la base (`doc/arquitectura/db/test_database.graphml`) tiene muchos tipos de línea de venta:
 
 - `ventas_item_producto`
 - `ventas_item_minicarga`
@@ -67,7 +70,7 @@ El diagrama de base de datos tiene muchos tipos de línea de venta:
 - `western_union_transaction`
 - `pagos_transacciones`
 
-En vez de meter todos esos tipos en el core, cada sistema externo será un **módulo** que implementa:
+En vez de meter todos esos tipos en el core, cada sistema externo será un **módulo** que implementa estas interfaces. Ya existen `PermissionProvider` y `ReportProvider`; las otras se harán con la fase 7:
 
 | Interfaz | Para qué |
 |---|---|
@@ -148,7 +151,7 @@ Va primero porque todo lo demás necesita saber **quién** hizo cada cosa.
   - Códigos de balanza (EAN-13 con peso o precio embebido, prefijos 20 a 29).
 - [x] Varios códigos de barras por artículo, para presentaciones y proveedores distintos.
 - [x] Historial de precios, cambio masivo por porcentaje (por rubro, marca o proveedor) e impresión de etiquetas de góndola.
-- [x] Alertas de stock mínimo, aprovechando las notificaciones del core.
+- [x] Alertas de stock mínimo, aprovechando las notificaciones del core. Llegan en el momento, también desde la otra caja (`LowStockWatcher`), y se actualizan solas al reponer.
 - [x] Stock negativo: **se permite**, con aviso y registro, para que una carga atrasada no frene la venta.
 
 **Hecho cuando:**
@@ -266,12 +269,11 @@ Es el corazón del sistema.
 
 Con las **fases 0 a 6** más este hito, el sistema sirve para un comercio de venta de productos.
 
-- [ ] **Instalador**, con Inno Setup (`installer/`), y **parches** que se aplican a mano en cada equipo:
-  - programa y módulos;
-  - runtime de MinGW y Qt;
-  - opción PostgreSQL: `libpq` de 32 bits, sus DLL y el runtime VC++ 2013 x86;
-  - accesos directos;
-  - probado en Windows 7 SP1 de 32 bits, el sistema del piloto.
+- [x] **Instalador**, con Inno Setup (`installer/`), y **parches** que se aplican a mano en cada equipo: programa y módulos, runtime de MinGW y Qt, `libpq` de 32 bits con sus DLL, runtime VC++ 2013 x86 y accesos directos. Se generan; falta ejecutarlos.
+- [ ] Probar el instalador y un parche en Windows 7 SP1 de 32 bits, el sistema del piloto.
+- [ ] Ejecutar las pruebas contra PostgreSQL 10.23 de 32 bits, el servidor del piloto.
+- [x] Versiones: `autoVersion.py` separa la versión del programa del nivel de API, con control antes de cada commit y al armar el instalador.
+- [ ] Etiquetar `v1.0.0` después de la prueba en una caja real. Una vez etiquetada, cualquier cambio necesita otra versión.
 - [x] Manual corto para el cajero y para el encargado (`doc/manual`, en PDF).
 - [ ] **Piloto** de dos semanas en un comercio real, con PostgreSQL en una de las dos cajas.
 - [ ] Corrección de lo que surja en el piloto antes de seguir con las fases 7 en adelante.
@@ -324,7 +326,7 @@ La forma exige definirla con el contador del comercio, porque la obligación dep
 
 ### Fase 9: Más adelante
 
-- **Contabilidad** (módulo previsto en `estructura_general.drawio`): asientos automáticos desde ventas, compras y caja, y exportación al sistema del contador.
+- **Contabilidad** (módulo previsto en el diseño original): asientos automáticos desde ventas, compras y caja, y exportación al sistema del contador.
 - **Varias sucursales:** stock por depósito, transferencias entre sucursales y reportes consolidados.
 - **Promociones:** combos, 2x1, precios por cantidad, listas de precios por cliente y horarios.
 - **Pedidos y presupuestos.**

@@ -288,6 +288,7 @@ void SqlProductService::refreshModels()
     }
     if (failed && m_monitor->connectionBroken())
         m_monitor->reconnect();     // on success, reconnected() refreshes again
+    emit listsRefreshed();
 }
 
 std::optional<Product> SqlProductService::product(const QString &code) const

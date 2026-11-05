@@ -147,6 +147,19 @@ bool SqlInventoryService::adjustStock(const QString &code, Quantity delta, const
     return true;
 }
 
+std::optional<QMap<QString, QString>> SqlInventoryService::lowStockNames() const
+{
+    QSqlQuery q(db());
+    q.prepare(QStringLiteral("SELECT codigo, descripcion FROM productos WHERE es_activo = 1 AND stock_min > 0"
+                             " AND stock <= stock_min"));
+    if (!exec(q))
+        return std::nullopt;
+    QMap<QString, QString> names;
+    while (q.next())
+        names.insert(q.value(0).toString(), q.value(1).toString());
+    return names;
+}
+
 QList<Product> SqlInventoryService::lowStock() const
 {
     QList<Product> result;

@@ -63,10 +63,13 @@ public:
 signals:
     /// The user saved other connection settings and wants them now.
     void restartRequested();
+    /// Someone else may be signed in, or the same person with other permissions.
+    void sessionChanged();
 
 protected:
     /// With a cash session open, leaving takes caja.salir_abierta.
     void closeEvent(QCloseEvent *event) override;
+    void changeEvent(QEvent *event) override;
 
 public slots:
     /// Status bar: where the data lives ("Este equipo", "Servidor 192.168.1.10").
@@ -88,6 +91,7 @@ private slots:
     void addTab(QWidget* widget = nullptr, QIcon ico = QIcon(), QString label = "");
     void onTabCloseRequested(int indx);
     void updateKeptPages();
+    void showNotifications();
     void onModuleNotification(ModuleMsg msg);
     void syncNavigation();
     void lockSession();
@@ -102,6 +106,9 @@ private:
     bool mayLeave();
     void openKeptPages();
     void closePage(int index);
+    void setClosable(QWidget *page, bool closable);
+    void markNewNotifications(bool unseen);
+    NotificationDialog *notificationCard(const QString &sender, const QString &id);
     void prepareWindow();
     void buildSidebar();
     void buildStatusBar();
@@ -140,7 +147,6 @@ private:
     QVBoxLayout *moduleNav = nullptr;
     QLabel *noModulesLabel = nullptr;
     QPushButton *notificationsButton = nullptr;
-    QLabel *notificationsBadge = nullptr;
     QWidget *sidebarUser = nullptr;
     QLabel *sidebarUserName = nullptr;
     QLabel *sidebarUserRole = nullptr;

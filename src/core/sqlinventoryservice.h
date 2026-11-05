@@ -3,6 +3,7 @@
 
 #include <inventoryservice.h>
 
+#include <QMap>
 #include <QObject>
 #include <QSqlDatabase>
 
@@ -27,6 +28,9 @@ public:
     QList<StockMovement> movements(const QString &code, int limit = 200) const override;
     bool adjustStock(const QString &code, Quantity delta, const QString &reason) override;
     QList<Product> lowStock() const override;
+    /// The same, code to description, in one query: it runs after every sale.
+    /// Nothing on a failure, which an empty list can't tell from "none low".
+    std::optional<QMap<QString, QString>> lowStockNames() const;
 
     ScanResult resolveScan(const QString &text) const override;
     QStringList barcodes(const QString &code) const override;

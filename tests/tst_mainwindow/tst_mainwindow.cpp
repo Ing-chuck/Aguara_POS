@@ -6,6 +6,7 @@
 #include "sqluserservice.h"
 #include "testsupport.h"
 #include "notificationdialog.h"
+#include "lowstockwatcher.h"
 #include "pagecero.h"
 
 #include <QAbstractButton>
@@ -43,7 +44,7 @@ private slots:
     void priorityLevel();
     void newestFirstAndDismissCloses();
     void lifetimeExpires();
-    void badgeCountsNotifications();
+    void dotMarksWhatNobodySaw();
     void emptyStateAndDismissAll();
     void sidebarMarksTheCurrentPage();
     void clockIs24Hour();
@@ -65,6 +66,10 @@ private slots:
     void lockScreenLeavesWithTheTillClosed();
     void restartAfterAConnectionChangeIsNotStopped();
     void modulesThatCantRunAreReported();
+    void installedModulesAreOnlyInTheHelpMenu();
+    void notificationsCloseWhileTheTillIsOpen();
+    void closingEverythingFallsBackOnNotifications();
+    void lowStockReachesWhoMayRestock();
 
 private:
     struct Session;
@@ -73,6 +78,7 @@ private:
     void notify(const ModuleMsg &m) { emit m_host->notificationRequested(m); }
     NotificationDialog *card(const QString &title) const;
     static void pump(int ms);
+    static void activate(QWidget *window);
 
     CoreHost *m_host = nullptr;
     MainWindow *m_window = nullptr;
@@ -135,6 +141,13 @@ void tst_MainWindow::modulesThatCantRunAreReported()
     QVERIFY2(mentions(QStringLiteral("wont_load.dll no se pudo abrir")), qPrintable(messages.join('|')));
     // the metadata was enough: the old module's code never ran
     QVERIFY(!qEnvironmentVariableIsSet("AGUARA_OLD_MODULE_RAN"));
+}
+
+void tst_MainWindow::activate(QWidget *window)
+{
+    window->show();
+    QApplication::setActiveWindow(window);
+    QTRY_VERIFY(window->isActiveWindow());
 }
 
 NotificationDialog *tst_MainWindow::card(const QString &title) const
@@ -212,19 +225,6 @@ void tst_MainWindow::lifetimeExpires()
     QCOMPARE(cards().size(), m_initial);
 }
 
-void tst_MainWindow::badgeCountsNotifications()
-{
-    auto badge = m_window->findChild<QLabel *>(QStringLiteral("notificationsBadge"));
-    QVERIFY(badge);
-    notify(ModuleMsg("B", "1", "Uno", "x"));
-    notify(ModuleMsg("B", "2", "Dos", "x"));
-    QVERIFY(badge->isVisible());
-    QCOMPARE(badge->text(), QString::number(m_initial + 2));
-    card(QStringLiteral("Uno"))->close();
-    pump(100);
-    QCOMPARE(badge->text(), QString::number(m_initial + 1));
-}
-
 void tst_MainWindow::emptyStateAndDismissAll()
 {
     auto empty = m_page->findChild<QWidget *>(QStringLiteral("emptyState"));
@@ -238,7 +238,8 @@ void tst_MainWindow::emptyStateAndDismissAll()
     QCOMPARE(cards().size(), 0);
     QVERIFY(empty->isVisible());
     QVERIFY(!dismissAll->isEnabled());
-    QVERIFY(!m_window->findChild<QLabel *>(QStringLiteral("notificationsBadge"))->isVisible());
+    QVERIFY(!m_window->findChild<QPushButton *>(QStringLiteral("notificationsButton"))
+                 ->property("newNotifications").toBool());
 }
 
 void tst_MainWindow::sidebarMarksTheCurrentPage()
@@ -426,6 +427,239 @@ void tst_MainWindow::openRegisterKeepsSalesOpen()
     QVERIFY(tabs->tabBar()->tabButton(0, closeButtonSide));
     QMetaObject::invokeMethod(tabs, "tabCloseRequested", Q_ARG(int, 0));
     QCOMPARE(tabs->count(), 2);
+}
+
+void tst_MainWindow::dotMarksWhatNobodySaw()
+{
+    Session s;
+    QVERIFY(s.ok);
+    QVERIFY(s.core.cash->openSession(oneNote()));
+    auto avisos = s.window->findChild<QPushButton *>(QStringLiteral("notificationsButton"));
+    auto page = s.window->findChild<PageCero *>();
+    auto tabs = s.window->findChild<QTabWidget *>();
+    const auto hasDot = [avisos]() { return avisos->property("newNotifications").toBool(); };
+    const auto post = [&s](const QString &id) {
+        emit s.core.host->notificationRequested(ModuleMsg("T", id, "Aviso", "x"));
+    };
+
+    // from while the program starts: Avisos is in front and looks seen, but
+    // signing in with the till open puts Ventas over it before anyone reads it
+    activate(s.window.get());
+    post(QStringLiteral("early"));
+    QVERIFY(!hasDot());
+    s.window->setUsers(s.users.get(), 0);
+    QCOMPARE(tabs->tabText(tabs->currentIndex()), QStringLiteral("Ventas"));
+    QVERIFY(hasDot());
+    QCOMPARE(avisos->toolTip(), QStringLiteral("Avisos nuevos (F1)"));
+
+    // the dot is on the icon, and it's yellow
+    const QImage marked = avisos->icon().pixmap(20, 20).toImage();
+    QCOMPARE(marked.pixelColor(16, 4), QColor(0xFF, 0xC4, 0x00));
+
+    // seeing them clears the dot; the notification stays
+    const int count = page->count();
+    avisos->click();
+    QVERIFY(!hasDot());
+    QCOMPARE(avisos->toolTip(), QStringLiteral("Avisos (F1)"));
+    QCOMPARE(page->count(), count);
+    QVERIFY(avisos->icon().pixmap(20, 20).toImage().pixelColor(16, 4) != QColor(0xFF, 0xC4, 0x00));
+
+    post(QStringLiteral("seen"));                // arrives in front of the reader
+    QVERIFY(!hasDot());
+
+    // somebody uses something else, and comes back to Avisos. Only offscreen:
+    // on a desktop Windows decides who gets the focus, not this test
+    if (QGuiApplication::platformName() == QLatin1String("offscreen")) {
+        activate(m_window);
+        post(QStringLiteral("away"));
+        QVERIFY(hasDot());
+        activate(s.window.get());
+        QVERIFY(!hasDot());
+    }
+
+    tabs->setCurrentIndex(0);
+    post(QStringLiteral("late"));
+    QVERIFY(hasDot());
+    post(QStringLiteral("late"));                // an update of the same one
+    QVERIFY(hasDot());
+
+    page->dismissAll();                          // nothing left to see
+    pump(100);
+    QVERIFY(!hasDot());
+}
+
+void tst_MainWindow::installedModulesAreOnlyInTheHelpMenu()
+{
+    Session s;
+    QVERIFY(s.ok);
+    s.window->setUsers(s.users.get(), 0);
+    QVERIFY(!navButton(s.window.get(), QStringLiteral("Módulos instalados")));
+    QVERIFY(navButton(s.window.get(), QStringLiteral("Ventas")));
+
+    bool inTheMenu = false;
+    for (QAction *action : s.window->findChildren<QAction *>())
+        inTheMenu = inTheMenu || action->text().remove('&').startsWith(QStringLiteral("Módulos instalados"));
+    QVERIFY(inTheMenu);
+}
+
+void tst_MainWindow::notificationsCloseWhileTheTillIsOpen()
+{
+    Session s;
+    QVERIFY(s.ok);
+    auto tabs = s.window->findChild<QTabWidget *>();
+    auto page = s.window->findChild<PageCero *>();
+    s.window->setUsers(s.users.get(), 0);
+    activate(s.window.get());                   // F1 and Ctrl+W need it
+    QCOMPARE(tabs->indexOf(page), 0);
+    QVERIFY(!tabs->tabBar()->tabButton(0, QTabBar::RightSide));    // the till is closed: no X
+
+    QVERIFY(s.core.cash->openSession(oneNote()));
+    s.window->setUsers(s.users.get(), 0);
+    QCOMPARE(tabs->count(), 2);
+    QCOMPARE(tabs->tabText(0), QStringLiteral("Ventas"));
+    QVERIFY(tabs->tabBar()->tabButton(1, QTabBar::RightSide));
+
+    QMetaObject::invokeMethod(tabs, "tabCloseRequested", Q_ARG(int, 1));
+    QCOMPARE(tabs->count(), 1);
+    QCOMPARE(tabs->indexOf(page), -1);
+
+    // closed, it still collects notifications
+    const int count = page->count();
+    emit s.core.host->notificationRequested(ModuleMsg("T", "1", "Aviso", "x"));
+    QCOMPARE(page->count(), count + 1);
+
+    // F1 brings it back as it was, and it can be closed again
+    QTest::keyClick(s.window.get(), Qt::Key_F1);
+    QCOMPARE(tabs->count(), 2);
+    QCOMPARE(tabs->currentWidget(), page);
+    QCOMPARE(tabs->tabText(1), QStringLiteral("Avisos"));
+    QVERIFY(!tabs->tabIcon(1).isNull());
+    QVERIFY(tabs->tabBar()->tabButton(1, QTabBar::RightSide));
+    QTest::keyClick(s.window.get(), Qt::Key_W, Qt::ControlModifier);
+    QCOMPARE(tabs->count(), 1);
+
+    // so does the sidebar, and closing the till takes the X away again
+    s.window->findChild<QPushButton *>(QStringLiteral("notificationsButton"))->click();
+    QCOMPARE(tabs->count(), 2);
+    QWidget *sales = tabs->widget(0);
+    QCOMPARE(s.core.cash->closeSession(oneNote()), CloseResult::Closed);
+    emit qobject_cast<AguaraWidget *>(sales)->keepOpenChanged();
+    QVERIFY(!tabs->tabBar()->tabButton(1, QTabBar::RightSide));
+    QMetaObject::invokeMethod(tabs, "tabCloseRequested", Q_ARG(int, 1));
+    QCOMPARE(tabs->count(), 2);
+}
+
+void tst_MainWindow::closingEverythingFallsBackOnNotifications()
+{
+    Session s;
+    QVERIFY(s.ok);
+    QVERIFY(s.core.cash->openSession(oneNote()));
+    s.window->setUsers(s.users.get(), 0);
+    s.window->show();
+    auto tabs = s.window->findChild<QTabWidget *>();
+    auto page = s.window->findChild<PageCero *>();
+    QMetaObject::invokeMethod(tabs, "tabCloseRequested", Q_ARG(int, 1));
+    QCOMPARE(tabs->count(), 1);                 // only Ventas
+
+    QWidget *sales = tabs->widget(0);
+    QCOMPARE(s.core.cash->closeSession(oneNote()), CloseResult::Closed);
+    emit qobject_cast<AguaraWidget *>(sales)->keepOpenChanged();
+    QMetaObject::invokeMethod(tabs, "tabCloseRequested", Q_ARG(int, 0));
+    QCOMPARE(tabs->count(), 1);
+    QCOMPARE(tabs->currentWidget(), page);
+    QCOMPARE(tabs->tabText(0), QStringLiteral("Avisos"));
+    QVERIFY(!tabs->tabBar()->tabButton(0, QTabBar::RightSide));
+}
+
+void tst_MainWindow::lowStockReachesWhoMayRestock()
+{
+    Session s;
+    QVERIFY(s.ok);
+    Product article;
+    article.code = QStringLiteral("A");
+    article.description = QStringLiteral("YERBA");
+    article.price = 10000;
+    article.stock = AguaraQuantity::whole(10);
+    article.stockMin = AguaraQuantity::whole(5);
+    QVERIFY(s.core.products->saveProduct(article));
+    article.code = QStringLiteral("B");
+    article.description = QStringLiteral("AZUCAR");
+    QVERIFY(s.core.products->saveProduct(article));
+
+    LowStockWatcher watcher(s.core.products.get(), s.core.inventory.get(), s.users.get(), s.core.host.get());
+    connect(s.window.get(), &MainWindow::sessionChanged, &watcher, &LowStockWatcher::check);
+    auto page = s.window->findChild<PageCero *>();
+    auto tabs = s.window->findChild<QTabWidget *>();
+    auto avisos = s.window->findChild<QPushButton *>(QStringLiteral("notificationsButton"));
+    const auto stockCard = [page]() -> NotificationDialog * {
+        for (NotificationDialog *c : page->findChildren<NotificationDialog *>()) {
+            if (c->property("aguaraKey").toString().endsWith(QStringLiteral("stock-bajo")))
+                return c;
+        }
+        return nullptr;
+    };
+    const auto text = [&stockCard]() { return stockCard()->findChild<QLabel *>(QStringLiteral("title"))->text(); };
+    const auto move = [&s](const char *code, int units) {
+        return s.core.inventory->adjustStock(QString::fromLatin1(code), AguaraQuantity::whole(units),
+                                             QStringLiteral("prueba"));
+    };
+
+    // the cashier isn't who restocks: sign in the same way the program does
+    s.window->setUsers(s.users.get(), 0);
+    QVERIFY(move("A", -6));
+    pump(50);
+    QVERIFY(!stockCard());
+
+    // whoever may opens Inventario hears at once, even with the page elsewhere
+    QVERIFY(s.users->login(QStringLiteral("admin"), QStringLiteral("secreto1")));
+    s.window->setUsers(s.users.get(), 0);
+    pump(50);
+    QVERIFY(stockCard());
+    QCOMPARE(text(), QStringLiteral("1 artículo con stock bajo"));
+
+    navButton(s.window.get(), QStringLiteral("Inventario"))->click();
+    QVERIFY(move("B", -6));
+    pump(50);
+    QCOMPARE(text(), QStringLiteral("2 artículos con stock bajo"));
+    QVERIFY(avisos->property("newNotifications").toBool());
+
+    // restocking one isn't news: same card, nothing new to look at
+    avisos->click();
+    QVERIFY(!avisos->property("newNotifications").toBool());
+    navButton(s.window.get(), QStringLiteral("Inventario"))->click();
+    QCOMPARE(tabs->tabText(tabs->currentIndex()), QStringLiteral("Inventario"));
+    QVERIFY(move("A", 20));
+    pump(50);
+    QCOMPARE(text(), QStringLiteral("1 artículo con stock bajo"));
+    QVERIFY(!avisos->property("newNotifications").toBool());
+
+    // dismissed, it doesn't come back for less than a new article
+    stockCard()->close();
+    pump(50);
+    QVERIFY(!stockCard());
+    QVERIFY(move("B", 1));
+    pump(50);
+    QVERIFY(!stockCard());
+    QVERIFY(move("A", -20));
+    pump(50);
+    QVERIFY(stockCard());
+    QVERIFY(avisos->property("newNotifications").toBool());
+
+    // restocked, it goes
+    QVERIFY(move("A", 20));
+    QVERIFY(move("B", 20));
+    pump(50);
+    QVERIFY(!stockCard());
+    QVERIFY(!avisos->property("newNotifications").toBool());
+
+    // the card doesn't stay behind for a cashier who takes over
+    QVERIFY(move("A", -20));
+    pump(50);
+    QVERIFY(stockCard());
+    QVERIFY(s.users->login(QStringLiteral("maria"), QStringLiteral("propia123")));
+    s.window->setUsers(s.users.get(), 0);
+    pump(50);
+    QVERIFY(!stockCard());
 }
 
 void tst_MainWindow::closedRegisterOpensNothing()

@@ -573,6 +573,11 @@ SqlSalesService::Push SqlSalesService::push(const OutboxEntry &entry, qint64 *sa
     return Push::Saved;
 }
 
+void SqlSalesService::stockChanged()
+{
+    m_products->refreshAfterChange();
+}
+
 bool SqlSalesService::flushPending()
 {
     if (m_flushing || !m_outbox.open())

@@ -29,11 +29,15 @@ because the installer and every patch carry all the modules.
 No dependencies but Python 3 (and git for tags). Works from any folder.
 """
 
+import sys
+
+if sys.version_info[0] < 3:
+    sys.exit('autoVersion.py needs Python 3. The MinGW in Qt brings a Python 2 named python.')
+
 import argparse
 import hashlib
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent

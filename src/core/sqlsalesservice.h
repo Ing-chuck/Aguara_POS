@@ -27,6 +27,10 @@ public:
                     QObject *parent = nullptr);
     ~SqlSalesService() override;
 
+    /// Stock moved somewhere else (a return): refresh the lists, here and on
+    /// the other tills.
+    void stockChanged();
+
     /// Who is selling, and where changes are recorded (may stay null).
     void setUsers(UserService *users) { m_users = users; }
 

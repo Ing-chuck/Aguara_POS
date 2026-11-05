@@ -1,5 +1,5 @@
 # Aguara POS
- sistema modular de gestion para punto de venta, utilizando el framework Qt 6, diseñado con el objetivo de ser:
+ sistema modular de gestion para punto de venta, utilizando el framework Qt 5.15, diseñado con el objetivo de ser:
  
  * facil de usar
  * confiable
@@ -7,10 +7,19 @@
 
 # Arquitectura
 El sistema se basa en la arquitectura plug-in que permite la creacion de modulos independientes para realizar diferentes tareas
-### Los modulos actualmente planeados son:
-* Control de inventario
-* Ventas
-* Usuarios y permisos
+### Los modulos son:
+
+| Modulo | Archivo | Para que |
+|---|---|---|
+| Inventario | `modulo_control_inventario.dll` | articulos, compras, proveedores y recuentos |
+| Clientes | `modulo_customers.dll` | clientes, con RUC o cedula |
+| Importar | `modulo_importar.dll` | importar articulos desde CSV (sin pagina propia) |
+| Ventas | `modulo_sales_module.dll` | la caja: vender, cobrar, cerrar |
+| Reportes | `modulo_stats.dll` | reportes para ver, imprimir y exportar |
+| Usuarios | `modulo_usuarios.dll` | usuarios, roles, permisos y auditoria |
+
+Se cargan en orden alfabetico de archivo, y ese orden da los atajos Ctrl+1, Ctrl+2...: por eso
+Reportes se llama `modulo_stats`, para que Ventas siga en Ctrl+3.
 
 # Compilar
 Requisitos: **Qt 5.15.2 con MinGW 8.1.0 32-bit** (ultima combinacion compatible con Windows 7).
@@ -27,7 +36,10 @@ No abrir los sub-proyectos por separado: sin el proyecto raiz no comparten la ca
 | `src/app` | `aguara.exe` (solo `main()`) |
 | `src/modules` | los modulos (plugins) |
 | `tests` | pruebas automaticas, ver [tests/README.md](tests/README.md) |
-| `scripts` | herramientas de instalacion, por ejemplo el respaldo del servidor |
+| `scripts` | el respaldo del servidor, y `find-python.sh`, que busca Python 3 para los demas scripts |
+| `installer` | el instalador y los parches (Inno Setup) |
+| `doc` | manuales (`manual`), instalacion en red (`deploy`), diagramas (`arquitectura`, `gui`) y hoja de ruta (`roadmap.md`) |
+| `.githooks` | el control de la API antes de cada commit, ver [Versiones](#versiones) |
 
 Estructura de la salida dentro de la carpeta de compilacion:
 
@@ -38,8 +50,25 @@ Estructura de la salida dentro de la carpeta de compilacion:
     tests/bin/tst_*.exe        <- pruebas (no se instalan)
 
 
-**Instalador**: `installer/build.sh CARPETA_RELEASE PGSQL_BIN` arma el instalador con Inno Setup 6, y con
-`patch` al final, el parche (ver `installer/aguarapos.iss`).
+**Instalador**: `installer/build.sh CARPETA_RELEASE PGSQL_BIN` arma el instalador, y con `patch` al final,
+el parche, en `installer/output/`. `PGSQL_BIN` es la carpeta `pgsql/bin` del zip de PostgreSQL 10 de 32
+bits. Necesita Qt y MinGW en el PATH, Python 3 e Inno Setup 6: si `ISCC.exe` no esta en el PATH, indicar
+su ruta en la variable `ISCC`. Sin Inno Setup deja lista la carpeta `stage` y termina. Primero copia lo
+que hace falta en un puesto: Qt, el runtime de MinGW, el cliente de PostgreSQL con sus DLL y el runtime
+de Visual C++ 2013 (`msvcr120.dll` y `msvcp120.dll`). Estas dos las toma de `installer/redist/` o, si no
+estan, de Windows: en un equipo sin ellas, ponerlas en esa carpeta.
+
+El parche reemplaza todos los programas y modulos, no toca los datos y comprueba que AguaraPOS este
+instalado. Como aplicarlo: [doc/deploy/varios-puestos-postgresql.md](doc/deploy/varios-puestos-postgresql.md).
+
+**Manuales**: `python doc/manual/build.py` arma los PDF desde los `.html` (necesita PyMuPDF). Revisar
+el numero de paginas: una frase de mas puede dejar una pagina casi vacia.
+
+**Diagramas**: `python doc/arquitectura/build.py ruta/a/una.db` dibuja los de `doc/arquitectura` y `doc/gui`,
+en SVG y PNG (necesita PyMuPDF). Lee las tablas de esa base SQLite y las interfaces de los modulos desde el
+codigo: sirve cualquier base migrada, por ejemplo una creada con `aguara.exe --database prueba.db`. Una tabla
+nueva hay que ubicarla en `GROUPS`, dentro del script: sin eso no termina. `db/test_database.graphml` es el
+diseño original y no se genera: conserva las tablas previstas para la fase 7.
 
 **Pruebas**: `mingw32-make check` en la carpeta de compilacion, o el panel *Test Results* de
 Qt Creator. Cada push las ejecuta en GitHub Actions (`.github/workflows/ci.yml`), con SQLite y con
@@ -47,7 +76,8 @@ un servidor PostgreSQL de prueba.
 
 # Versiones
 
-Hay dos numeros, y `autoVersion.py` se encarga de ambos (solo necesita Python 3 y git).
+Hay dos numeros, y `autoVersion.py` se encarga de ambos (solo necesita Python 3 y git). Ojo: el MinGW
+8.1 de Qt trae un Python 2 llamado `python`; si aparece primero en el PATH, usar `python3`.
 
 **Version del programa** (`src/interfaces/version.h`), `MAYOR.MENOR.PARCHE`: la que ve la gente y lleva
 el instalador. Cambia solo a pedido, nunca por compilar. Parche: correcciones. Menor: funciones nuevas.
@@ -321,8 +351,34 @@ Un modulo **no define colores propios**: le da un *rol* a cada widget con
   icono generico que usan los modulos nuevos del wizard.
 * El inventario (`src/modules/inventory_manager`) sirve de ejemplo de pagina completa.
 
-Para instalar: ademas de las DLL de Qt habituales, el programa usa **Qt5Svg**, **Qt5Network** y los
-plugins `imageformats/qsvg` e `iconengines/qsvgicon`, que `windeployqt` copia solo.
+Ademas de las DLL de Qt habituales, el programa usa **Qt5Svg**, **Qt5Network** y los plugins
+`imageformats/qsvg` e `iconengines/qsvgicon`. `installer/build.sh` los incluye con `windeployqt`.
+
+# Avisos
+La pagina **Avisos** junta las notificaciones del programa y de los modulos. Siempre existe: cerrar su
+pestaña solo la oculta, y los avisos siguen llegando.
+
+* **Punto amarillo:** la campana de la barra lateral lo muestra si hay avisos sin ver. Visto significa
+  Avisos al frente de la ventana activa, y ver los avisos no los descarta. Si el programa tapa Avisos al
+  iniciar sesion, porque Ventas debe quedar abierta, lo que habia en ella cuenta como no visto.
+* **Cerrar la pestaña:** solo se puede mientras una pagina deba quedar abierta. Si no, es la pagina a
+  la que vuelve la ventana: nunca queda vacia.
+* **Stock bajo:** `LowStockWatcher` (`src/core`) mira la lista de articulos en su minimo cada vez que
+  `SqlProductService` refresca sus listas, y eso ocurre con cualquier cambio de stock, en esta caja o en
+  otra. Avisa solo si la lista cambia: un articulo nuevo en la lista es un aviso nuevo, si quedan menos
+  el texto se actualiza sin marcarlo como nuevo, y si no queda ninguno el aviso desaparece. Sin
+  conexion no hace nada: no poder consultar no significa que se haya repuesto. Lo ve quien puede abrir
+  Inventario.
+
+**En un modulo:** `AguaraWidget::notify()` desde una pagina, o `host->notify()` si no tiene pagina. El
+remitente y el `id` identifican el aviso: repetirlos actualiza el mismo, sin agregar otro. Un dato que
+cambia se avisa cuando cambia, no al iniciar el programa, y solo si hay algo nuevo que decir: `CoreHost`
+ofrece ademas `updateNotification()`, que no lo marca como nuevo ni lo trae de vuelta si fue descartado,
+y `dismissNotification()`, para retirarlo. Estas dos son del core, no de `AguaraHost`.
+
+**Todo cambio de stock debe avisar:** despues del commit, `SqlProductService::refreshAfterChange()` o,
+donde no se tiene ese servicio, `SqlSalesService::stockChanged()`. Eso refresca las listas y, con
+PostgreSQL, avisa a las demas cajas con `NOTIFY`.
 
 # Registro y errores
 * El usuario ve mensajes cortos en español (`src/core/errors.h`).
@@ -341,8 +397,8 @@ el codigo y presiona Enter.
 |---|---|
 | Ctrl+1 ... Ctrl+9 | abrir el modulo N de la barra lateral |
 | Ctrl+Tab / Ctrl+Shift+Tab | pagina siguiente / anterior |
-| Ctrl+W | cerrar la pagina actual |
-| F1 | avisos |
+| Ctrl+W | cerrar la pagina actual, salvo la que debe quedar abierta (Ventas con la caja abierta) |
+| F1 | abrir Avisos, tambien si su pestaña estaba cerrada |
 | Ctrl+I | importar articulos |
 | Ctrl+L / Ctrl+Shift+L | bloquear la sesion / cambiar de usuario |
 | Ctrl+Q | salir |
@@ -353,9 +409,17 @@ el codigo y presiona Enter.
 
 # Como empezar un nuevo modulo en Qt Creator
 Un modulo es un plugin cuyo objeto raiz implementa `AguaraModuleInterface` (descripcion del modulo)
-y una o mas interfaces de capacidad (`WidgetModuleInterface`, `ImportArticlesInterface`).
+y una o mas interfaces de capacidad: `WidgetModuleInterface` (una pagina), `ImportArticlesInterface`,
+`PermissionProvider` (sus permisos) y `ReportProvider` (sus reportes).
 Ver `src/interfaces/interfaces.h` y los modulos existentes. El `.pro` de un modulo solo necesita
 `TARGET`, sus fuentes, e `include(../module.pri)`; ademas hay que agregarlo a `src/modules/modules.pro`.
+
+Una pagina que debe seguir abierta responde `true` en `keepPageOpen()` y emite `keepOpenChanged()`
+cuando la respuesta cambia: el core la pone primera y le quita la X.
+
+**Compatibilidad:** un modulo solo carga con el nivel de API con el que se compilo (ver
+[Versiones](#versiones)). Uno que no carga no detiene el programa: el core lo salta y lo muestra en
+Avisos. Si se cambia un encabezado de `src/interfaces`, subir el nivel con `python autoVersion.py api`.
 
 ### Utilizando el wizard
 La forma mas facil de empezar un modulo nuevo es utilizando el wizard personalizado "aguaramodule". Este wizard se encunetra en un archivo rar dentro de este repositorio.

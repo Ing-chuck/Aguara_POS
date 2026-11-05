@@ -26,6 +26,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPainter>
 #include <QPluginLoader>
 #include <QPushButton>
 #include <QShortcut>
@@ -42,17 +43,31 @@ using AguaraStyle::Color;
 
 namespace {
 
+/// `pixmap` with the yellow dot of "something new" on its top right corner.
+QPixmap withDot(QPixmap pixmap)
+{
+    const qreal width = pixmap.width() / pixmap.devicePixelRatio();
+    const qreal radius = width * 0.21;
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(0xFF, 0xC4, 0x00));
+    painter.drawEllipse(QPointF(width - radius, radius), radius, radius);
+    return pixmap;
+}
+
 /// An icon for the dark sidebar: light when idle, white when selected.
-QIcon sidebarIcon(const QString &name)
+QIcon sidebarIcon(const QString &name, bool dot = false)
 {
     const QIcon idle = AguaraStyle::icon(name, AguaraStyle::color(Color::SidebarText));
     const QIcon active = AguaraStyle::icon(name, QColor(Qt::white));
+    const auto marked = [dot](const QPixmap &pixmap) { return dot ? withDot(pixmap) : pixmap; };
     QIcon result;
     for (int size : { 16, 20, 24, 32, 40 }) {
-        result.addPixmap(idle.pixmap(size, size), QIcon::Normal, QIcon::Off);
-        result.addPixmap(active.pixmap(size, size), QIcon::Normal, QIcon::On);
-        result.addPixmap(active.pixmap(size, size), QIcon::Active, QIcon::Off);
-        result.addPixmap(active.pixmap(size, size), QIcon::Active, QIcon::On);
+        result.addPixmap(marked(idle.pixmap(size, size)), QIcon::Normal, QIcon::Off);
+        result.addPixmap(marked(active.pixmap(size, size)), QIcon::Normal, QIcon::On);
+        result.addPixmap(marked(active.pixmap(size, size)), QIcon::Active, QIcon::Off);
+        result.addPixmap(marked(active.pixmap(size, size)), QIcon::Active, QIcon::On);
     }
     return result;
 }
@@ -82,6 +97,14 @@ MainWindow::MainWindow(CoreHost *host, Backup *backup, QWidget *parent, const QS
 
     // modules without a page (e.g. importers) notify through the host
     connect(host, &CoreHost::notificationRequested, this, &MainWindow::onModuleNotification);
+    connect(host, &CoreHost::notificationUpdated, this, [this](const ModuleMsg &msg) {
+        if (NotificationDialog *card = notificationCard(msg.senderName, msg.id))
+            card->setMessage(msg);
+    });
+    connect(host, &CoreHost::notificationDismissed, this, [this](const QString &sender, const QString &id) {
+        if (NotificationDialog *card = notificationCard(sender, id))
+            card->close();
+    });
     connect(&idleWatcher, &InactivityWatcher::idle, this, &MainWindow::lockSession);
     loadPlugins();
     syncNavigation();
@@ -185,29 +208,47 @@ bool MainWindow::mayLeave()
 void MainWindow::openKeptPages()
 {
     for (int i = 0; i < modules.size(); ++i) {
-        if (!pageModule.key(i, nullptr) && canOpen(i) && mustStayOpen(i))
+        if (!pageModule.key(i, nullptr) && canOpen(i) && mustStayOpen(i)) {
+            // The program covers Avisos, nobody chose to leave it: what's on it
+            // may be from startup, before anyone could read it.
+            if (ui->tabWidget->currentWidget() == &pageCero && pageCero.count() > 0)
+                markNewNotifications(true);
             openModulePage(i);
+        }
+    }
+}
+
+/// Give a page's tab its X, or take it away and keep it for later.
+void MainWindow::setClosable(QWidget *page, bool closable)
+{
+    const int index = ui->tabWidget->indexOf(page);
+    if (index < 0 || closable != closeButtons.contains(page))
+        return;
+    QTabBar *bar = ui->tabWidget->tabBar();
+    const auto side = QTabBar::ButtonPosition(style()->styleHint(QStyle::SH_TabBar_CloseButtonPosition, nullptr, bar));
+    if (closable) {
+        bar->setTabButton(index, side, closeButtons.take(page));
+    } else {
+        closeButtons.insert(page, bar->tabButton(index, side));
+        bar->setTabButton(index, side, nullptr);
     }
 }
 
 /// A page that must stay open loses its X and goes first; it gets the X back,
-/// and keeps its place, when it no longer has to.
+/// and keeps its place, when it no longer has to. Avisos can only be closed
+/// while such a page is there: otherwise it's what the window falls back on.
 void MainWindow::updateKeptPages()
 {
-    QTabBar *bar = ui->tabWidget->tabBar();
-    const auto side = QTabBar::ButtonPosition(style()->styleHint(QStyle::SH_TabBar_CloseButtonPosition, nullptr, bar));
+    bool anyKept = false;
     const QList<QWidget *> pages = pageModule.keys();
     for (QWidget *page : pages) {
-        const int index = ui->tabWidget->indexOf(page);
         const bool keep = mustStayOpen(pageModule.value(page));
-        if (keep && !closeButtons.contains(page)) {
-            closeButtons.insert(page, bar->tabButton(index, side));
-            bar->setTabButton(index, side, nullptr);
-            bar->moveTab(index, 0);
-        } else if (!keep && closeButtons.contains(page)) {
-            bar->setTabButton(index, side, closeButtons.take(page));
-        }
+        if (keep && !closeButtons.contains(page))
+            ui->tabWidget->tabBar()->moveTab(ui->tabWidget->indexOf(page), 0);
+        setClosable(page, !keep);
+        anyKept = anyKept || keep;
     }
+    setClosable(&pageCero, anyKept);
 }
 
 /// Show the signed-in user and only what they may open.
@@ -245,6 +286,7 @@ void MainWindow::applySession()
     sidebarUserName->setToolTip(name);
     sidebarUserRole->setText(user ? user->roleNames.join(QStringLiteral(", ")) : QString());
     syncNavigation();
+    emit sessionChanged();
 }
 
 /// Cover the window and wait for a password. Whoever signs in takes over.
@@ -359,24 +401,8 @@ void MainWindow::buildSidebar()
     notificationsButton = makeNavButton(sidebarIcon(QStringLiteral("bell")), tr("Avisos"));
     notificationsButton->setObjectName(QStringLiteral("notificationsButton"));
     notificationsButton->setToolTip(tr("Avisos (F1)"));
-    auto badgeLayout = new QHBoxLayout(notificationsButton);
-    badgeLayout->setContentsMargins(0, 0, 14, 0);
-    badgeLayout->addStretch();
-    notificationsBadge = new QLabel;
-    notificationsBadge->setObjectName(QStringLiteral("notificationsBadge"));
-    notificationsBadge->setAlignment(Qt::AlignCenter);
-    notificationsBadge->setFixedHeight(18);
-    notificationsBadge->setAttribute(Qt::WA_TransparentForMouseEvents);
-    AguaraStyle::setRole(notificationsBadge, "badge");
-    notificationsBadge->hide();
-    badgeLayout->addWidget(notificationsBadge);
-    connect(notificationsButton, &QPushButton::clicked, this, [this]() { addTab(&pageCero); syncNavigation(); });
+    connect(notificationsButton, &QPushButton::clicked, this, &MainWindow::showNotifications);
     layout->addWidget(notificationsButton);
-
-    auto modulesButton = makeNavButton(sidebarIcon(QStringLiteral("puzzle")), tr("Módulos instalados"));
-    modulesButton->setCheckable(false);
-    connect(modulesButton, &QPushButton::clicked, this, &MainWindow::aboutModules);
-    layout->addWidget(modulesButton);
 
     // who is signed in, and the padlock (shown once users are on: setUsers)
     sidebarUser = new QWidget;
@@ -408,8 +434,8 @@ void MainWindow::buildSidebar()
     layout->addWidget(sidebarUser);
 
     connect(&pageCero, &PageCero::countChanged, this, [this](int count) {
-        notificationsBadge->setVisible(count > 0);
-        notificationsBadge->setText(count > 99 ? QStringLiteral("99+") : QString::number(count));
+        if (count == 0)
+            markNewNotifications(false);
     });
 }
 
@@ -489,10 +515,34 @@ void MainWindow::setConnected(bool connected)
 
 void MainWindow::setUpPageCero()
 {
+    showNotifications();
+    ui->tabWidget->setTabBarAutoHide(true);     // only one page open: no tab bar
+}
+
+/// Bring Avisos to the front, opening its tab if it was closed.
+void MainWindow::showNotifications()
+{
     addTab(&pageCero, AguaraStyle::icon(QStringLiteral("bell"), AguaraStyle::color(Color::TextMuted)), tr("Avisos"));
-    ui->tabWidget->tabBar()->setTabButton(0, QTabBar::RightSide, nullptr);
-    ui->tabWidget->tabBar()->setTabButton(0, QTabBar::LeftSide, nullptr);
-    ui->tabWidget->setTabBarAutoHide(true);     // only Avisos open: no tab bar
+    updateKeptPages();
+    syncNavigation();
+}
+
+/// The dot on the sidebar's bell: there are notifications nobody has seen.
+void MainWindow::markNewNotifications(bool unseen)
+{
+    if (notificationsButton->property("newNotifications").toBool() == unseen)
+        return;
+    notificationsButton->setProperty("newNotifications", unseen);
+    notificationsButton->setIcon(sidebarIcon(QStringLiteral("bell"), unseen));
+    notificationsButton->setToolTip(unseen ? tr("Avisos nuevos (F1)") : tr("Avisos (F1)"));
+}
+
+/// Coming back to the window may be what shows Avisos to someone.
+void MainWindow::changeEvent(QEvent *event)
+{
+    QMainWindow::changeEvent(event);
+    if (event->type() == QEvent::ActivationChange)
+        syncNavigation();
 }
 
 /// Import articles from a file. With `only` set, offer only that module's
@@ -781,7 +831,7 @@ void MainWindow::createShortcuts()
             ui->tabWidget->setCurrentIndex((ui->tabWidget->currentIndex() + count - 1) % count);
     });
     auto notifications = new QShortcut(QKeySequence(Qt::Key_F1), this);
-    connect(notifications, &QShortcut::activated, this, [this]() { addTab(&pageCero); });
+    connect(notifications, &QShortcut::activated, this, &MainWindow::showNotifications);
 }
 
 /// Load every module from the "modules" folder next to the executable.
@@ -890,25 +940,32 @@ void MainWindow::addImportMenuEntry(const LoadedModule &module)
 /// Show a notification. Sender + id identify a message (see messages.h):
 /// a message with the same pair updates the card already shown instead of
 /// adding another one.
-void MainWindow::onModuleNotification(ModuleMsg msg) {
+/// The card of this notification, if it's still there.
+NotificationDialog *MainWindow::notificationCard(const QString &sender, const QString &id)
+{
     notificationWidgets.removeAll(QPointer<NotificationDialog>());     // dismissed/expired
 
-    const QString key = msg.senderName + QLatin1Char('\n') + msg.id;
-    NotificationDialog *nd = nullptr;
+    const QString key = sender + QLatin1Char('\n') + id;
     for (const QPointer<NotificationDialog> &existing : qAsConst(notificationWidgets)) {
-        if (existing->property("aguaraKey").toString() == key) {
-            nd = existing;
-            break;
-        }
+        if (existing->property("aguaraKey").toString() == key)
+            return existing;
     }
+    return nullptr;
+}
 
+void MainWindow::onModuleNotification(ModuleMsg msg) {
+    NotificationDialog *nd = notificationCard(msg.senderName, msg.id);
     if (!nd) {
         nd = new NotificationDialog();
-        nd->setProperty("aguaraKey", key);
+        nd->setProperty("aguaraKey", msg.senderName + QLatin1Char('\n') + msg.id);
         pageCero.addWidget(nd);
         notificationWidgets.append(nd);
     }
     nd->setMessage(msg);
+
+    // Seen means Avisos in front of the active window.
+    if (!isActiveWindow() || ui->tabWidget->currentWidget() != &pageCero)
+        markNewNotifications(true);
 }
 
 /// Add a sidebar button that opens the module's page.
@@ -946,6 +1003,8 @@ void MainWindow::syncNavigation()
     }
     if (notificationsButton)
         notificationsButton->setChecked(current == &pageCero);
+    if (notificationsButton && isActiveWindow() && current == &pageCero)
+        markNewNotifications(false);
 }
 
 void MainWindow::dateTimeUpdate() {
@@ -1019,8 +1078,15 @@ void MainWindow::addTab(QWidget* widget, QIcon ico, QString label) {
 
 void MainWindow::onTabCloseRequested(int indx) {
     QWidget* page = ui->tabWidget->widget(indx);
-    if (!page || page == &pageCero)      // the notifications page is permanent
+    if (!page)
         return;
+    if (page == &pageCero) {             // never deleted: F1 brings it back
+        if (!closeButtons.contains(page)) {
+            ui->tabWidget->removeTab(indx);
+            syncNavigation();
+        }
+        return;
+    }
     const int module = pageModule.value(page, -1);
     if (module >= 0 && mustStayOpen(module))
         return;                          // Ctrl+W: such a tab has no X
@@ -1042,5 +1108,8 @@ void MainWindow::closePage(int indx) {
     }
     pageModule.remove(page);
     page->deleteLater();
+    if (ui->tabWidget->count() == 0)
+        showNotifications();             // never an empty window
+    updateKeptPages();
     syncNavigation();
 }

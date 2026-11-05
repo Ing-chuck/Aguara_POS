@@ -14,6 +14,11 @@ un subproyecto de `Aguara_POS.pro`). Los ejecutables quedan en `<compilación>/t
 | `tst_productservice` | `ProductService`, lo que usan los módulos *(SQLite y PostgreSQL)* |
 | `tst_users` | Usuarios, roles, permisos, autorización de supervisor y auditoría *(SQLite y PostgreSQL)* |
 | `tst_inventory` | Movimientos, compras, recuentos, precios, proveedores y lector *(SQLite y PostgreSQL)* |
+| `tst_print` | Tickets ESC/POS byte por byte, impresoras comunes, copias y cajón, sin imprimir de verdad *(SQLite y PostgreSQL)* |
+| `tst_customers` | Clientes, RUC con su dígito verificador y cédula *(SQLite y PostgreSQL)* |
+| `tst_returns` | Devoluciones, notas de crédito y medios de pago, con su efecto en la caja y el stock *(SQLite y PostgreSQL)* |
+| `tst_reports` | Los reportes, sus totales y la exportación a CSV *(SQLite y PostgreSQL)* |
+| `tst_lowstock` | El aviso de stock bajo sigue al stock: ventas, compras, ajustes, recuentos, devoluciones, sin conexión *(SQLite y PostgreSQL)* |
 | `tst_sales` | Caja y ventas: totales exactos, sesión, numeración, anulación, arqueo y cierre *(SQLite y PostgreSQL)* |
 | `tst_modules` | Los plugins reales: importación de CSV, inventario, compra y recuento por pantalla, etiquetas, autorización, usuarios y un día de caja por pantalla |
 | `tst_reconnect` | Varias cajas en un servidor: avisos entre cajas, reinicio y caída del servidor *(solo PostgreSQL)* |
@@ -28,7 +33,8 @@ un subproyecto de `Aguara_POS.pro`). Los ejecutables quedan en `<compilación>/t
   - `mingw32-make check` ejecuta todas las suites.
   - `tests/run-tests.sh <carpeta de compilación>` las ejecuta, guarda los resultados en archivos
     (`test-results/*.txt` y JUnit `*.xml`) y muestra un resumen. Si una consola no muestra la
-    salida de Qt Test, los archivos siempre la tienen.
+    salida de Qt Test, los archivos siempre la tienen. Al final ejecuta `autoVersion.py check` y
+    `test_autoversion.py`. Sin Python 3 los omite con un mensaje, salvo en CI, donde fallan.
 - **Sin las pruebas**: `qmake CONFIG+=no_tests` no las compila.
 
 ## PostgreSQL
@@ -76,3 +82,9 @@ todas las suites y lo detiene al terminar:
   `initTestCase_data()` y abrir la base con `AGUARA_OPEN_FIXTURE(fixture, carpeta)`.
 - Los módulos se cargan desde la carpeta `AGUARA_TEST_MODULES_DIR`, que es la de los plugins
   compilados.
+- `fixtures/` tiene módulos que no deben arrancar, para probar la carga: `old_api` declara una API
+  vieja y deja rastro si su código se ejecuta, y `wont_load` tiene la API correcta pero Windows se
+  niega a cargarlo. Se compilan en `tests/fixture_modules`, fuera de la carpeta de los módulos reales.
+- En una ventana real, Windows decide quién tiene el foco. Una prueba que dependa de cambiar de
+  ventana activa debe correr solo con `QT_QPA_PLATFORM=offscreen`, como en CI. Conviene correr también
+  sin esa variable: hay carreras de activación que solo aparecen en la plataforma real.

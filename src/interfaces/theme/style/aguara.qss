@@ -365,15 +365,6 @@ QPushButton[role="nav"]:checked {
     font-weight: 600;
 }
 QPushButton[role="nav"]:focus { background: {{sidebarHover}}; }
-QLabel[role="badge"] {
-    background: {{sidebarAccent}};
-    color: #1F2933;
-    border-radius: 9px;
-    font-size: 8.5pt;
-    font-weight: 700;
-    padding: 0 6px;
-    min-width: 6px;
-}
 
 QLabel#sidebarUserName { color: #FFFFFF; font-weight: 600; }
 QWidget#sidebarUser { border-top: 1px solid {{sidebarHover}}; }

@@ -17,6 +17,7 @@ SUBDIRS += \
     tst_productservice \
     tst_users \
     tst_inventory \
+    tst_lowstock \
     tst_sales \
     tst_print \
     tst_customers \
