@@ -7,7 +7,7 @@
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 0
 #define VERSION_PATCH 0
-#define VERSION_SUFFIX "-beta"
+#define VERSION_SUFFIX "-beta.2"
 
 // For display only: change it with autoVersion.py. Module compatibility is the
 // API level in apiversion.h, not this string.
