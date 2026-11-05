@@ -1,6 +1,7 @@
 #ifndef CUSTOMERSERVICE_H
 #define CUSTOMERSERVICE_H
 
+#include "apiversion.h"
 #include "aguara_global.h"
 
 #include <QList>
@@ -56,7 +57,7 @@ public:
     virtual QString lastError() const = 0;
 };
 
-#define CustomerService_iid "org.AguaraPOS.CustomerService/1.0"
+#define CustomerService_iid "org.AguaraPOS.CustomerService/" AGUARA_API_VERSION
 Q_DECLARE_INTERFACE(CustomerService, CustomerService_iid)
 
 #endif // CUSTOMERSERVICE_H

@@ -22,6 +22,7 @@ BIN="$BUILD_DIR/bin"
 STAGE="$BUILD_DIR/stage"
 
 [ -f "$BIN/aguara.exe" ] || { echo "no aguara.exe in $BIN"; exit 1; }
+python -B "$ROOT/autoVersion.py" check --release
 
 number() { sed -n "s/^#define VERSION_$1 //p" "$ROOT/src/interfaces/version.h" | tr -d '\r'; }
 VERSION="$(number MAJOR).$(number MINOR).$(number PATCH)"
@@ -67,5 +68,6 @@ fi
 
 ARGS=("/DAppVersion=$VERSION" "/DStage=$(cygpath -w "$STAGE")")
 [ "$MODE" = patch ] && ARGS+=("/DPatch")
-(cd "$HERE" && "$ISCC" "${ARGS[@]}" aguarapos.iss)
+# Git Bash would turn /DName=value into a path
+(cd "$HERE" && MSYS2_ARG_CONV_EXCL="*" "$ISCC" "${ARGS[@]}" aguarapos.iss)
 ls -la "$HERE"/output

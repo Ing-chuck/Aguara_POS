@@ -19,8 +19,7 @@
             return products != nullptr;    // false: the core skips the module
         }
 
-    New services can be added to the core without changing this interface:
-    each service has its own versioned interface ID.
+    New services can be added to the core without changing this interface.
 */
 class AguaraHost {
 public:
@@ -34,8 +33,7 @@ public:
     /// AguaraWidget::notify().
     virtual void notify(const ModuleMsg &msg) = 0;
 
-    /// Typed lookup: returns nullptr if the core doesn't provide T
-    /// (or provides another version of it).
+    /// Typed lookup: returns nullptr if the core doesn't provide T.
     template <class T>
     T *service() const {
         return qobject_cast<T *>(serviceObject(qobject_interface_iid<T *>()));

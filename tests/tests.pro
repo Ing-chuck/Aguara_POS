@@ -24,7 +24,9 @@ SUBDIRS += \
     tst_reports \
     tst_modules \
     tst_reconnect \
-    tst_mainwindow
+    tst_mainwindow \
+    fixtures/old_api \
+    fixtures/wont_load
 
 DISTFILES += \
     README.md \
@@ -32,4 +34,5 @@ DISTFILES += \
     core_test.pri \
     common/testsupport.h \
     run-tests.sh \
-    run-postgresql-tests.sh
+    run-postgresql-tests.sh \
+    test_autoversion.py

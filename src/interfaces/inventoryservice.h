@@ -1,6 +1,7 @@
 #ifndef INVENTORYSERVICE_H
 #define INVENTORYSERVICE_H
 
+#include "apiversion.h"
 #include "money.h"
 #include "productservice.h"
 #include "quantity.h"
@@ -172,7 +173,7 @@ public:
     virtual QString lastError() const = 0;
 };
 
-#define InventoryService_iid "org.AguaraPOS.InventoryService/1.0"
+#define InventoryService_iid "org.AguaraPOS.InventoryService/" AGUARA_API_VERSION
 Q_DECLARE_INTERFACE(InventoryService, InventoryService_iid)
 
 #endif // INVENTORYSERVICE_H

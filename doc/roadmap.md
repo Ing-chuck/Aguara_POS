@@ -79,7 +79,7 @@ En vez de meter todos esos tipos en el core, cada sistema externo será un **mó
 
 **Regla de atomicidad:** una venta se guarda entera o no se guarda. Hay que evitar que el giro quede registrado y la venta no, o al revés. Por eso los proveedores escriben dentro de la transacción que abre `SalesService`.
 
-Los IID se versionan (`.../1.1`) al agregar métodos, para que un módulo viejo no se cargue con un core nuevo.
+Todos los IID terminan en un único nivel de API (`AGUARA_API_VERSION`), que cubre también los tipos de datos compartidos. Un módulo de otro nivel se descarta antes de cargar su código, y `autoVersion.py check` falla si cambian los encabezados públicos sin subir el nivel.
 
 ### 2.3 Modelo de datos: cambios respecto del diagrama
 

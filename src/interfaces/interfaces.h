@@ -1,6 +1,7 @@
 #ifndef INTERFACES_H
 #define INTERFACES_H
 
+#include "apiversion.h"
 #include "aguara_global.h"
 #include "aguarahost.h"
 #include "aguarastyle.h"
@@ -48,10 +49,12 @@
     module fetches the services it needs (see aguarahost.h). Data lives in
     the core: modules use services such as ProductService, never SQL.
 
-    Compatibility: each interface ID ends in a version. When an interface
-    changes in an incompatible way, bump its version. Modules built against
-    the old version then no longer match, and the core skips them instead of
-    crashing.
+    Compatibility: everything in this folder is one API with one number,
+    AGUARA_API_VERSION, and every interface ID ends in it. A module built
+    against another number fails the check in the plugin's metadata, so the
+    core skips it without loading any of its code. This covers the data types
+    too, which an ID of their own never could. Changing a public header takes
+    raising the number: "python autoVersion.py check" fails until you do.
 */
 
 /// Static description of a module: everything the core needs to list it
@@ -136,11 +139,10 @@ signals:
     void keepOpenChanged();
 };
 
-// 1.1: ModuleInfo::iconName. 1.2: WidgetModuleInterface::keepPageOpen()
-#define AguaraModuleInterface_iid    "org.AguaraPOS.ModuleInterface/1.2"
-#define WidgetModuleInterface_iid    "org.AguaraPOS.WidgetModuleInterface/1.1"
-#define ImportArticlesInterface_iid  "org.AguaraPOS.ImportArticlesInterface/1.0"
-#define PermissionProvider_iid       "org.AguaraPOS.PermissionProvider/1.0"
+#define AguaraModuleInterface_iid    "org.AguaraPOS.ModuleInterface/" AGUARA_API_VERSION
+#define WidgetModuleInterface_iid    "org.AguaraPOS.WidgetModuleInterface/" AGUARA_API_VERSION
+#define ImportArticlesInterface_iid  "org.AguaraPOS.ImportArticlesInterface/" AGUARA_API_VERSION
+#define PermissionProvider_iid       "org.AguaraPOS.PermissionProvider/" AGUARA_API_VERSION
 
 Q_DECLARE_INTERFACE(AguaraModuleInterface,   AguaraModuleInterface_iid)
 Q_DECLARE_INTERFACE(WidgetModuleInterface,   WidgetModuleInterface_iid)

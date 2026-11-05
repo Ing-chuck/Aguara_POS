@@ -1,6 +1,7 @@
 #ifndef PRODUCTSERVICE_H
 #define PRODUCTSERVICE_H
 
+#include "apiversion.h"
 #include "money.h"
 #include "quantity.h"
 
@@ -137,7 +138,7 @@ public:
     virtual QString lastError() const = 0;
 };
 
-#define ProductService_iid "org.AguaraPOS.ProductService/1.1"   // 1.1: quantities, units, nested categories
+#define ProductService_iid "org.AguaraPOS.ProductService/" AGUARA_API_VERSION
 Q_DECLARE_INTERFACE(ProductService, ProductService_iid)
 
 #endif // PRODUCTSERVICE_H

@@ -1,6 +1,7 @@
 #ifndef CASHSERVICE_H
 #define CASHSERVICE_H
 
+#include "apiversion.h"
 #include "money.h"
 
 #include <QDateTime>
@@ -176,7 +177,7 @@ public:
     virtual QString lastError() const = 0;
 };
 
-#define CashService_iid "org.AguaraPOS.CashService/1.0"
+#define CashService_iid "org.AguaraPOS.CashService/" AGUARA_API_VERSION
 Q_DECLARE_INTERFACE(CashService, CashService_iid)
 
 #endif // CASHSERVICE_H

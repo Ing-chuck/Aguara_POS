@@ -4,11 +4,11 @@
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 
-#define VERSION_MAJOR 0
+#define VERSION_MAJOR 1
 #define VERSION_MINOR 0
-#define VERSION_PATCH 23
+#define VERSION_PATCH 0
 
-// For display only. Module compatibility is checked by the versioned
-// interface IDs (interfaces.h), not by this string.
+// For display only: change it with autoVersion.py. Module compatibility is the
+// API level in apiversion.h, not this string.
 #define VERSION_STRING "v" TOSTRING(VERSION_MAJOR) "." TOSTRING(VERSION_MINOR) "." TOSTRING(VERSION_PATCH)
 #endif // VERSION_H

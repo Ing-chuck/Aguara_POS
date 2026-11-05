@@ -37,6 +37,7 @@ HEADERS += aguara_global.h \
            productservice.h \
            salesservice.h \
            userservice.h \
+           apiversion.h \
            version.h
 
 # The theme (style sheet, icons, logo), shared by the core and the modules.

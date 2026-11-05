@@ -1,6 +1,7 @@
 #ifndef SALESSERVICE_H
 #define SALESSERVICE_H
 
+#include "apiversion.h"
 #include "aguara_global.h"
 #include "money.h"
 #include "quantity.h"
@@ -251,7 +252,7 @@ public:
     virtual QString lastError() const = 0;
 };
 
-#define SalesService_iid "org.AguaraPOS.SalesService/1.2"
+#define SalesService_iid "org.AguaraPOS.SalesService/" AGUARA_API_VERSION
 Q_DECLARE_INTERFACE(SalesService, SalesService_iid)
 
 #endif // SALESSERVICE_H

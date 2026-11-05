@@ -1,6 +1,7 @@
 #ifndef PRINTSERVICE_H
 #define PRINTSERVICE_H
 
+#include "apiversion.h"
 #include <QList>
 #include <QString>
 
@@ -123,7 +124,7 @@ public:
     virtual QString lastError() const = 0;
 };
 
-#define PrintService_iid "org.AguaraPOS.PrintService/1.1"
+#define PrintService_iid "org.AguaraPOS.PrintService/" AGUARA_API_VERSION
 Q_DECLARE_INTERFACE(PrintService, PrintService_iid)
 
 #endif // PRINTSERVICE_H

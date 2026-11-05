@@ -16,6 +16,7 @@
 #include "sqlsalesservice.h"
 #include "sqluserservice.h"
 #include <aguarastyle.h>
+#include <apiversion.h>
 #include <version.h>
 
 #include <QApplication>
@@ -58,7 +59,8 @@ int main(int argc, char *argv[])
     const bool debugLog = qEnvironmentVariableIntValue("AGUARA_DEBUG") != 0;
 #endif
     AguaraLog::install(AguaraLog::defaultDirectory(), debugLog);
-    qCInfo(lcApp).noquote() << "AguaraPOS" << VERSION_STRING << "starting | Qt" << qVersion()
+    qCInfo(lcApp).noquote() << "AguaraPOS" << VERSION_STRING << "API" << AGUARA_API_VERSION
+                            << "starting | Qt" << qVersion()
                             << "|" << QSysInfo::prettyProductName() << QSysInfo::currentCpuArchitecture();
 
     // Spanish everywhere: Qt's own texts (Sí/No/Cancelar, file dialogs, the

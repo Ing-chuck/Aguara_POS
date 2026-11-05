@@ -1,4 +1,5 @@
-; AguaraPOS: the installer, and with /DPatch the patch that updates a till.
+﻿; AguaraPOS: the installer, and with /DPatch the patch that updates a till.
+; Keep the BOM: without it Inno reads the Spanish text in the system code page.
 ; Built by build.sh, which fills the staging folder and passes the version.
 ;
 ;   ISCC /DAppVersion=1.0.0 /DStage=C:\...\stage aguarapos.iss
@@ -12,10 +13,12 @@
 #endif
 
 ; Never change it: it's how a patch finds the installation.
-#define AppGuid "{{7D0C2C1E-6A5B-4F4E-9C51-A6F1D1B2E3A7}"
+#define AppGuid "7D0C2C1E-6A5B-4F4E-9C51-A6F1D1B2E3A7"
+; [Setup] writes a literal brace as {{
+#define SetupId "{{" + AppGuid + "}"
 
 [Setup]
-AppId={#AppGuid}
+AppId={#SetupId}
 AppName=AguaraPOS
 AppVersion={#AppVersion}
 AppPublisher=Aguara
@@ -39,8 +42,6 @@ OutputBaseFilename=aguarapos-parche-{#AppVersion}
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 DisableReadyPage=no
-CreateUninstallRegKey=no
-UpdateUninstallLogAppend=yes
 #else
 OutputBaseFilename=aguarapos-{#AppVersion}
 #endif
@@ -76,7 +77,7 @@ Filename: "{app}\aguara.exe"; Description: "Abrir AguaraPOS"; Flags: postinstall
 #ifdef Patch
 function InitializeSetup(): Boolean;
 begin
-  Result := RegKeyExists(HKLM, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#AppGuid}_is1');
+  Result := RegKeyExists(HKLM, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{' + '{#AppGuid}' + '}_is1');
   if not Result then
     MsgBox('AguaraPOS no está instalado en este equipo. Use el instalador completo.', mbError, MB_OK)
   else

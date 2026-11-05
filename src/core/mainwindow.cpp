@@ -801,8 +801,8 @@ void MainWindow::loadPlugins()
 
         QPluginLoader loader(pluginsDir.absoluteFilePath(fileName));
 
-        // Check the interface version from the metadata before loading any
-        // code: a module built against another interface version is skipped.
+        // The API level is in the module's metadata: a module built against
+        // another level is skipped before any of its code is loaded.
         const QString iid = loader.metaData().value("IID").toString();
         if (iid != QLatin1String(AguaraModuleInterface_iid)) {
             qCWarning(lcModules) << "Skipping" << fileName << "- interface" << iid
@@ -818,6 +818,10 @@ void MainWindow::loadPlugins()
         auto module = qobject_cast<AguaraModuleInterface *>(plugin);
         if (!module) {
             qCWarning(lcModules) << "Could not load" << fileName << ":" << loader.errorString();
+            onModuleNotification(ModuleMsg("Aguara", "module-load-failed:" + fileName,
+                tr("Módulo no cargado"),
+                tr("%1 no se pudo abrir. Reinstale AguaraPOS.").arg(fileName),
+                MsgPriority::PriorityHigh));
             loader.unload();
             continue;
         }

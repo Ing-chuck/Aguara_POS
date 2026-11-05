@@ -1,6 +1,7 @@
 #ifndef USERSERVICE_H
 #define USERSERVICE_H
 
+#include "apiversion.h"
 #include <QDate>
 #include <QDateTime>
 #include <QList>
@@ -113,7 +114,7 @@ public:
     virtual QString lastError() const = 0;
 };
 
-#define UserService_iid "org.AguaraPOS.UserService/1.1"   // 1.1: discount limits, lastAuthorizer()
+#define UserService_iid "org.AguaraPOS.UserService/" AGUARA_API_VERSION
 Q_DECLARE_INTERFACE(UserService, UserService_iid)
 
 #endif // USERSERVICE_H

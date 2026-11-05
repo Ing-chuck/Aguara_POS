@@ -64,6 +64,7 @@ private slots:
     void lockScreenCantLeaveWithTheTillOpen();
     void lockScreenLeavesWithTheTillClosed();
     void restartAfterAConnectionChangeIsNotStopped();
+    void modulesThatCantRunAreReported();
 
 private:
     struct Session;
@@ -116,6 +117,24 @@ void tst_MainWindow::pump(int ms)
         QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         QTest::qWait(5);
     }
+}
+
+void tst_MainWindow::modulesThatCantRunAreReported()
+{
+    qunsetenv("AGUARA_OLD_MODULE_RAN");
+    MainWindow window(m_host, nullptr, nullptr, QStringLiteral(AGUARA_TEST_FIXTURE_MODULES));
+    QStringList messages;
+    for (QLabel *label : window.findChild<PageCero *>()->findChildren<QLabel *>())
+        messages << label->text();
+
+    const auto mentions = [&messages](const QString &text) {
+        return std::any_of(messages.cbegin(), messages.cend(),
+                           [&text](const QString &m) { return m.contains(text); });
+    };
+    QVERIFY2(mentions(QStringLiteral("old_api.dll es para otra versión")), qPrintable(messages.join('|')));
+    QVERIFY2(mentions(QStringLiteral("wont_load.dll no se pudo abrir")), qPrintable(messages.join('|')));
+    // the metadata was enough: the old module's code never ran
+    QVERIFY(!qEnvironmentVariableIsSet("AGUARA_OLD_MODULE_RAN"));
 }
 
 NotificationDialog *tst_MainWindow::card(const QString &title) const

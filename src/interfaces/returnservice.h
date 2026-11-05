@@ -1,6 +1,7 @@
 #ifndef RETURNSERVICE_H
 #define RETURNSERVICE_H
 
+#include "apiversion.h"
 #include "cashservice.h"
 #include "salesservice.h"
 
@@ -118,7 +119,7 @@ public:
     virtual QString lastError() const = 0;
 };
 
-#define ReturnService_iid "org.AguaraPOS.ReturnService/1.0"
+#define ReturnService_iid "org.AguaraPOS.ReturnService/" AGUARA_API_VERSION
 Q_DECLARE_INTERFACE(ReturnService, ReturnService_iid)
 
 #endif // RETURNSERVICE_H

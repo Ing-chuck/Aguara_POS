@@ -1,6 +1,7 @@
 #ifndef REPORTSERVICE_H
 #define REPORTSERVICE_H
 
+#include "apiversion.h"
 #include "aguara_global.h"
 
 #include <QByteArray>
@@ -127,9 +128,9 @@ public:
     virtual QString lastError() const = 0;
 };
 
-#define ReportProvider_iid "org.AguaraPOS.ReportProvider/1.0"
+#define ReportProvider_iid "org.AguaraPOS.ReportProvider/" AGUARA_API_VERSION
 Q_DECLARE_INTERFACE(ReportProvider, ReportProvider_iid)
-#define ReportService_iid "org.AguaraPOS.ReportService/1.0"
+#define ReportService_iid "org.AguaraPOS.ReportService/" AGUARA_API_VERSION
 Q_DECLARE_INTERFACE(ReportService, ReportService_iid)
 
 #endif // REPORTSERVICE_H

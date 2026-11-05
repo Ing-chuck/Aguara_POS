@@ -45,6 +45,35 @@ Estructura de la salida dentro de la carpeta de compilacion:
 Qt Creator. Cada push las ejecuta en GitHub Actions (`.github/workflows/ci.yml`), con SQLite y con
 un servidor PostgreSQL de prueba.
 
+# Versiones
+
+Hay dos numeros, y `autoVersion.py` se encarga de ambos (solo necesita Python 3 y git).
+
+**Version del programa** (`src/interfaces/version.h`), `MAYOR.MENOR.PARCHE`: la que ve la gente y lleva
+el instalador. Cambia solo a pedido, nunca por compilar. Parche: correcciones. Menor: funciones nuevas.
+Mayor: un cambio que hay que planificar con el comercio.
+
+**Nivel de API** (`src/interfaces/apiversion.h`): un solo numero contra el que se comprueban los modulos.
+Todos los IID terminan en el. Un modulo compilado con otro nivel no pasa el control de sus metadatos y se
+descarta, con un aviso, sin cargar su codigo. Cubre todo `src/interfaces`, tambien los tipos de datos que
+pasan entre el core y los modulos. El archivo guarda una huella de los encabezados publicos, sin contar
+comentarios ni espacios: si cambian, `check` falla hasta subir el nivel. Subirlo solo cuesta recompilar,
+porque el instalador y cada parche llevan todos los modulos.
+
+    python autoVersion.py                  estado, no cambia nada
+    python autoVersion.py check            falla si la API cambio sin subir el nivel
+    python autoVersion.py api              sube el nivel de API
+    python autoVersion.py bump patch       o minor, o major
+    python autoVersion.py tag              etiqueta el commit con vX.Y.Z, sin hacer push
+
+Para publicar: `bump`, commit, compilar, `installer/build.sh`, probar en una caja real, `tag` y push.
+La etiqueta va al final: hasta entonces se puede corregir y recompilar con el mismo numero, y despues
+cualquier cambio necesita una version nueva. `build.sh` usa `check --release`: no compila si la API no
+esta al dia, ni si esa version ya esta etiquetada sobre otro codigo.
+
+Para que git frene un commit que cambia la API sin subir el nivel, activar una vez en cada clon el hook
+de `.githooks`: `git config core.hooksPath .githooks`.
+
 # Base de datos
 Dos opciones, elegidas en **Preferencias > Conexion a los datos** (permiso `datos.conexion`, solo
 administradores salvo que un rol lo reciba), en `aguara.exe --configure-database` o automaticamente si
