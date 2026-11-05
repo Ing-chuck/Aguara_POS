@@ -1,0 +1,113 @@
+<h1>AguaraPOS</h1>
+<p class="sub">Manual del encargado</p>
+
+<p>Este manual cubre lo que rodea a la venta: usuarios, artículos, compras, control de la caja, reportes y mantenimiento. Lo que hace el cajero está en su propio manual.</p>
+
+<h2>1. Puesta en marcha</h2>
+<p>La primera vez que el programa abre con una base nueva, pide crear el administrador. Después, en este orden:</p>
+<ol>
+<li><b>Preferencias &gt; Impresora y comercio:</b> datos del comercio, impresora y prueba de impresión.</li>
+<li><b>Usuarios:</b> un usuario para cada persona. No comparta usuarios: la auditoría registra quién hizo qué.</li>
+<li><b>Inventario:</b> cargue o importe los artículos, y sus códigos.</li>
+<li><b>Caja &gt; Medios de pago:</b> deje en uso los que acepta el comercio.</li>
+</ol>
+<img src="img/50-printer.png" width="230"/>
+<p class="note">El ticket es un comprobante interno y dice «No válido como factura». No lleva timbrado.</p>
+
+<h2 class="page">2. Usuarios y permisos</h2>
+<p>En <b>Usuarios</b>, cada persona tiene uno o más roles, y cada rol tiene permisos y un descuento máximo.</p>
+<img src="img/12-users.png" width="340"/>
+<table>
+<tr><th>Rol</th><th>Puede</th><th>Descuento sin pedir</th></tr>
+<tr><td>Administrador</td><td>Todo</td><td>100 %</td></tr>
+<tr><td>Encargado</td><td>Todo salvo usuarios y conexión</td><td>20 %</td></tr>
+<tr><td>Cajero</td><td>Vender, abrir y cerrar la caja, y cargar clientes</td><td>5 %</td></tr>
+</table>
+<p>Se pueden crear otros roles en <b>Roles y permisos</b>. Cuando alguien no tiene un permiso, el programa pide un supervisor en ese momento, sin cerrar su sesión. La pestaña <b>Auditoría</b> muestra lo que hizo cada uno.</p>
+
+<h2>3. Artículos</h2>
+<p><b>Nuevo artículo</b> crea uno. En el menú <b>Más</b> están los ajustes de stock, el historial, el cambio de precios y las etiquetas de góndola.</p>
+<img src="img/02-inventory.png" width="340"/>
+<ul>
+<li><b>Importar:</b> <b>Archivo &gt; Importar artículos</b> carga un archivo CSV.</li>
+<li><b>Dar de baja:</b> el artículo deja de ofrecerse, pero su historial queda.</li>
+<li><b>Cambio de precios:</b> sube o baja por porcentaje, por rubro o marca, con redondeo hacia arriba. Muestra el resultado antes de aplicarlo.</li>
+<li><b>Stock mínimo:</b> al abrir el día, el programa avisa qué hay que reponer.</li>
+</ul>
+
+<h2 class="page">4. Compras y proveedores</h2>
+<p>En <b>Compras</b>, <b>Nueva compra</b> carga la factura del proveedor. Escanee cada artículo y escriba cantidad y costo. El stock sube y el costo se actualiza.</p>
+<img src="img/22-purchase-dialog.png" width="380"/>
+
+<h2>5. Recuentos</h2>
+<ol>
+<li>En <b>Recuentos</b>, elija un rubro y pulse <b>Preparar planilla</b>.</li>
+<li>Escanee cada unidad o escriba lo contado.</li>
+<li>Pulse <b>Aplicar recuento</b>. Solo se ajusta lo que se contó.</li>
+</ol>
+<img src="img/24-count.png" width="420"/>
+
+<h2 class="page">6. Control de la caja</h2>
+<h3>Cierre con diferencia</h3>
+<p>Si el conteo no coincide, el cajero vuelve a contar o llama a un supervisor. Solo el supervisor ve lo esperado, y debe escribir un motivo. La diferencia queda en la planilla y en los reportes.</p>
+<img src="img/42-difference.png" width="200"/>
+<h3>Planillas de cierre</h3>
+<p><b>Caja &gt; Planillas anteriores</b> reimprime cualquier cierre.</p>
+<img src="img/44-sessions.png" width="380"/>
+<h3 class="page">Conciliar tarjetas y transferencias</h3>
+<p>La planilla lista cada pago en <b>Comprobantes por conciliar</b>. Compárela con el cierre de lote de la terminal y con el extracto del banco. El programa no se conecta con la terminal: solo esta comparación confirma que el pago existió.</p>
+<p class="note">Si un cajero carga un código ya usado sin conexión, el programa no puede frenarlo en el momento. Queda en la auditoría como <b>venta.comprobante_repetido</b>: revíselo.</p>
+<h3>Movimientos y devoluciones</h3>
+<p>Los gastos y retiros salen en <b>Caja &gt; Movimiento de caja</b>, con un motivo. En una devolución, elija lo devuelto y por qué medio sale el dinero, hasta lo que entró por ese medio, o emita una nota de crédito.</p>
+<img src="img/51-return.png" width="290"/>
+<p class="note">Una nota de crédito no vence y la usa quien tenga el número. Pida el ticket al recibirla.</p>
+<h3>Medios de pago</h3>
+<p>En <b>Caja &gt; Medios de pago</b> se agregan otros medios y se elige si piden código. Solo el efectivo entra en el arqueo.</p>
+<img src="img/52-methods.png" width="230"/>
+
+<h2 class="page">7. Reportes</h2>
+<p>Elija un reporte en la lista, ajuste los filtros y pulse <b>Ver</b>. Todos se imprimen y se exportan a PDF o a CSV para Excel.</p>
+<img src="img/54-reports.png" width="420"/>
+<ul>
+<li><b>Ventas por día</b> coincide con las planillas de cierre.</li>
+<li>Las <b>devoluciones</b> cuentan el día en que ocurrieron, no el de la venta.</li>
+<li>El <b>margen</b> usa el costo del día de cada venta, con IVA en ventas y en costo.</li>
+<li><b>Resumen de IVA</b> y <b>Libro de ventas</b> son internos: contrólelos con su contador.</li>
+<li>Un aviso indica si hay ventas sin subir, que todavía no están en los reportes.</li>
+</ul>
+
+<h2 class="page">8. Las dos cajas y el servidor</h2>
+<p>Los datos están en el servidor PostgreSQL de una de las cajas.</p>
+<ul>
+<li><b>La caja del servidor se enciende primero y se apaga al final.</b> Sin ella, la otra caja no puede entrar.</li>
+<li>Si se cae mientras la otra trabaja, esa caja termina la venta en pantalla y la guarda en su cola. Sube sola al volver la conexión.</li>
+<li><b>Caja &gt; Ventas por subir</b> muestra lo que espera. Si el servidor rechazó una venta, aparece el motivo. Corrija la causa y pulse <b>Reintentar ahora</b>.</li>
+<li><b>No borre</b> el archivo <b>ventas-pendientes-aguara.db</b> de la carpeta de AguaraPOS: son ventas cobradas.</li>
+<li>No exponga esa caja a Internet. Windows 7 y PostgreSQL 10 ya no reciben correcciones de seguridad.</li>
+</ul>
+<p>La conexión se cambia en <b>Preferencias &gt; Conexión a los datos</b>, y se aplica al reiniciar. Los datos no se copian de una base a otra.</p>
+<img src="img/49-connection.png" width="220"/>
+
+<h2>9. Copias de seguridad</h2>
+<p>La caja del servidor hace una copia diaria con la tarea programada. Esa copia queda en el mismo disco, y si el disco falla se pierde junto con los datos.</p>
+<p class="note"><b>Copie los respaldos cada semana a un pendrive o disco externo</b>, y guárdelo fuera de la caja. Es lo único que protege los datos de un disco roto, un robo o un incendio.</p>
+
+<h2>10. Aplicar un parche</h2>
+<ol>
+<li>Fuera del horario de venta, cierre la caja y salga de AguaraPOS en todos los equipos.</li>
+<li>Haga una copia de seguridad.</li>
+<li>Ejecute el parche en la caja del servidor y abra AguaraPOS: actualiza los datos.</li>
+<li>Ejecute el parche en la otra caja.</li>
+</ol>
+<p>Un parche no toca los datos ni las ventas en cola. Un equipo sin actualizar no entra hasta recibirlo, y sus ventas esperan a salvo.</p>
+
+<h2 class="page">Problemas frecuentes</h2>
+<table>
+<tr><th>Qué pasa</th><th>Qué hacer</th></tr>
+<tr><td>Una caja no entra: sin conexión</td><td>Revise que la caja del servidor esté encendida y que el cable de red esté conectado.</td></tr>
+<tr><td>«Datos de una versión más nueva»</td><td>Aplique el último parche en ese equipo.</td></tr>
+<tr><td>«Hay ventas sin subir» al cerrar</td><td>Espere a la conexión, o revise <b>Caja &gt; Ventas por subir</b>.</td></tr>
+<tr><td>El cajón no abre</td><td>Debe estar conectado a una impresora térmica configurada. Pruebe con <b>Caja &gt; Abrir cajón</b>.</td></tr>
+<tr><td>Letras raras en el ticket</td><td>Avise a soporte con una foto de la prueba de impresión.</td></tr>
+<tr><td>Olvidó una contraseña</td><td>Un administrador la cambia en <b>Usuarios</b>.</td></tr>
+</table>

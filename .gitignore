@@ -59,3 +59,7 @@ compile_commands.json
 
 # Private Development Files
 *priv*
+
+# Installer output, and the Microsoft package it carries
+installer/output/
+installer/redist/

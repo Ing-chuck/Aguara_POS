@@ -21,6 +21,7 @@ SUBDIRS += \
     tst_print \
     tst_customers \
     tst_returns \
+    tst_reports \
     tst_modules \
     tst_reconnect \
     tst_mainwindow

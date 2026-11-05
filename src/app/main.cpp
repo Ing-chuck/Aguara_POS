@@ -11,6 +11,7 @@
 #include "sqlinventoryservice.h"
 #include "sqlprintservice.h"
 #include "sqlproductservice.h"
+#include "sqlreportservice.h"
 #include "sqlreturnservice.h"
 #include "sqlsalesservice.h"
 #include "sqluserservice.h"
@@ -27,8 +28,18 @@
 #include <QSysInfo>
 #include <QTranslator>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+
 int main(int argc, char *argv[])
 {
+#ifdef Q_OS_WIN
+    // Lets a patch see that the program is running (AppMutex in the installer).
+    // Windows releases it when the program ends.
+    CreateMutexW(nullptr, FALSE, L"AguaraPOS-running");
+#endif
+
     // Sharp text and icons at 125 % / 150 % Windows scaling
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
@@ -56,7 +67,8 @@ int main(int argc, char *argv[])
     QTranslator qtTranslator;
     const QString qtTranslations = QLibraryInfo::location(QLibraryInfo::TranslationsPath);
     if (qtTranslator.load(QStringLiteral("qtbase_es"), qtTranslations)
-        || qtTranslator.load(QStringLiteral("qtbase_es"), QCoreApplication::applicationDirPath() + QStringLiteral("/translations")))
+        || qtTranslator.load(QStringLiteral("qtbase_es"), QCoreApplication::applicationDirPath() + QStringLiteral("/translations"))
+        || qtTranslator.load(QStringLiteral("qt_es"), QCoreApplication::applicationDirPath() + QStringLiteral("/translations")))     // as windeployqt names it
         a.installTranslator(&qtTranslator);
     else
         qCWarning(lcApp) << "Qt Spanish translation (qtbase_es.qm) not found: standard buttons stay in English";
@@ -132,6 +144,8 @@ int main(int argc, char *argv[])
     customers.setUsers(&users);
     SqlReturnService returns(&connection, &sales, &cash);
     returns.setUsers(&users);
+    SqlReportService reports(&connection, &products);
+    reports.setUsers(&users);
     CoreHost host;
     host.registerService(ProductService_iid, &products);
     host.registerService(InventoryService_iid, &inventory);
@@ -141,6 +155,7 @@ int main(int argc, char *argv[])
     host.registerService(PrintService_iid, &print);
     host.registerService(CustomerService_iid, &customers);
     host.registerService(ReturnService_iid, &returns);
+    host.registerService(ReportService_iid, &reports);
 
     // Nothing opens without a user. First run: create the administrator.
     if (users.hasUsers()) {

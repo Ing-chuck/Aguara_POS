@@ -19,6 +19,7 @@ private slots:
     void migrationIsIdempotent();
     void existingDataSurvivesUpgrade();
     void otherOwnersHaveTheirOwnVersion();
+    void newerDataStopsAnOldProgram();
     void failedMigrationRollsBack();
     void sqlitePragmas();
     void noDefaultConnection();
@@ -103,6 +104,18 @@ void tst_Database::existingDataSurvivesUpgrade()
     q = QSqlQuery();
     connection = QSqlDatabase();
     old.close();
+}
+
+/// One till got the patch and the other didn't: the old one must not work on
+/// tables it doesn't know.
+void tst_Database::newerDataStopsAnOldProgram()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    QList<Migration> older = coreMigrations();
+    older.removeLast();
+    QVERIFY(!m_core.database.migrate(QStringLiteral("core"), older));
+    QVERIFY(m_core.database.lastError().contains(QStringLiteral("parche")));
+    QVERIFY(m_core.database.migrate(QStringLiteral("core"), coreMigrations()));      // the patch arrives
 }
 
 void tst_Database::otherOwnersHaveTheirOwnVersion()

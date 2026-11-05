@@ -236,43 +236,44 @@ Es el corazón del sistema.
 `ReportService` muestra los reportes en pantalla con filtros de fecha, caja, usuario y rubro. Se pueden imprimir y exportar a CSV o PDF, y los módulos pueden aportar los suyos.
 
 **Ventas**
-- [ ] Ventas del día o de un período (totales, cantidad de tickets, ticket promedio)
-- [ ] Ventas por hora
-- [ ] Ventas por artículo, rubro, marca, cajero y medio de pago
-- [ ] Margen bruto por artículo y rubro, con el costo del momento de la venta
+- [x] Ventas del día o de un período (totales, cantidad de tickets, ticket promedio)
+- [x] Ventas por hora
+- [x] Ventas por artículo, rubro, marca, cajero y medio de pago
+- [x] Margen bruto por artículo y rubro, con el costo del momento de la venta
 
 **Caja**
-- [ ] Historial de sesiones, con aperturas, cierres, diferencias y quién las autorizó
-- [ ] Movimientos de efectivo
-- [ ] Anulaciones y devoluciones, con su motivo y quién las autorizó
+- [x] Historial de sesiones, con aperturas, cierres, diferencias y quién las autorizó
+- [x] Movimientos de efectivo
+- [x] Anulaciones y devoluciones, con su motivo y quién las autorizó
 
 **Inventario**
-- [ ] Stock actual valorizado (a costo y a precio)
-- [ ] Artículos bajo el mínimo
-- [ ] Artículos sin movimiento en N días
-- [ ] Kardex de un artículo
-- [ ] Compras por proveedor
-- [ ] Ajustes
+- [x] Stock actual valorizado (a costo y a precio)
+- [x] Artículos bajo el mínimo
+- [x] Artículos sin movimiento en N días
+- [x] Kardex de un artículo
+- [x] Compras por proveedor
+- [x] Ajustes
 
 **Impositivo**
-- [ ] Resumen de IVA por tasa (10 %, 5 % y exenta) del período
-- [ ] Libro de ventas exportable en el formato que pida la SET para el registro de comprobantes. A confirmar con el contador; ver la fase 8.
+- [x] Resumen de IVA por tasa (10 %, 5 % y exenta) del período
+- [x] Libro de ventas en borrador: comprobante por comprobante, con cliente, RUC e IVA, exportable.
+- [ ] Libro de ventas en el formato que pida la SET para el registro de comprobantes. A confirmar con el contador; ver la fase 8.
 
 **Auditoría**
-- [ ] Consulta de la auditoría por usuario, acción y fecha
+- [x] Consulta de la auditoría por usuario, acción y fecha
 
 ### ★ Hito v1.0: primera versión usable
 
 Con las **fases 0 a 6** más este hito, el sistema sirve para un comercio de venta de productos.
 
-- [ ] **Instalador**, con Inno Setup o NSIS:
+- [ ] **Instalador**, con Inno Setup (`installer/`), y **parches** que se aplican a mano en cada equipo:
   - programa y módulos;
   - runtime de MinGW y Qt;
   - opción PostgreSQL: `libpq` de 32 bits, sus DLL y el runtime VC++ 2013 x86;
   - accesos directos;
-  - probado en Windows 7 SP1 de 32 y 64 bits, y en Windows 10 y 11.
-- [ ] Manual corto para el cajero y para el encargado.
-- [ ] **Piloto** de dos semanas en un comercio real, con PostgreSQL y dos cajas.
+  - probado en Windows 7 SP1 de 32 bits, el sistema del piloto.
+- [x] Manual corto para el cajero y para el encargado (`doc/manual`, en PDF).
+- [ ] **Piloto** de dos semanas en un comercio real, con PostgreSQL en una de las dos cajas.
 - [ ] Corrección de lo que surja en el piloto antes de seguir con las fases 7 en adelante.
 
 ### Fase 7: Sistemas externos, como módulos *(L, cada uno M)*
@@ -347,9 +348,11 @@ Fase 0 ─► Fase 1 ─┬─► Fase 2 ───────────┐
 
 | # | Pregunta | Recomendación |
 |---|---|---|
-| 1 | ¿Qué comprobante necesita el comercio piloto: ticket interno, factura con timbrado o factura electrónica? | Definirlo con el contador **antes de la fase 4**. Cambia el diseño de la numeración. |
-| 2 | Cierre con diferencia: ¿bloquear siempre o permitir que un supervisor cierre con la diferencia registrada? | Permitirlo con supervisor y motivo. Si no, una caja con 500 Gs. de diferencia queda trabada. |
+| 1 | ¿Qué comprobante necesita el comercio piloto: ticket interno, factura con timbrado o factura electrónica? | **Decidido:** ticket interno por ahora. La factura sigue en la fase 8. |
+| 2 | Cierre con diferencia: ¿bloquear siempre o permitir que un supervisor cierre con la diferencia registrada? | **Decidido:** con supervisor y motivo. |
 | 3 | ¿Qué impresora térmica y qué cajón se van a usar? | Comprar una ESC/POS de 80 mm de marca conocida para probar desde la fase 4. |
-| 4 | ¿Se permite stock negativo? | Sí, con aviso y registro. |
+| 4 | ¿Se permite stock negativo? | **Decidido:** sí, con aviso y registro. |
 | 5 | ¿Qué sistemas externos opera realmente el comercio: operadoras, redes de cobranza, Western Union? | Hacer solo esos módulos y en ese orden. |
-| 6 | ¿Hace falta cuenta corriente ("fiado") en la v1.0? | Depende del comercio. En almacenes de barrio suele ser imprescindible. |
+| 6 | ¿Hace falta cuenta corriente ("fiado") en la v1.0? | **Decidido:** no. |
+| 7 | ¿Dónde corre PostgreSQL y qué sistema tienen las cajas? | **Decidido:** en una de las cajas, con Windows 7 de 32 bits, así que PostgreSQL 10.23. Las copias fuera del local quedan para más adelante. |
+| 8 | ¿Cómo llegan las actualizaciones? | **Decidido:** parches que se aplican a mano en cada equipo. Un equipo sin actualizar no entra a una base más nueva. |

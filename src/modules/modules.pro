@@ -6,5 +6,6 @@ SUBDIRS += \
     customers_module \
     import_module \
     inventory_manager \
+    reports_module \
     sales_module \
     users_module

@@ -20,6 +20,7 @@ SOURCES      +=     \
     saleoutbox.cpp \
     sqlcustomerservice.cpp \
     sqlprintservice.cpp \
+    sqlreportservice.cpp \
     sqlreturnservice.cpp \
     errors.cpp      \
     inactivitywatcher.cpp \
@@ -48,6 +49,7 @@ HEADERS      +=     \
     saleoutbox.h \
     sqlcustomerservice.h \
     sqlprintservice.h \
+    sqlreportservice.h \
     sqlreturnservice.h \
     errors.h        \
     inactivitywatcher.h \

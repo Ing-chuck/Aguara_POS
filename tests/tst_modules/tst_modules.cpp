@@ -13,6 +13,7 @@
 #include <QDir>
 #include <QFile>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QPluginLoader>
 #include <QAbstractButton>
 #include <QAction>
@@ -81,6 +82,7 @@ private slots:
     void paymentKeysFollowTheMethods();
     void configuringPaymentMethods();
     void customersPage();
+    void reportsPage();
     void chargingPrintsAndOpensTheDrawer();
     void printerFailureDoesNotStopTheSale();
     void copyNeedsASupervisor();
@@ -1148,6 +1150,86 @@ void tst_Modules::customersPage()
     m_page->findChild<QPushButton *>(QStringLiteral("customerToggle"))->click();
     QCOMPARE(asked, 1);
     QCOMPARE(m_core.customers->customers().size(), 1);
+}
+
+void tst_Modules::reportsPage()
+{
+    openUsers();
+    auto factory = load(QStringLiteral("modulo_stats.dll"));
+    auto provider = qobject_cast<PermissionProvider *>(factory);
+    QVERIFY(provider);
+    QVERIFY(m_users->registerPermissions(provider->permissions()));
+    auto widgets = qobject_cast<WidgetModuleInterface *>(factory);
+    QVERIFY(widgets);
+
+    Product p;
+    p.code = QStringLiteral("A");
+    p.description = QStringLiteral("ARTICULO");
+    p.price = 10000;
+    p.cost = 7000;
+    p.stock = AguaraQuantity::whole(10);
+    QVERIFY(m_core.products->saveProduct(p));
+    DenominationCount note;
+    note.denomination = 100000;
+    note.count = 1;
+    QVERIFY(m_core.cash->openSession({ note }));
+    SaleLine line;
+    line.code = p.code;
+    line.description = p.description;
+    line.unitPrice = p.price;
+    SaleDraft draft;
+    draft.lines << line;
+    QVERIFY(m_core.sales->checkout(draft, { inCash(10000) }) > 0);
+
+    QVERIFY(m_users->login(QStringLiteral("encargado"), QStringLiteral("clave123")));
+    m_page = widgets->createWidget();
+    m_page->show();
+
+    // the first report runs by itself, today, and its total comes last
+    auto table = m_page->findChild<QTableWidget *>(QStringLiteral("reportTable"));
+    auto list = m_page->findChild<QListWidget *>(QStringLiteral("reportList"));
+    QCOMPARE(m_page->findChild<QLabel *>(QStringLiteral("reportTitle"))->text(), QStringLiteral("Ventas por día"));
+    QCOMPARE(table->rowCount(), 2);
+    QCOMPARE(table->item(1, 0)->text(), QStringLiteral("Total"));
+    QCOMPARE(table->item(1, 3)->text(), QStringLiteral("10.000"));
+    QVERIFY(m_page->findChild<QPushButton *>(QStringLiteral("reportCsv"))->isEnabled());
+
+    // headings can't be chosen, and each report shows its own filters
+    QCOMPARE(list->item(0)->flags(), Qt::NoItemFlags);
+    const auto choose = [list](const QString &title) {
+        const auto found = list->findItems(title, Qt::MatchExactly);
+        if (!found.isEmpty())
+            list->setCurrentItem(found.first());
+        return !found.isEmpty();
+    };
+    QVERIFY(choose(QStringLiteral("Stock valorizado")));
+    QVERIFY(m_page->findChild<QWidget *>(QStringLiteral("reportFrom"))->isHidden()
+            || !m_page->findChild<QWidget *>(QStringLiteral("reportFrom"))->isVisible());
+    QCOMPARE(table->rowCount(), 2);
+
+    // the kardex waits for its code, and a wrong one says so
+    QVERIFY(choose(QStringLiteral("Kardex de un artículo")));
+    QCOMPARE(table->rowCount(), 0);
+    QVERIFY(!m_page->findChild<QPushButton *>(QStringLiteral("reportCsv"))->isEnabled());
+    auto text = m_page->findChild<QLineEdit *>(QStringLiteral("reportText"));
+    text->setText(QStringLiteral("NADA"));
+    QTest::keyClick(text, Qt::Key_Return);
+    QVERIFY(m_page->findChild<QLabel *>(QStringLiteral("reportProblem"))->text().contains(QStringLiteral("código")));
+    text->setText(QStringLiteral("A"));
+    QTest::keyClick(text, Qt::Key_Return);
+    QVERIFY(table->rowCount() >= 1);
+    QVERIFY(m_page->findChild<QLabel *>(QStringLiteral("reportProblem"))->isHidden());
+
+    // what costs show is for who may see costs
+    QVERIFY(m_users->login(QStringLiteral("cajero"), QStringLiteral("clave123")));
+    delete m_page;
+    m_page = widgets->createWidget();
+    m_page->show();
+    list = m_page->findChild<QListWidget *>(QStringLiteral("reportList"));
+    QVERIFY(list->findItems(QStringLiteral("Margen por artículo"), Qt::MatchExactly).isEmpty());
+    QVERIFY(list->findItems(QStringLiteral("Stock valorizado"), Qt::MatchExactly).isEmpty());
+    QVERIFY(list->findItems(QStringLiteral("Registro de auditoría"), Qt::MatchExactly).isEmpty());
+    QVERIFY(!list->findItems(QStringLiteral("Ventas por día"), Qt::MatchExactly).isEmpty());
 }
 
 static PrinterSettings thermal()

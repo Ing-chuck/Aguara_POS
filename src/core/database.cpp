@@ -314,6 +314,14 @@ bool Database::migrate(const QString &owner, const QList<Migration> &migrations)
     std::sort(pending.begin(), pending.end(),
               [](const Migration &a, const Migration &b) { return a.version < b.version; });
 
+    // Another till got a patch first: this program doesn't know these tables.
+    if (!pending.isEmpty() && schemaVersion(owner) > pending.last().version) {
+        m_lastError = QCoreApplication::translate("Database", "Estos datos son de una versión más nueva de AguaraPOS. "
+                                                  "Aplique en este equipo el último parche.");
+        qCWarning(lcDatabase) << "Schema" << owner << schemaVersion(owner) << "is newer than this program:" << pending.last().version;
+        return false;
+    }
+
     for (const Migration &m : qAsConst(pending)) {
         if (!beginMigrationTransaction())
             return false;
@@ -977,5 +985,14 @@ QList<Migration> coreMigrations()
     v8.sqlite = returnsSchema(false);
     v8.postgresql = returnsSchema(true);
 
-    return { v1, v2, v3, v4, v5, v6, v7, v8 };
+    Migration v9;
+    v9.version = 9;
+    v9.description = QStringLiteral("reports look things up by date");
+    v9.sqlite = v9.postgresql = QStringList {
+        QStringLiteral("CREATE INDEX ventas_fecha ON ventas (fecha)"),
+        QStringLiteral("CREATE INDEX devoluciones_fecha ON devoluciones (fecha)"),
+        QStringLiteral("CREATE INDEX stock_movimientos_fecha ON stock_movimientos (fecha)"),
+    };
+
+    return { v1, v2, v3, v4, v5, v6, v7, v8, v9 };
 }

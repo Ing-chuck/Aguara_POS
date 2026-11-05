@@ -17,7 +17,8 @@ SOURCES += aguarastyle.cpp \
            salesservice.cpp \
            customerservice.cpp \
            customerdialog.cpp \
-           returnservice.cpp
+           returnservice.cpp \
+           reportservice.cpp
 HEADERS += aguara_global.h \
            aguarastyle.h \
            aguarahost.h \
@@ -26,6 +27,7 @@ HEADERS += aguara_global.h \
            customerdialog.h \
            customerservice.h \
            returnservice.h \
+           reportservice.h \
            printservice.h \
            inventoryservice.h \
            quantity.h \

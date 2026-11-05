@@ -837,6 +837,10 @@ void MainWindow::loadPlugins()
         loaded.info     = module->moduleInfo();
         loaded.widgets  = qobject_cast<WidgetModuleInterface *>(plugin);
         loaded.importer = qobject_cast<ImportArticlesInterface *>(plugin);
+        auto reports = host->service<ReportService>();
+        auto provider = qobject_cast<ReportProvider *>(plugin);
+        if (reports && provider)
+            reports->addProvider(provider);
         modules.append(loaded);
         moduleButtons.append(nullptr);
         qCInfo(lcModules) << "Loaded module" << fileName << loaded.info.id << loaded.info.version;

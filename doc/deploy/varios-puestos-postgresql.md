@@ -8,17 +8,25 @@ los datos se guardan en un **servidor PostgreSQL** al que se conectan todos los 
 > recursos compartidos y la base de datos puede corromperse (ver
 > https://www.sqlite.org/useovernet.html).
 
-Si el servidor o la red se caen, los puestos no pueden operar hasta que se restablezca la
-conexion (reiniciar AguaraPOS en cada puesto).
+Si el servidor o la red se caen, un puesto abierto termina y cobra la venta en pantalla, que queda en
+su cola local y sube sola al volver la conexion. No se pueden iniciar ventas nuevas, y un puesto cerrado
+no puede entrar hasta que vuelva el servidor.
 
 ## 1. Servidor
 
-Un equipo de la red que quede siempre encendido, con IP fija (ej. `192.168.1.10`).
-Se recomienda un equipo de 64 bits con una version de PostgreSQL con soporte vigente
-(https://www.postgresql.org/download/windows/). El servidor puede ser Windows o Linux; los
-puestos solo necesitan el cliente (paso 2).
+El servidor corre en **una de las cajas**, con IP fija (ej. `192.168.1.10`). Es la primera que se
+enciende y la ultima que se apaga: sin ella, las demas cajas no pueden entrar al programa.
+
+Esa caja tiene Windows 7 de 32 bits, asi que el servidor es **PostgreSQL 10.23 de 32 bits**, la ultima
+version publicada para ese sistema. Ya no recibe correcciones de seguridad, igual que Windows 7: esa
+caja y la red del local **no deben quedar expuestas a Internet**. Con un equipo de 64 bits conviene una
+version con soporte vigente; el servidor tambien puede ser Linux. Los puestos solo necesitan el cliente
+(paso 2).
 
 1. Instalar PostgreSQL y anotar la contraseña del usuario `postgres`.
+   En PostgreSQL 10, antes de crear el usuario, poner en `postgresql.conf`
+   `password_encryption = scram-sha-256` y reiniciar el servicio. Si no, la contraseña queda en md5 y
+   la regla del paso 3 rechaza a todos los puestos.
 2. Crear el usuario y la base de datos de AguaraPOS (con `psql -U postgres` o pgAdmin):
 
    ```sql
@@ -53,7 +61,8 @@ puestos solo necesitan el cliente (paso 2).
    - Probarla una vez con `schtasks /Run /TN "AguaraPOS backup"` y revisar que aparezca el
      archivo `aguara-AAAAMMDD-HHMMSS.dump`.
    - **Copiar también los respaldos a otro disco u otro equipo**: una copia en el mismo disco se
-     pierde con ese disco.
+     pierde con ese disco. Mientras no haya copia fuera del local, copiarlos cada semana a un pendrive
+     o disco externo que no quede enchufado a la caja.
    - Restaurar, con AguaraPOS cerrado en todos los puestos:
      `pg_restore --clean --if-exists -h localhost -U aguara -d aguara D:\AguaraBackups\aguara-....dump`
 
@@ -68,6 +77,7 @@ servidores PostgreSQL actuales):
    de su carpeta `pgsql\bin` al lado de `aguara.exe`:
    `libpq.dll`, `libssl-1_1.dll`, `libcrypto-1_1.dll`, `libintl-8.dll`, `libiconv-2.dll`.
 2. Instalar el **Visual C++ 2013 Redistributable (x86)** de Microsoft (lo requiere `libpq.dll`).
+   Con el instalador de AguaraPOS estos dos pasos no hacen falta: ya trae esas DLL y el runtime.
 3. Abrir **Preferencias > Conexion a los datos** como administrador (o iniciar `aguara.exe --configure-database`), elegir **Servidor en la red**, completar
    servidor, puerto, base de datos, usuario y contraseña, y **Probar conexion**.
    La configuracion se guarda en `%APPDATA%\Aguara\AguaraPOS\aguara.ini`.
@@ -81,6 +91,20 @@ servidores PostgreSQL actuales):
    que queda en texto plano en el perfil del usuario de Windows.
 
 Cuando un puesto modifica productos, los demas actualizan sus listas automaticamente.
+
+## Actualizar con un parche
+
+Un parche se aplica a mano, equipo por equipo, con `aguarapos-parche-X.Y.Z.exe`. Cambia los programas,
+no toca los datos ni la cola de ventas.
+
+1. Fuera del horario de venta, **cerrar la caja y salir de AguaraPOS en todos los equipos**.
+2. Hacer una copia de seguridad con la tarea del paso 1 del servidor.
+3. Aplicar el parche en la caja del servidor y abrir AguaraPOS: actualiza la base de datos.
+4. Aplicar el parche en las demas cajas.
+
+Un equipo sin actualizar **no puede entrar**: avisa que los datos son de una version mas nueva, y sus
+ventas en cola esperan a salvo hasta que reciba el parche. Si una caja se actualizo por error antes
+que las demas, no hay daño: solo hay que aplicar el parche al resto.
 
 ## Para desarrolladores
 

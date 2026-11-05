@@ -38,6 +38,9 @@ Estructura de la salida dentro de la carpeta de compilacion:
     tests/bin/tst_*.exe        <- pruebas (no se instalan)
 
 
+**Instalador**: `installer/build.sh CARPETA_RELEASE PGSQL_BIN` arma el instalador con Inno Setup 6, y con
+`patch` al final, el parche (ver `installer/aguarapos.iss`).
+
 **Pruebas**: `mingw32-make check` en la carpeta de compilacion, o el panel *Test Results* de
 Qt Creator. Cada push las ejecuta en GitHub Actions (`.github/workflows/ci.yml`), con SQLite y con
 un servidor PostgreSQL de prueba.
@@ -214,6 +217,15 @@ nota de credito. Vuelve el stock al costo de la venta, sale de la sesion actual 
 conexion y la caja abierta. La venta con devoluciones ya no se puede anular. Una **nota de credito** es
 interna (la fiscal es de la fase 8): su numero `NC-000001` se usa como medio de pago, tambien en parte, hasta
 agotar el saldo; anular esa venta devuelve el saldo. Sin conexion no se usa, porque no se ve su saldo.
+
+**Reportes:** pagina propia para ventas (por dia, hora, articulo, rubro, marca, cajero y medio de pago, y
+margen con el costo del momento de la venta), caja (sesiones, movimientos, anulaciones y devoluciones),
+inventario (stock valorizado, bajo el minimo, sin movimiento, kardex, compras, ajustes), IVA, un libro de
+ventas en borrador y la auditoria. Filtros por fechas, caja, usuario y rubro segun el reporte; cada uno se
+imprime y se exporta a PDF o a CSV para Excel en espanol. *Ventas por dia* coincide al guarani con las
+planillas de cierre. Las devoluciones cuentan el dia que ocurrieron. Costos y margenes piden
+`reportes.costos`, la auditoria `reportes.auditoria`, y una sesion abierta no muestra lo esperado, para no
+romper el arqueo a ciegas. Un modulo aporta sus reportes con `ReportProvider`.
 
 **Una venta se guarda entera o no se guarda:** venta, lineas, pago, movimientos de stock y numero van
 en una sola transaccion. La numeracion es correlativa por caja, sin saltos ni repetidos entre puestos.
