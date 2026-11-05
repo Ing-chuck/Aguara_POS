@@ -23,6 +23,25 @@ caja y la red del local **no deben quedar expuestas a Internet**. Con un equipo 
 version con soporte vigente; el servidor tambien puede ser Linux. Los puestos solo necesitan el cliente
 (paso 2).
 
+**Con el instalador de AguaraPOS, la forma recomendada.** En la caja que guarda los datos, marcar
+**Instalar el servidor PostgreSQL** al ejecutar `aguarapos-X.Y.Z.exe` y elegir una contraseña. Anotarla: es
+la de las demas cajas. Hace los pasos 1 a 4 de abajo:
+
+* instala el servidor en `pgsql` dentro de la carpeta de AguaraPOS, y los datos en
+  `%ProgramData%\AguaraPOS\pgdata`;
+* crea la base y el usuario `aguara`, y al superusuario `postgres`, con esa misma contraseña;
+* lo registra como el servicio de Windows `AguaraPostgreSQL`, que arranca con el equipo;
+* permite el puerto 5432 solo desde la red local, y solo al usuario `aguara` (`samenet` en `pg_hba.conf`).
+
+Si algo falla, AguaraPOS queda instalado y lo que paso esta en `%ProgramData%\AguaraPOS\pg-setup.log`. Si ya
+hay otro PostgreSQL en el equipo, el instalador se detiene: hay que desinstalarlo antes, porque usaria el mismo
+puerto. Por eso, despues de un intento fallido con otro instalador, revisar que no haya quedado su servicio.
+
+Reinstalar no toca los datos. Desinstalar quita el servicio y deja los datos en `pgdata`: se borran a mano, y
+solo despues de confirmar que hay copia. Los parches no cambian el servidor.
+
+**A mano**, por ejemplo con un servidor en otro equipo:
+
 1. Instalar PostgreSQL y anotar la contraseña del usuario `postgres`.
    En PostgreSQL 10, antes de crear el usuario, poner en `postgresql.conf`
    `password_encryption = scram-sha-256` y reiniciar el servicio. Si no, la contraseña queda en md5 y
@@ -49,9 +68,10 @@ version con soporte vigente; el servidor tambien puede ser Linux. Los puestos so
 
    Reiniciar el servicio de PostgreSQL.
 4. Abrir el puerto TCP 5432 en el firewall del servidor, solo para la red local.
-5. **Respaldos**: copiar `scripts\backup-postgresql.ps1` al servidor (por ejemplo a
+5. **Respaldos**, en los dos casos: copiar `scripts\backup-postgresql.ps1` al servidor (por ejemplo a
    `C:\AguaraPOS\`). El script ejecuta `pg_dump`, deja las copias en una carpeta y conserva las
-   30 más nuevas.
+   30 más nuevas. Ejecutado desde la carpeta instalada, usa el `pg_dump` que trae AguaraPOS; copiado a
+   otro lado, indicar su carpeta con `-PgBin`.
    - La contraseña la lee `pg_dump` de `%APPDATA%\postgresql\pgpass.conf` del usuario de Windows
      que ejecuta la tarea. Una línea: `localhost:5432:aguara:aguara:CONTRASEÑA`.
    - Programar la tarea diaria, como ese usuario:

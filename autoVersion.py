@@ -5,7 +5,9 @@ Product version (src/interfaces/version.h), MAJOR.MINOR.PATCH, what people see:
     patch   fixes, delivered as a patch
     minor   new features
     major   a change that takes planning at the store
-  It changes only on purpose, with "bump": never because of a build.
+  It changes only on purpose, with "bump": never because of a build. A version
+  not ready yet carries a label, as in 1.0.0-beta: "pre" sets it, "bump" keeps
+  it and "final" takes it off.
 
 API level (src/interfaces/apiversion.h), a single number, what modules are
 checked against. Every interface ID ends in it, so a module built against
@@ -24,6 +26,8 @@ because the installer and every patch carry all the modules.
                                         tagged on different code
     python autoVersion.py api           raise the API level
     python autoVersion.py bump patch    or minor, or major
+    python autoVersion.py pre beta      label the version, here X.Y.Z-beta
+    python autoVersion.py final         take the label off
     python autoVersion.py tag           tag the commit with vX.Y.Z (no push)
 
 No dependencies but Python 3 (and git for tags). Works from any folder.
@@ -90,6 +94,18 @@ def product_version():
     return parts
 
 
+def version_suffix():
+    found = re.search(r'^#define VERSION_SUFFIX "([^"]*)"', read(VERSION_H), re.M)
+    return found.group(1) if found else ''
+
+
+def set_suffix(suffix):
+    text = read(VERSION_H)
+    if not re.search(r'^#define VERSION_SUFFIX "', text, re.M):
+        raise Stop('no VERSION_SUFFIX in %s' % VERSION_H)
+    write(VERSION_H, re.sub(r'^(#define VERSION_SUFFIX )"[^"]*"', r'\g<1>"%s"' % suffix, text, flags=re.M))
+
+
 def api_state():
     text = read(API_H)
     level = re.search(r'^#define AGUARA_API_VERSION "(\d+)"', text, re.M)
@@ -121,7 +137,7 @@ def git(*args):
 
 
 def tag_name():
-    return 'v%d.%d.%d' % tuple(product_version())
+    return 'v%d.%d.%d' % tuple(product_version()) + version_suffix()
 
 
 def tag_commit():
@@ -172,7 +188,8 @@ def cmd_api(_):
 
 def cmd_bump(args):
     require_api_recorded()
-    major, minor, patch = old = product_version()
+    old_name = tag_name()
+    major, minor, patch = product_version()
     if args.part == 'major':
         new = [major + 1, 0, 0]
     elif args.part == 'minor':
@@ -183,8 +200,26 @@ def cmd_bump(args):
     for part, number in zip(('MAJOR', 'MINOR', 'PATCH'), new):
         text = re.sub(r'^(#define VERSION_%s )\d+' % part, r'\g<1>%d' % number, text, flags=re.M)
     write(VERSION_H, text)
-    print('%d.%d.%d -> %d.%d.%d' % tuple(old + new))
+    print('%s -> %s' % (old_name[1:], tag_name()[1:]))
     print('Commit, build and test on a till, then: python autoVersion.py tag')
+
+
+def cmd_pre(args):
+    require_api_recorded()
+    if not re.fullmatch(r'[0-9A-Za-z]+(\.[0-9A-Za-z]+)*', args.label):
+        raise Stop('a label is letters and numbers, as in beta or rc.1')
+    old_name = tag_name()
+    set_suffix('-' + args.label)
+    print('%s -> %s' % (old_name[1:], tag_name()[1:]))
+
+
+def cmd_final(_):
+    require_api_recorded()
+    if not version_suffix():
+        raise Stop('%s has no label' % tag_name()[1:])
+    old_name = tag_name()
+    set_suffix('')
+    print('%s -> %s' % (old_name[1:], tag_name()[1:]))
 
 
 def cmd_tag(_):
@@ -212,6 +247,10 @@ def main():
     bump = commands.add_parser('bump')
     bump.add_argument('part', choices=['major', 'minor', 'patch'])
     bump.set_defaults(run=cmd_bump)
+    pre = commands.add_parser('pre')
+    pre.add_argument('label')
+    pre.set_defaults(run=cmd_pre)
+    commands.add_parser('final').set_defaults(run=cmd_final)
     commands.add_parser('tag').set_defaults(run=cmd_tag)
     args = parser.parse_args()
 

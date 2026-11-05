@@ -36,7 +36,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# pg_dump: from -PgBin, else the newest PostgreSQL installed in Program Files, else PATH
+# pg_dump: from -PgBin, else the server that comes with AguaraPOS (next to the
+# installed copy of this script), else the newest in Program Files, else PATH
+$bundled = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "../pgsql/bin"
+if ($PgBin -eq "" -and (Test-Path (Join-Path $bundled "pg_dump.exe"))) { $PgBin = $bundled }
 if ($PgBin -eq "") {
     $installed = Get-ChildItem -Path "$env:ProgramFiles\PostgreSQL" -ErrorAction SilentlyContinue |
                  Where-Object { Test-Path (Join-Path $_.FullName "bin\pg_dump.exe") } |

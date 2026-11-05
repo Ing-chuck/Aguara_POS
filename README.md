@@ -52,11 +52,16 @@ Estructura de la salida dentro de la carpeta de compilacion:
 
 **Instalador**: `installer/build.sh CARPETA_RELEASE PGSQL_BIN` arma el instalador, y con `patch` al final,
 el parche, en `installer/output/`. `PGSQL_BIN` es la carpeta `pgsql/bin` del zip de PostgreSQL 10 de 32
-bits. Necesita Qt y MinGW en el PATH, Python 3 e Inno Setup 6: si `ISCC.exe` no esta en el PATH, indicar
+bits, con `bin`, `lib` y `share` descomprimidas: de ahi sale tambien el servidor. Necesita Qt y MinGW en el PATH, Python 3 e Inno Setup 6: si `ISCC.exe` no esta en el PATH, indicar
 su ruta en la variable `ISCC`. Sin Inno Setup deja lista la carpeta `stage` y termina. Primero copia lo
 que hace falta en un puesto: Qt, el runtime de MinGW, el cliente de PostgreSQL con sus DLL y el runtime
 de Visual C++ 2013 (`msvcr120.dll` y `msvcp120.dll`). Estas dos las toma de `installer/redist/` o, si no
 estan, de Windows: en un equipo sin ellas, ponerlas en esa carpeta.
+
+El **servidor PostgreSQL** es una tarea opcional del instalador, para la caja que guarda los datos. Va en su
+propia carpeta (`stage-pg`) sin pgAdmin, simbolos ni documentacion, y `installer/pg-setup.cmd` lo prepara. Los
+parches no lo llevan. Al ser codigo que el instalador no prueba por si solo, revisar esta tarea en una
+maquina limpia cada vez que se cambie.
 
 El parche reemplaza todos los programas y modulos, no toca los datos y comprueba que AguaraPOS este
 instalado. Como aplicarlo: [doc/deploy/varios-puestos-postgresql.md](doc/deploy/varios-puestos-postgresql.md).
@@ -81,7 +86,9 @@ Hay dos numeros, y `autoVersion.py` se encarga de ambos (solo necesita Python 3 
 
 **Version del programa** (`src/interfaces/version.h`), `MAYOR.MENOR.PARCHE`: la que ve la gente y lleva
 el instalador. Cambia solo a pedido, nunca por compilar. Parche: correcciones. Menor: funciones nuevas.
-Mayor: un cambio que hay que planificar con el comercio.
+Mayor: un cambio que hay que planificar con el comercio. Una version todavia no definitiva lleva una
+etiqueta, como `1.0.0-beta`: `pre` la pone, `bump` la conserva y `final` la quita. Cada beta publicada
+con cambios necesita otra etiqueta (`pre beta.2`), porque dos programas no pueden compartir version.
 
 **Nivel de API** (`src/interfaces/apiversion.h`): un solo numero contra el que se comprueban los modulos.
 Todos los IID terminan en el. Un modulo compilado con otro nivel no pasa el control de sus metadatos y se
@@ -94,6 +101,8 @@ porque el instalador y cada parche llevan todos los modulos.
     python autoVersion.py check            falla si la API cambio sin subir el nivel
     python autoVersion.py api              sube el nivel de API
     python autoVersion.py bump patch       o minor, o major
+    python autoVersion.py pre beta         pone una etiqueta: X.Y.Z-beta
+    python autoVersion.py final            quita la etiqueta
     python autoVersion.py tag              etiqueta el commit con vX.Y.Z, sin hacer push
 
 Para publicar: `bump`, commit, compilar, `installer/build.sh`, probar en una caja real, `tag` y push.

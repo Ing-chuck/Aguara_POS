@@ -89,6 +89,43 @@ class AutoVersion(unittest.TestCase):
         self.assertEqual(self.get('version.h'),
                          '#define VERSION_MAJOR 2\r\n#define VERSION_MINOR 0\r\n#define VERSION_PATCH 0\r\n')
 
+    def labelled(self):
+        self.put('version.h', VERSION_H + '#define VERSION_SUFFIX ""\r\n')
+
+    def test_a_label_comes_and_goes_and_keeps_line_endings(self):
+        self.labelled()
+        self.assertEqual(self.tool('pre', 'beta').returncode, 0)
+        self.assertIn('#define VERSION_SUFFIX "-beta"\r\n', self.get('version.h'))
+        self.assertIn('Version  1.2.3-beta', self.tool().stdout)
+
+        self.tool('bump', 'patch')                      # stays until it's taken off
+        self.assertIn('Version  1.2.4-beta', self.tool().stdout)
+
+        self.assertEqual(self.tool('final').returncode, 0)
+        self.assertIn('#define VERSION_SUFFIX ""\r\n', self.get('version.h'))
+        self.assertIn('Version  1.2.4\n', self.tool().stdout)
+        self.assertEqual(self.tool('final').returncode, 1)  # nothing to take off
+
+    def test_a_label_is_letters_and_numbers(self):
+        self.labelled()
+        for bad in ('be ta', 'beta"', '-beta', 'beta.'):
+            self.assertEqual(self.tool('pre', '--', bad).returncode, 1, bad)
+        self.assertEqual(self.tool('pre', 'rc.1').returncode, 0)
+        self.assertIn('"-rc.1"', self.get('version.h'))
+
+    def test_a_label_is_part_of_the_tag(self):
+        self.labelled()
+        self.tool('pre', 'beta')
+        self.commit()
+        self.assertEqual(self.tool('tag').returncode, 0)
+        self.assertEqual(self.tool('check', '--release').returncode, 0)
+
+        (self.root / 'fix.cpp').write_text('int fix;\n')
+        self.commit()
+        self.assertEqual(self.tool('check', '--release').returncode, 1)  # beta is out
+        self.tool('pre', 'beta.2')
+        self.assertEqual(self.tool('check', '--release').returncode, 0)
+
     def test_no_release_with_the_api_unrecorded(self):
         self.put('service.h', SERVICE_H.replace('int total;', 'long total;'))
         self.assertEqual(self.tool('bump', 'patch').returncode, 1)

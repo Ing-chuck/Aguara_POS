@@ -4,3 +4,6 @@
 # Shell scripts run under bash (CI, tests): always LF, even on Windows checkouts
 *.sh text eol=lf
 .githooks/* text eol=lf
+
+# cmd.exe loses its labels with LF
+*.cmd text eol=crlf

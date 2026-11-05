@@ -4,7 +4,8 @@
 #   installer/build.sh BUILD_DIR PG_CLIENT_BIN [patch]
 #
 #   BUILD_DIR       a release build (its bin/ has aguara.exe)
-#   PG_CLIENT_BIN   pgsql/bin of the 32-bit PostgreSQL 10 zip
+#   PG_CLIENT_BIN   pgsql/bin of the 32-bit PostgreSQL 10 zip, unpacked whole: the
+#                   full installer also carries the server, from next to it
 #
 # Stops if autoVersion.py says this can't be released as it is.
 # Needs Python 3, and Qt and MinGW on PATH. Without ISCC (Inno Setup 6) it leaves the staging
@@ -28,7 +29,8 @@ STAGE="$BUILD_DIR/stage"
 $PYTHON -B "$ROOT/autoVersion.py" check --release
 
 number() { sed -n "s/^#define VERSION_$1 //p" "$ROOT/src/interfaces/version.h" | tr -d '\r'; }
-VERSION="$(number MAJOR).$(number MINOR).$(number PATCH)"
+NUMERIC="$(number MAJOR).$(number MINOR).$(number PATCH)"
+VERSION="$NUMERIC$(sed -n 's/^#define VERSION_SUFFIX "\(.*\)".*/\1/p' "$ROOT/src/interfaces/version.h")"
 echo "== AguaraPOS $VERSION ($MODE)"
 
 rm -rf "$STAGE"
@@ -58,6 +60,25 @@ for dll in msvcr120.dll msvcp120.dll; do
     fi
 done
 
+# The server, for the caja that hosts the data: its own folder, so it's an
+# option in the installer and patches leave it alone. Only what it needs to run.
+PG_STAGE="$BUILD_DIR/stage-pg"
+if [ "$MODE" != patch ]; then
+    PG_DIR="$(dirname "$PG_CLIENT_BIN")"
+    [ -f "$PG_DIR/share/postgresql.conf.sample" ] || {
+        echo "No PostgreSQL server in $PG_DIR: unpack bin, lib and share of the zip there"; exit 1; }
+    rm -rf "$PG_STAGE"
+    mkdir -p "$PG_STAGE"
+    cp -r "$PG_DIR/bin" "$PG_DIR/lib" "$PG_DIR/share" "$PG_STAGE/"
+    rm -f "$PG_STAGE"/bin/stackbuilder.exe "$PG_STAGE"/bin/wx*.dll "$PG_STAGE"/bin/icutest*.dll \
+          "$PG_STAGE"/bin/icutu*.dll "$PG_STAGE"/bin/*regress*.exe "$PG_STAGE"/bin/isolationtester.exe \
+          "$PG_STAGE"/bin/ecpg.exe "$PG_STAGE"/lib/*.lib "$PG_STAGE"/lib/*.a
+    rm -rf "$PG_STAGE/lib/pgxs"
+    cp "$STAGE/msvcr120.dll" "$STAGE/msvcp120.dll" "$PG_STAGE/bin/"
+    cp "$HERE/LICENSE-PostgreSQL.txt" "$PG_STAGE/"
+    cp "$HERE/pg-setup.cmd" "$STAGE/scripts/"
+fi
+
 cp "$ROOT"/doc/manual/*.pdf "$STAGE/doc/"
 cp "$ROOT/doc/deploy/varios-puestos-postgresql.md" "$STAGE/doc/"
 cp "$ROOT/scripts/backup-postgresql.ps1" "$STAGE/scripts/"
@@ -69,8 +90,8 @@ if [ -z "$ISCC" ]; then
     exit 0
 fi
 
-ARGS=("/DAppVersion=$VERSION" "/DStage=$(cygpath -w "$STAGE")")
-[ "$MODE" = patch ] && ARGS+=("/DPatch")
+ARGS=("/DAppVersion=$VERSION" "/DNumericVersion=$NUMERIC" "/DStage=$(cygpath -w "$STAGE")")
+if [ "$MODE" = patch ]; then ARGS+=("/DPatch"); else ARGS+=("/DPgStage=$(cygpath -w "$PG_STAGE")"); fi
 # Git Bash would turn /DName=value into a path
 (cd "$HERE" && MSYS2_ARG_CONV_EXCL="*" "$ISCC" "${ARGS[@]}" aguarapos.iss)
 ls -la "$HERE"/output
