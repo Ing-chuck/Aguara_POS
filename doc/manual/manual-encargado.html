@@ -2,13 +2,14 @@
 <p class="sub">Manual del encargado</p>
 
 <p>Este manual cubre lo que rodea a la venta: usuarios, artículos, compras, control de la caja, reportes y mantenimiento. Lo que hace el cajero está en su propio manual.</p>
+<p class="note">En todos los formularios, los datos con <b>*</b> son obligatorios. Antes de dar de baja, quitar o desactivar algo, el programa pregunta: <b>Enter</b> y <b>Esc</b> cancelan, y para confirmar se pulsa <b>Tab</b> y <b>Enter</b>, o el botón rojo.</p>
 
 <h2>1. Puesta en marcha</h2>
 <p>La primera vez que el programa abre con una base nueva, pide crear el administrador. Después, en este orden:</p>
 <ol>
-<li><b>Preferencias &gt; Impresora y comercio:</b> datos del comercio, impresora y prueba de impresión.</li>
+<li><b>Preferencias &gt; Impresora y comercio:</b> datos del comercio, impresora y prueba de impresión. El nombre del comercio es obligatorio, porque encabeza los tickets.</li>
 <li><b>Usuarios:</b> un usuario para cada persona. No comparta usuarios: la auditoría registra quién hizo qué.</li>
-<li><b>Inventario:</b> cargue o importe los artículos, y sus códigos.</li>
+<li><b>Inventario:</b> cargue o importe los artículos, y sus códigos. También puede crearlos a medida que llegan, con <b>Alta de productos</b>.</li>
 <li><b>Caja &gt; Medios de pago:</b> deje en uso los que acepta el comercio.</li>
 </ol>
 <img src="img/50-printer.png" width="230"/>
@@ -23,46 +24,66 @@
 <tr><td>Encargado</td><td>Todo salvo usuarios y conexión</td><td>20 %</td></tr>
 <tr><td>Cajero</td><td>Vender, abrir y cerrar la caja, y cargar clientes</td><td>5 %</td></tr>
 </table>
+<p>El nombre de usuario no lleva espacios. Para que alguien deje de entrar, desmarque <b>Activo</b> en su ficha: lo que hizo sigue en la auditoría.</p>
 <p>Se pueden crear otros roles en <b>Roles y permisos</b>. Cuando alguien no tiene un permiso, el programa pide un supervisor en ese momento, sin cerrar su sesión. La pestaña <b>Auditoría</b> muestra lo que hizo cada uno.</p>
 
 <h2>3. Artículos</h2>
-<p><b>Nuevo artículo</b> crea uno. En el menú <b>Más</b> están los ajustes de stock, el historial, el cambio de precios y las etiquetas de góndola.</p>
+<p><b>Nuevo artículo</b> crea uno. <b>Alta de productos</b> carga lo que llegó (sección 4). En el menú <b>Más</b> están los ajustes de stock, el historial, el cambio de precios y las etiquetas de góndola.</p>
 <img src="img/02-inventory.png" width="340"/>
 <ul>
-<li><b>Importar:</b> <b>Archivo &gt; Importar artículos</b> carga un archivo CSV.</li>
+<li><b>Buscar:</b> la tabla se reduce mientras escribe, por código, descripción, marca o rubro, sin importar acentos ni el orden de las palabras. <b>Esc</b> borra la búsqueda.</li>
+<li><b>Precio:</b> un artículo se guarda con precio mayor que cero. Si no, pasaría gratis por la caja.</li>
+<li><b>Código propio:</b> para lo que llega sin código de barras, pulse <b>Generar</b> junto al código. El programa elige uno que ningún artículo usa, que empieza con 299, y sus barras salen en las etiquetas.</li>
+<li><b>Importar:</b> <b>Archivo &gt; Importar artículos</b> carga un archivo CSV. Las líneas con montos negativos o una tasa de IVA que no existe se saltan, y el aviso final dice cuáles.</li>
 <li><b>Dar de baja:</b> el artículo deja de ofrecerse, pero su historial queda.</li>
 <li><b>Cambio de precios:</b> sube o baja por porcentaje, por rubro o marca, con redondeo hacia arriba. Muestra el resultado antes de aplicarlo.</li>
 <li><b>Stock mínimo:</b> al llegar a su mínimo, también por una venta en la otra caja, aparece un aviso.</li>
 </ul>
+<img src="img/04-add-item.png" width="210"/>
 
-<h2 class="page">4. Compras y proveedores</h2>
-<p>En <b>Compras</b>, <b>Nueva compra</b> carga la factura del proveedor. Escanee cada artículo y escriba cantidad y costo. El stock sube y el costo se actualiza.</p>
+<h2>4. Alta de productos y proveedores</h2>
+<p><b>Alta de productos</b> carga lo que llegó, y se abre desde <b>Inventario</b> o desde la pestaña <b>Compras</b>. Se trabaja como en una venta.</p>
 <img src="img/22-purchase-dialog.png" width="380"/>
+<ol>
+<li>Elija el <b>proveedor</b>. Si no está, <b>Nuevo proveedor</b> lo crea y lo deja elegido.</li>
+<li>Escriba la <b>factura</b>. Es opcional, pero el programa no deja cargar dos veces la misma factura de un proveedor.</li>
+<li>Escanee cada artículo, o empiece a escribir y elija de la lista. El mismo artículo otra vez suma uno a su línea.</li>
+<li>En la tabla, ajuste la <b>cantidad</b>, el <b>costo</b> y el <b>margen</b> o el <b>precio de venta</b>. Al cambiar el margen, el precio se calcula y se redondea hacia arriba, de a 100 guaraníes. Al cambiar el precio, se muestra el margen.</li>
+<li>Pulse <b>Dar de alta</b>. El stock sube, y el costo y el precio se actualizan.</li>
+<li>Elija cuántas <b>etiquetas</b> imprimir. Sale una por unidad recibida; lo que se vende por peso, una sola. Ponga 0 en lo que no necesite, o pulse <b>Ahora no</b>.</li>
+</ol>
+<img src="img/29-entry-labels.png" width="230"/>
+<ul>
+<li><b>Artículo nuevo:</b> si escanea un código desconocido, se abre el formulario con ese código. Sin código, use <b>Nuevo artículo</b> y <b>Generar</b>. Al guardar, el artículo pasa a la lista. Su stock es la cantidad de esta alta.</li>
+<li><b>Margen sugerido:</b> con un valor, cada costo calcula su precio. Déjelo en 0 para fijar el precio línea por línea.</li>
+<li><b>Actualizar el costo:</b> desmárquelo si esta compra no debe cambiar el costo de los artículos.</li>
+</ul>
+<p>La pestaña <b>Proveedores</b> tiene su propia búsqueda. Solo el nombre es obligatorio, y no puede haber dos proveedores activos con el mismo nombre.</p>
 
 <h2>5. Recuentos</h2>
 <ol>
 <li>En <b>Recuentos</b>, elija un rubro y pulse <b>Preparar planilla</b>.</li>
 <li>Escanee cada unidad o escriba lo contado.</li>
-<li>Pulse <b>Aplicar recuento</b>. Solo se ajusta lo que se contó.</li>
+<li>Pulse <b>Aplicar recuento</b>. Solo se ajusta lo que se contó. Si una cantidad dice <b>revisar</b>, corríjala: el recuento no se aplica hasta entonces.</li>
 </ol>
 <img src="img/24-count.png" width="420"/>
 
-<h2 class="page">6. Control de la caja</h2>
+<h2>6. Control de la caja</h2>
 <h3>Cierre con diferencia</h3>
 <p>Si el conteo no coincide, el cajero vuelve a contar o llama a un supervisor. Solo el supervisor ve lo esperado, y debe escribir un motivo. La diferencia queda en la planilla y en los reportes.</p>
 <img src="img/42-difference.png" width="200"/>
 <h3>Planillas de cierre</h3>
 <p><b>Caja &gt; Planillas anteriores</b> reimprime cualquier cierre.</p>
 <img src="img/44-sessions.png" width="380"/>
-<h3 class="page">Conciliar tarjetas y transferencias</h3>
+<h3>Conciliar tarjetas y transferencias</h3>
 <p>La planilla lista cada pago en <b>Comprobantes por conciliar</b>. Compárela con el cierre de lote de la terminal y con el extracto del banco. El programa no se conecta con la terminal: solo esta comparación confirma que el pago existió.</p>
 <p class="note">Si un cajero carga un código ya usado sin conexión, el programa no puede frenarlo en el momento. Queda en la auditoría como <b>venta.comprobante_repetido</b>: revíselo.</p>
-<h3>Movimientos y devoluciones</h3>
+<h3 class="page">Movimientos y devoluciones</h3>
 <p>Los gastos y retiros salen en <b>Caja &gt; Movimiento de caja</b>, con un motivo. En una devolución, elija lo devuelto y por qué medio sale el dinero, hasta lo que entró por ese medio, o emita una nota de crédito.</p>
 <img src="img/51-return.png" width="290"/>
 <p class="note">Una nota de crédito no vence y la usa quien tenga el número. Pida el ticket al recibirla.</p>
 <h3>Medios de pago</h3>
-<p>En <b>Caja &gt; Medios de pago</b> se agregan otros medios y se elige si piden código. Solo el efectivo entra en el arqueo.</p>
+<p>En <b>Caja &gt; Medios de pago</b> se agregan otros medios y se elige si piden código. Dejar de usar uno pide confirmar, y las ventas anteriores no cambian. Solo el efectivo entra en el arqueo.</p>
 <img src="img/52-methods.png" width="230"/>
 
 <h2 class="page">7. Reportes</h2>
@@ -74,6 +95,7 @@
 <li>El <b>margen</b> usa el costo del día de cada venta, con IVA en ventas y en costo.</li>
 <li><b>Resumen de IVA</b> y <b>Libro de ventas</b> son internos: contrólelos con su contador.</li>
 <li>Un aviso indica si hay ventas sin subir, que todavía no están en los reportes.</li>
+<li>Un PDF o una impresión de miles de filas tarda unos segundos, y el programa espera hasta terminar. Para mirar muchos datos en Excel, CSV es lo más rápido.</li>
 </ul>
 
 <h2 class="page">8. Las dos cajas y el servidor</h2>
@@ -101,6 +123,28 @@
 </ol>
 <p>Un parche no toca los datos ni las ventas en cola. Un equipo sin actualizar no entra hasta recibirlo, y sus ventas esperan a salvo.</p>
 
+<h2 class="page">11. Registros de este equipo</h2>
+<p>Cada equipo guarda sus propios registros, siempre, y <b>no salen de ahí</b>. Sirven para averiguar qué pasó. <b>Ayuda &gt; Carpeta de registros</b> los abre.</p>
+<table>
+<tr><th>Archivo</th><th>Qué tiene</th></tr>
+<tr><td><b>aguara.log</b></td><td>Errores técnicos y avisos del programa</td></tr>
+<tr><td><b>actividad-AAAA-MM.log</b></td><td>Qué hizo el programa y a qué hora: una línea por venta, reporte o módulo abierto. Solo el nombre de la acción, sin clientes, artículos ni montos. Se guardan 12 meses</td></tr>
+<tr><td><b>crashes</b></td><td>Una ficha por cada cierre inesperado: código del error, versión y lugar del programa</td></tr>
+</table>
+<p>Tras un corte de luz o un cierre forzado, <b>actividad</b> marca <b>programa.cierre_inesperado</b>. Las líneas anteriores muestran qué se estaba haciendo. Quién hizo qué, con sus detalles, está en la pestaña <b>Auditoría</b> de Usuarios.</p>
+
+<h2>12. Telemetría</h2>
+<p>Durante la prueba, cada equipo puede enviar a un servidor propio estadísticas de uso, cierres inesperados y reportes de problemas. <b>Está apagada</b> hasta que un administrador la active, equipo por equipo, en <b>Preferencias &gt; Telemetría</b>.</p>
+<img src="img/57-telemetry.png" width="280"/>
+<ul>
+<li><b>Qué envía:</b> cuántas veces por día se usa cada módulo y función, y en los cierres inesperados, el código del error y el lugar del programa. También la versión, Windows y el nombre que usted elija para el equipo.</li>
+<li><b>Qué nunca envía:</b> clientes, artículos, montos, usuarios ni nombres de equipos.</li>
+<li><b>Ver lo que se envía</b> muestra el contenido exacto del próximo envío.</li>
+<li><b>Sin servidor</b> no pasa nada: la venta nunca espera, y los datos quedan guardados para el próximo envío.</li>
+<li><b>Al activarla</b>, también se envían los cierres inesperados guardados que no se enviaron antes.</li>
+</ul>
+<p>Con la telemetría activa, <b>Ayuda &gt; Reportar un problema</b> queda disponible para todo el personal. Envía solo lo que la persona escribe.</p>
+
 <h2 class="page">Problemas frecuentes</h2>
 <table>
 <tr><th>Qué pasa</th><th>Qué hacer</th></tr>
@@ -110,4 +154,6 @@
 <tr><td>El cajón no abre</td><td>Debe estar conectado a una impresora térmica configurada. Pruebe con <b>Caja &gt; Abrir cajón</b>.</td></tr>
 <tr><td>Letras raras en el ticket</td><td>Avise a soporte con una foto de la prueba de impresión.</td></tr>
 <tr><td>Olvidó una contraseña</td><td>Un administrador la cambia en <b>Usuarios</b>.</td></tr>
+<tr><td>«Ya existe el proveedor»</td><td>Búsquelo en la lista del alta, o use otro nombre.</td></tr>
+<tr><td>«La factura de este proveedor ya está cargada»</td><td>Esa compra ya entró. Revise la pestaña <b>Compras</b> antes de cargarla de nuevo.</td></tr>
 </table>

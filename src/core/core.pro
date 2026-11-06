@@ -20,6 +20,11 @@ SOURCES      +=     \
     saleoutbox.cpp \
     sqlcustomerservice.cpp \
     sqlprintservice.cpp \
+    reportpainter.cpp \
+    activitylog.cpp \
+    crashhandler.cpp \
+    telemetry.cpp \
+    telemetrydialog.cpp \
     sqlreportservice.cpp \
     sqlreturnservice.cpp \
     errors.cpp      \
@@ -50,6 +55,11 @@ HEADERS      +=     \
     saleoutbox.h \
     sqlcustomerservice.h \
     sqlprintservice.h \
+    reportpainter.h \
+    activitylog.h \
+    crashhandler.h \
+    telemetry.h \
+    telemetrydialog.h \
     sqlreportservice.h \
     sqlreturnservice.h \
     errors.h        \

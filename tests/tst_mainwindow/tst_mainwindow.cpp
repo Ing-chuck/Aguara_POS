@@ -8,6 +8,7 @@
 #include "notificationdialog.h"
 #include "lowstockwatcher.h"
 #include "pagecero.h"
+#include "sessiondialogs.h"
 
 #include <QAbstractButton>
 #include <QAction>
@@ -40,6 +41,7 @@ private slots:
     void cleanup();
 
     void sameSenderAndIdUpdatesTheCard();
+    void blankSignInIsNotAnAttempt();
     void priorityLevel_data();
     void priorityLevel();
     void newestFirstAndDismissCloses();
@@ -351,6 +353,25 @@ void tst_MainWindow::cashierSeesOnlyWhatTheyMayOpen()
     s.window->setUsers(s.users.get(), 0);
     QVERIFY(!navButton(s.window.get(), QStringLiteral("Inventario"))->isHidden());
     QVERIFY(!navButton(s.window.get(), QStringLiteral("Usuarios"))->isHidden());
+}
+
+void tst_MainWindow::blankSignInIsNotAnAttempt()
+{
+    Session s;
+    QVERIFY(s.ok);
+    s.users->logout();
+
+    LoginDialog dialog(s.users.get(), LoginDialog::Start);
+    auto username = dialog.findChild<QLineEdit *>(QStringLiteral("username"));
+    auto error = dialog.findChild<QLabel *>(QStringLiteral("errorLabel"));
+    dialog.accept();
+    QVERIFY(error->text().contains(QStringLiteral("usuario")));
+
+    username->setText(QStringLiteral("admin"));
+    for (int i = 0; i < 8; ++i)         // past the failures that lock an account
+        dialog.accept();
+    QVERIFY(error->text().contains(QStringLiteral("contraseña")));
+    QVERIFY(s.users->login(QStringLiteral("admin"), QStringLiteral("secreto1")));
 }
 
 void tst_MainWindow::lockedSessionCanBeTakenOverByAnotherUser()

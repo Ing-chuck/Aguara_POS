@@ -1,6 +1,8 @@
 #include "stockdialogs.h"
 #include "labelsheet.h"
 
+#include <formcheck.h>
+
 #include <QAbstractItemDelegate>
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -17,6 +19,8 @@
 #include <QPrinter>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QRegularExpression>
+#include <QRegularExpressionValidator>
 #include <QSpinBox>
 #include <QTableWidget>
 #include <QTabWidget>
@@ -167,10 +171,13 @@ AdjustStockDialog::AdjustStockDialog(InventoryService *inventory, const Product 
     form->setHorizontalSpacing(12);
     form->setVerticalSpacing(10);
     form->addRow(tr("Tipo:"), direction);
-    form->addRow(tr("Cantidad:"), quantity);
-    form->addRow(tr("Motivo:"), reason);
+    form->addRow(AguaraForm::required(tr("Cantidad:")), quantity);
+    form->addRow(AguaraForm::required(tr("Motivo:")), reason);
     form->addRow(tr("Queda:"), result);
     layout->addLayout(form);
+    layout->addWidget(AguaraForm::requiredNote());
+    problem = AguaraForm::errorLabel(QStringLiteral("adjustError"));
+    layout->addWidget(problem);
     layout->addWidget(saveCancel(this, tr("Ajustar")));
 
     connect(quantity, &QLineEdit::textChanged, this, &AdjustStockDialog::updateResult);
@@ -195,11 +202,19 @@ void AdjustStockDialog::accept()
 {
     Quantity amount = 0;
     if (!AguaraQuantity::parse(quantity->text(), &amount) || amount <= 0) {
-        QMessageBox::warning(this, tr("Cantidad inválida"), tr("Escriba una cantidad mayor que cero."));
+        AguaraForm::showError(problem, tr("Escriba una cantidad mayor que cero."), quantity);
+        return;
+    }
+    if (!AguaraForm::fitsUnit(amount, product.unit.decimals)) {
+        AguaraForm::showError(problem, tr("Esta unidad no admite tantos decimales."), quantity);
+        return;
+    }
+    if (reason->currentText().trimmed().isEmpty()) {
+        AguaraForm::showError(problem, tr("Indique el motivo del ajuste."), reason);
         return;
     }
     if (!inventory->adjustStock(product.code, amount * direction->currentData().toInt(), reason->currentText())) {
-        QMessageBox::warning(this, tr("No se pudo ajustar"), inventory->lastError());
+        AguaraForm::showError(problem, inventory->lastError());
         return;
     }
     QDialog::accept();
@@ -266,7 +281,9 @@ ArticleHistoryDialog::ArticleHistoryDialog(InventoryService *inventory, UserServ
     codesLayout->addWidget(barcodes, 1);
     auto addRow = new QHBoxLayout;
     auto newCode = new QLineEdit;
+    newCode->setObjectName(QStringLiteral("newBarcode"));
     newCode->setPlaceholderText(tr("Escanee o escriba el código"));
+    newCode->setValidator(new QRegularExpressionValidator(QRegularExpression(QStringLiteral("^[0-9A-Za-z-]{0,20}$")), newCode));
     auto add = new QPushButton(AguaraStyle::icon(QStringLiteral("plus")), tr("Agregar"));
     add->setAutoDefault(false);
     auto remove = new QPushButton(AguaraStyle::icon(QStringLiteral("trash"), AguaraStyle::color(Color::Danger)), tr("Quitar"));
@@ -279,6 +296,10 @@ ArticleHistoryDialog::ArticleHistoryDialog(InventoryService *inventory, UserServ
     tabs->addTab(codes, tr("Códigos de barras"));
 
     const auto addCode = [this, newCode]() {
+        if (newCode->text().trimmed().isEmpty()) {      // nothing for a supervisor to come for
+            newCode->setFocus();
+            return;
+        }
         if (!isAuthorized(this->users, QStringLiteral("inventario.editar"), tr("Agregar un código de barras"), this))
             return;
         if (!this->inventory->addBarcode(this->product.code, newCode->text())) {
@@ -293,9 +314,14 @@ ArticleHistoryDialog::ArticleHistoryDialog(InventoryService *inventory, UserServ
     keepEnterInDialog(this);
     connect(remove, &QPushButton::clicked, this, [this]() {
         const auto item = barcodes->currentItem();
-        if (!item || !isAuthorized(this->users, QStringLiteral("inventario.editar"), tr("Quitar un código de barras"), this))
+        if (!item || !AguaraForm::confirmRemoval(this, tr("Quitar el código de barras"),
+                tr("El código %1 deja de identificar a este artículo: al escanearlo, no se encontrará.").arg(item->text()),
+                tr("Quitar")))
             return;
-        this->inventory->removeBarcode(item->text());
+        if (!isAuthorized(this->users, QStringLiteral("inventario.editar"), tr("Quitar un código de barras"), this))
+            return;
+        if (!this->inventory->removeBarcode(item->text()))
+            QMessageBox::warning(this, tr("No se pudo quitar"), this->inventory->lastError());
         reloadBarcodes();
     });
     reloadBarcodes();
@@ -361,9 +387,13 @@ PriceChangeDialog::PriceChangeDialog(ProductService *products, InventoryService 
     fitCodeColumn(preview);
     layout->addWidget(preview, 1);
     summary = new QLabel;
+    summary->setObjectName(QStringLiteral("priceSummary"));
     AguaraStyle::setRole(summary, AguaraStyle::Muted);
     layout->addWidget(summary);
-    layout->addWidget(saveCancel(this, tr("Aplicar")));
+    QDialogButtonBox *buttons = saveCancel(this, tr("Aplicar"));
+    applyButton = buttons->button(QDialogButtonBox::Ok);
+    applyButton->setObjectName(QStringLiteral("priceApply"));
+    layout->addWidget(buttons);
 
     for (QComboBox *box : { category, brand, supplier, rounding })
         connect(box, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &PriceChangeDialog::updatePreview);
@@ -401,7 +431,10 @@ void PriceChangeDialog::updatePreview()
         preview->setItem(row, 2, rightAligned(AguaraMoney::format(p.oldPrice)));
         preview->setItem(row, 3, rightAligned(AguaraMoney::format(p.newPrice)));
     }
-    summary->setText(list.size() == 1 ? tr("1 artículo") : tr("%1 artículos").arg(list.size()));
+    summary->setText(percent() == 0 ? tr("Escriba un cambio distinto de 0 %.")
+                     : list.isEmpty() ? tr("Ningún artículo cumple esas condiciones.")
+                     : list.size() == 1 ? tr("1 artículo") : tr("%1 artículos").arg(list.size()));
+    applyButton->setEnabled(percent() != 0 && !list.isEmpty());
 }
 
 void PriceChangeDialog::accept()
@@ -418,6 +451,22 @@ void PriceChangeDialog::accept()
     }
     QDialog::accept();
 }
+
+namespace {
+
+void previewLabels(const QList<Product> &labels, QWidget *parent)
+{
+    QPrinter printer(QPrinter::HighResolution);
+    printer.setPageSize(QPageSize(QPageSize::A4));
+    printer.setPageMargins(QMarginsF(8, 8, 8, 8), QPageLayout::Millimeter);
+    QPrintPreviewDialog preview(&printer, parent);
+    preview.setWindowTitle(QObject::tr("Etiquetas de góndola"));
+    QObject::connect(&preview, &QPrintPreviewDialog::paintRequested, &preview,
+                     [&labels](QPrinter *p) { LabelSheet::print(p, labels); });
+    preview.exec();
+}
+
+} // namespace
 
 // --- LabelsDialog --------------------------------------------------------------
 
@@ -471,12 +520,56 @@ void LabelsDialog::accept()
         return;
     }
 
-    QPrinter printer(QPrinter::HighResolution);
-    printer.setPageSize(QPageSize(QPageSize::A4));
-    printer.setPageMargins(QMarginsF(8, 8, 8, 8), QPageLayout::Millimeter);
-    QPrintPreviewDialog preview(&printer, this);
-    preview.setWindowTitle(tr("Etiquetas de góndola"));
-    connect(&preview, &QPrintPreviewDialog::paintRequested, this, [&labels](QPrinter *p) { LabelSheet::print(p, labels); });
-    preview.exec();
+    previewLabels(labels, this);
+    QDialog::accept();
+}
+
+// --- EntryLabelsDialog ---------------------------------------------------------
+
+EntryLabelsDialog::EntryLabelsDialog(ProductService *products, const QList<PurchaseLine> &lines, QWidget *parent)
+    : QDialog(parent)
+{
+    setObjectName(QStringLiteral("entryLabels"));
+    auto layout = dialogHeader(this, tr("Etiquetas de lo que entró"),
+        tr("Una por unidad recibida; lo que se vende por peso, una sola. Ponga 0 en lo que no necesita etiqueta."));
+    resize(620, 460);
+    auto table = makeInventoryTable({ tr("Artículo"), tr("Precio"), tr("Etiquetas") });
+    table->setObjectName(QStringLiteral("entryLabelsTable"));
+    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    for (const PurchaseLine &line : lines) {
+        const std::optional<Product> p = products->product(line.code);
+        if (!p)
+            continue;
+        const int row = table->rowCount();
+        table->insertRow(row);
+        table->setItem(row, 0, new QTableWidgetItem(p->description));
+        table->setItem(row, 1, rightAligned(AguaraMoney::format(p->price)));
+        auto spin = new QSpinBox;
+        spin->setRange(0, 500);
+        spin->setValue(p->unit.decimals > 0 ? 1 : int(qMin<Quantity>(line.quantity / AguaraQuantity::One, 500)));
+        table->setCellWidget(row, 2, spin);
+        articles << *p;
+        copies << spin;
+    }
+    layout->addWidget(table, 1);
+    problem = AguaraForm::errorLabel(QStringLiteral("entryLabelsError"));
+    layout->addWidget(problem);
+    QDialogButtonBox *buttons = saveCancel(this, tr("Ver e imprimir"));
+    buttons->button(QDialogButtonBox::Cancel)->setText(tr("Ahora no"));
+    layout->addWidget(buttons);
+}
+
+void EntryLabelsDialog::accept()
+{
+    QList<Product> labels;
+    for (int i = 0; i < articles.size(); ++i) {
+        for (int n = 0; n < copies.at(i)->value(); ++n)
+            labels << articles.at(i);
+    }
+    if (labels.isEmpty()) {
+        AguaraForm::showError(problem, tr("No hay etiquetas para imprimir."));
+        return;
+    }
+    previewLabels(labels, this);
     QDialog::accept();
 }

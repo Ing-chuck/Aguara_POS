@@ -1,3 +1,5 @@
+#include "telemetry.h"
+#include "telemetrydialog.h"
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "backup.h"
@@ -16,6 +18,8 @@
 #include <QCloseEvent>
 #include <QDateTime>
 #include <QDialogButtonBox>
+#include <QUrl>
+#include <QDesktopServices>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -668,6 +672,41 @@ void MainWindow::configureConnection()
         emit restartRequested();
 }
 
+void MainWindow::setTelemetry(Telemetry *service, const QString &backend)
+{
+    telemetry = service;
+    telemetryAct->setVisible(telemetry != nullptr);
+    bugReportAct->setVisible(telemetry && telemetry->isEnabled());
+    if (!telemetry)
+        return;
+    QStringList ids;
+    for (const LoadedModule &module : qAsConst(modules))
+        ids << module.info.id;
+    telemetry->setInstall(backend, ids);
+}
+
+/// Preferencias > Telemetría: who may change where the data goes.
+void MainWindow::configureTelemetry()
+{
+    if (users && !users->authorize(QStringLiteral("datos.conexion"), tr("Cambiar la telemetría"), this))
+        return;
+    if (TelemetryDialog(telemetry, this).exec() == QDialog::Accepted)
+        bugReportAct->setVisible(telemetry->isEnabled());
+}
+
+/// Ayuda > Carpeta de registros: for whoever is looking into a problem.
+void MainWindow::openLogFolder()
+{
+    QDesktopServices::openUrl(QUrl::fromLocalFile(AguaraLog::defaultDirectory()));
+}
+
+/// Ayuda > Reportar un problema: anyone can, it's their own words.
+void MainWindow::reportBug()
+{
+    if (BugReportDialog(telemetry, this).exec() == QDialog::Accepted)
+        statusBar()->showMessage(tr("Reporte guardado. Gracias."), 6000);
+}
+
 /// Preferencias > Impresora y comercio
 void MainWindow::configurePrinter()
 {
@@ -757,6 +796,16 @@ void MainWindow::createActions()
     printerAct->setObjectName(QStringLiteral("printerAction"));
     connect(printerAct, &QAction::triggered, this, &MainWindow::configurePrinter);
 
+    telemetryAct = new QAction(tr("&Telemetría..."), this);
+    telemetryAct->setObjectName(QStringLiteral("telemetryAction"));
+    telemetryAct->setVisible(false);            // until setTelemetry()
+    connect(telemetryAct, &QAction::triggered, this, &MainWindow::configureTelemetry);
+
+    bugReportAct = new QAction(tr("&Reportar un problema..."), this);
+    bugReportAct->setObjectName(QStringLiteral("bugReportAction"));
+    bugReportAct->setVisible(false);            // with telemetry on
+    connect(bugReportAct, &QAction::triggered, this, &MainWindow::reportBug);
+
     quitAct = new QAction(AguaraStyle::icon(QStringLiteral("logout")), tr("&Salir"), this);
     quitAct->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Q));
     connect(quitAct, &QAction::triggered, this, &QWidget::close);
@@ -790,9 +839,13 @@ void MainWindow::createMenus()
     preferencesMenu = menuBar()->addMenu(tr("&Preferencias"));
     preferencesMenu->addAction(connectionAct);
     preferencesMenu->addAction(printerAct);
+    preferencesMenu->addAction(telemetryAct);
 
     helpMenu = menuBar()->addMenu(tr("A&yuda"));
     helpMenu->addAction(aboutModulesAct);
+    helpMenu->addAction(bugReportAct);
+    helpMenu->addAction(tr("Carpeta de &registros..."), this, &MainWindow::openLogFolder)
+        ->setObjectName(QStringLiteral("logFolderAction"));
     helpMenu->addSeparator();
     helpMenu->addAction(aboutAct);
 }
@@ -1024,6 +1077,7 @@ void MainWindow::openModulePage(int moduleIndex) {
     if (!canOpen(moduleIndex))
         return;                     // e.g. Ctrl+2 for a module this user can't see
     LoadedModule &module = modules[moduleIndex];
+    Telemetry::count(QStringLiteral("modulo.") + module.info.id);
     const bool multi = module.widgets->allowsMultipleInstances();
 
     if (!multi && module.openPage) {

@@ -6,6 +6,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
+#include <QSet>
 
 namespace {
 
@@ -101,6 +102,10 @@ bool ImportModule::importFrom(const QString &filename)
     const QString text = Csv::decode(csv.readAll());
     csv.close();
 
+    QSet<int> rates;
+    for (const VatCategory &vat : products->vatCategories())
+        rates.insert(vat.rate);
+
     QHash<int, Field> columns;      // column index -> field, from the header row
     QList<Product> parsed;
     QStringList problems;
@@ -167,6 +172,15 @@ bool ImportModule::importFrom(const QString &filename)
         }
         if (ok && (p.code.isEmpty() || p.description.isEmpty())) {
             problems << tr("línea %1: falta código o descripción").arg(lineNumber);
+            ok = false;
+        }
+        // one bad line is left out; for the service, it would stop the whole file
+        if (ok && (p.price < 0 || p.cost < 0 || p.stockMin < 0)) {
+            problems << tr("línea %1: precio, costo o stock mínimo negativo").arg(lineNumber);
+            ok = false;
+        }
+        if (ok && !rates.contains(p.vatRate)) {
+            problems << tr("línea %1: la tasa de IVA %2% no existe").arg(lineNumber).arg(p.vatRate);
             ok = false;
         }
         if (ok)

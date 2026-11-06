@@ -6,7 +6,8 @@
 QT_BEGIN_NAMESPACE
 namespace Ui { class inventoryWidget; }
 class QAbstractItemModel;
-class QCompleter;
+class QTimer;
+class SearchProxyModel;
 class QMenu;
 class QPushButton;
 class QTabWidget;
@@ -35,7 +36,8 @@ private:
     addItemDialog *addDialog = nullptr;
     addItemDialog *editDialog = nullptr;
     QAbstractItemModel *model = nullptr;
-    QCompleter *searchCompleter = nullptr;
+    SearchProxyModel *visible = nullptr;    ///< the rows the search leaves on the table
+    QTimer *searchTimer = nullptr;
 
     void loadTable();
     void setUpKeyboard();
@@ -58,6 +60,5 @@ private slots:
     void onItemAddedEdited(QString id);
     void onItemEditPressed();
     void onItemRemovePressed();
-    void onCompleterAccepted(const QModelIndex &index);
 };
 #endif // INVENTORYWIDGET_H

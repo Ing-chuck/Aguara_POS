@@ -8,7 +8,7 @@ Objetivo: llevar AguaraPOS a una **primera versión usable en un comercio real**
 
 ## 1. Dónde estamos
 
-**Lo que ya funciona** (versión 1.0.0-beta, probada en Windows 7 con el servidor PostgreSQL incluido, todavía sin etiquetar)
+**Lo que ya funciona** (versión 1.0.0-beta.2, probada en Windows 7 con el servidor PostgreSQL incluido y actualizada con un parche)
 
 | Área | Estado |
 |---|---|
@@ -26,10 +26,9 @@ Objetivo: llevar AguaraPOS a una **primera versión usable en un comercio real**
 
 **Lo que falta para usarlo en un comercio**
 
-- **Parche:** el instalador y el programa ya se probaron en Windows 7; falta aplicar un parche sobre una instalación.
 - **PostgreSQL 10.23:** el servidor ya funcionó en Windows 7, pero las pruebas automáticas corren contra PostgreSQL 17, no contra esa versión.
 - **Hardware:** no se probó una impresora térmica ni un cajón reales.
-- **Piloto:** falta elegir el comercio, y la impresora y el cajón (decisión 3 de la sección 5).
+- **Piloto:** el comercio ya está elegido. Falta elegir la impresora y el cajón (decisión 3 de la sección 5) y hacer el piloto.
 
 ---
 
@@ -271,7 +270,7 @@ Con las **fases 0 a 6** más este hito, el sistema sirve para un comercio de ven
 
 - [x] **Instalador**, con Inno Setup (`installer/`), y **parches** que se aplican a mano en cada equipo: programa y módulos, runtime de MinGW y Qt, `libpq` de 32 bits con sus DLL, runtime VC++ 2013 x86 y accesos directos. Se generan; falta ejecutarlos.
 - [x] Probar el instalador y el programa en Windows 7 de 32 bits, el sistema del piloto.
-- [ ] Aplicar un parche sobre esa instalación.
+- [x] Aplicar un parche sobre esa instalación.
 - [x] Probar la tarea **Instalar el servidor PostgreSQL** en esa máquina.
 - [ ] Ejecutar las pruebas contra PostgreSQL 10.23 de 32 bits, el servidor del piloto.
 - [x] Versiones: `autoVersion.py` separa la versión del programa del nivel de API, con control antes de cada commit y al armar el instalador.

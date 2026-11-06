@@ -6,6 +6,8 @@
 #include <QDialog>
 
 QT_BEGIN_NAMESPACE
+class QLabel;
+
 namespace Ui {
 class addItemDialog;
 }
@@ -27,9 +29,12 @@ signals:
 public slots:
     void addItem();
     void editItem(const QString &code);
+    /// For an article that is arriving now: its stock comes from the purchase.
+    void addForEntry(const QString &code = QString());
 
 private:
     Ui::addItemDialog *ui;
+    QLabel *problem;
     ProductService *products;
 
     bool editing = false;
@@ -43,6 +48,7 @@ private:
     void setStockEditable(bool editable);
     void updateMargin();
     bool readInput(Product *product);
+    void refuse(const QString &text, QWidget *field = nullptr);
 
     void reject() override;
     void accept() override;

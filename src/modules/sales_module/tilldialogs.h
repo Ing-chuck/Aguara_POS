@@ -87,6 +87,7 @@ private:
     QTableWidget *table;
     QLineEdit *newName;
     QLabel *error;
+    QStringList inUse;      ///< what is offered today: taking one away asks first
 };
 
 #endif // TILLDIALOGS_H

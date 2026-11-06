@@ -39,6 +39,7 @@ private slots:
     void categoryCantGoInsideItself();
     void alternateBarcodes();
     void barcodeCantBelongToTwoArticles();
+    void internalCodesAreNeverRepeated();
     void scaleCodes();
 
     void priceHistory();
@@ -210,9 +211,28 @@ void tst_Inventory::suppliers()
     QCOMPARE(inventory()->saveSupplier(s), s.id);
     QCOMPARE(inventory()->suppliers().size(), 1);
     QCOMPARE(inventory()->suppliers().first().contact, QStringLiteral("Ana"));
+
+    Supplier twin;
+    twin.name = QStringLiteral(" distribuidora ");
+    QCOMPARE(inventory()->saveSupplier(twin), qint64(0));
+    QVERIFY(inventory()->lastError().contains(QStringLiteral("Ya existe")));
+    Supplier bad;
+    bad.name = QStringLiteral("OTRO");
+    bad.phone = QStringLiteral("no tiene");
+    QCOMPARE(inventory()->saveSupplier(bad), qint64(0));
+    bad.phone.clear();
+    bad.email = QStringLiteral("otro");
+    QCOMPARE(inventory()->saveSupplier(bad), qint64(0));
+    bad.email.clear();
+    bad.web = QStringLiteral("otro");
+    QCOMPARE(inventory()->saveSupplier(bad), qint64(0));
+    bad.web = QStringLiteral("www.otro.com.py");
+    QVERIFY(inventory()->saveSupplier(bad) != 0);
+    QVERIFY(inventory()->deactivateSupplier(inventory()->suppliers().last().id));
+
     QVERIFY(inventory()->deactivateSupplier(s.id));
     QVERIFY(inventory()->suppliers().isEmpty());
-    QCOMPARE(inventory()->suppliers(true).size(), 1);
+    QCOMPARE(inventory()->suppliers(true).size(), 2);
 }
 
 void tst_Inventory::purchaseUpdatesEverything()
@@ -427,6 +447,39 @@ void tst_Inventory::alternateBarcodes()
     QVERIFY(products()->deactivateProduct(QStringLiteral("1")));    // not for sale any more
     QVERIFY(!inventory()->resolveScan(QStringLiteral("1")).found);
     QVERIFY(!inventory()->resolveScan(QStringLiteral("7840001")).found);
+}
+
+void tst_Inventory::internalCodesAreNeverRepeated()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    const QString first = m_core.products->newInternalCode();
+    QCOMPARE(first, QStringLiteral("299") + QStringLiteral("000000001")
+                    + QString::number(AguaraBarcode::ean13CheckDigit(QStringLiteral("299000000001"))));
+    QVERIFY(AguaraBarcode::isValidEan13(first));
+    QCOMPARE(m_core.products->newInternalCode(), first);            // nothing took it yet
+
+    Product p;
+    p.code = first;
+    p.description = QStringLiteral("SIN CODIGO DE BARRAS");
+    p.price = 1000;
+    p.vatRate = 10;
+    QVERIFY(m_core.products->saveProduct(p));
+
+    const QString second = m_core.products->newInternalCode();
+    QVERIFY(second != first);
+    QVERIFY(inventory()->addBarcode(first, second));                // used as a barcode counts too
+    const QString third = m_core.products->newInternalCode();
+    QVERIFY(third != second && third != first);
+
+    QVERIFY(m_core.products->deactivateProduct(first));             // an old article keeps its code
+    QVERIFY(m_core.products->newInternalCode() == third);
+
+    // a scale label's range: the code itself is what's found, with no weight read from it
+    QVERIFY(m_core.products->saveProduct(p));
+    const ScanResult scan = inventory()->resolveScan(first);
+    QVERIFY(scan.found);
+    QCOMPARE(scan.product.code, first);
+    QCOMPARE(scan.quantity, AguaraQuantity::One);
 }
 
 void tst_Inventory::barcodeCantBelongToTwoArticles()

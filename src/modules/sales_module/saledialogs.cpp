@@ -1,5 +1,9 @@
 #include "saledialogs.h"
 
+#include <formcheck.h>
+#include <livesearch.h>
+
+#include <QApplication>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFileDialog>
@@ -11,7 +15,6 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QSortFilterProxyModel>
 #include <QTableView>
 #include <QTableWidget>
 #include <QVBoxLayout>
@@ -80,13 +83,13 @@ bool askConfirm(QWidget *parent, const QString &title, const QString &text, cons
     return dialog.exec() == QDialog::Accepted;
 }
 
-QString askReason(QWidget *parent, const QString &title, const QString &text)
+QString askReason(QWidget *parent, const QString &title, const QString &text, const QString &placeholder)
 {
     QDialog dialog(parent);
     QVBoxLayout *layout = dialogHeader(&dialog, title, text);
     auto edit = new QLineEdit;
     edit->setObjectName(QStringLiteral("reasonEdit"));
-    edit->setPlaceholderText(QObject::tr("Motivo"));
+    edit->setPlaceholderText(placeholder.isEmpty() ? QObject::tr("Motivo") : placeholder);
     layout->addWidget(edit);
     QDialogButtonBox *buttons = acceptCancel(&dialog, QObject::tr("Aceptar"));
     QPushButton *ok = buttons->button(QDialogButtonBox::Ok);
@@ -198,7 +201,7 @@ void DiscountDialog::accept()
 PaymentDialog::PaymentDialog(Money net, SalesService *sales, UserService *users, ReturnService *returns, QWidget *parent)
     : QDialog(parent), net(net), sales(sales), users(users), returns(returns), due(AguaraSale::cashDue(net, 0))
 {
-    QVBoxLayout *layout = dialogHeader(this, tr("Cobrar"), tr("Sin monto, se cobra en efectivo lo que falta."));
+    QVBoxLayout *layout = dialogHeader(this, tr("Cobrar"), tr("Escriba lo que entrega el cliente. Si da justo, pulse Enter dos veces."));
 
     caption = new QLabel;
     caption->setObjectName(QStringLiteral("paymentCaption"));
@@ -247,12 +250,16 @@ PaymentDialog::PaymentDialog(Money net, SalesService *sales, UserService *users,
     changeLabel->setStyleSheet(QStringLiteral("font-size: 16pt; font-weight: 600;"));
     changeLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     layout->addWidget(changeLabel);
+    cashError = AguaraForm::errorLabel(QStringLiteral("paymentError"));
+    layout->addWidget(cashError);
     QDialogButtonBox *buttons = acceptCancel(this, tr("Cobrar"));
     okButton = buttons->button(QDialogButtonBox::Ok);
     layout->addWidget(buttons);
     setMinimumWidth(460);
 
     connect(edit, &QLineEdit::textChanged, this, &PaymentDialog::showChange);
+    edit->installEventFilter(this);
+    sinceLastKey.start();
     refresh();
 }
 
@@ -264,6 +271,15 @@ const struct { int key; const char *label; } kMethodKeys[] = {
     { Qt::Key_F7, "F7" }, { Qt::Key_F8, "F8" }, { Qt::Key_F9, "F9" }, { Qt::Key_F10, "F10" },
 };
 const int kMethodKeyCount = int(sizeof(kMethodKeys) / sizeof(kMethodKeys[0]));
+
+// A scanner types a whole code, and its Enter, far faster than a person can.
+const qint64 kScannerKeyGapMs = 30;     // closer than this, no hand typed the keys
+const int kScannerQuickKeys = 3;        // in a row: one or two can happen to anyone
+const qint64 kScanEndGapMs = 150;       // this quiet, the code has finished arriving
+
+// A slower scanner gets past the timing. Its code still reads as a sum no
+// customer hands over: the highest note is Gs. 100.000.
+const Money kMaxChange = 1000000;
 
 } // namespace
 
@@ -293,6 +309,39 @@ Money PaymentDialog::electronic() const
     for (const SalePayment &p : vouchers)
         sum += p.amount;
     return sum;
+}
+
+/// The cash field takes what a person types, not what a scanner sends: a code
+/// read as money would finish the sale with an absurd change.
+bool PaymentDialog::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched != edit || event->type() != QEvent::KeyPress)
+        return QDialog::eventFilter(watched, event);
+
+    const auto key = static_cast<QKeyEvent *>(event);
+    const qint64 gap = sinceLastKey.restart();
+    if (scanning) {
+        if (gap < kScanEndGapMs)
+            return true;            // the rest of the code and its Enter go nowhere
+        scanning = false;
+    }
+
+    const bool character = !key->text().isEmpty() && key->text().at(0).isPrint();
+    if (!character || key->isAutoRepeat()) {
+        quickKeys = 0;
+        return false;
+    }
+    quickKeys = gap < kScannerKeyGapMs ? quickKeys + 1 : 0;
+    if (quickKeys < kScannerQuickKeys)
+        return false;
+
+    quickKeys = 0;
+    scanning = true;
+    edit->clear();
+    QApplication::beep();
+    AguaraForm::showError(cashError, tr("Eso parece un código de barras. Escriba el monto a mano."), edit);
+    adjustSize();
+    return true;
 }
 
 void PaymentDialog::keyPressEvent(QKeyEvent *event)
@@ -332,7 +381,14 @@ void PaymentDialog::removeVoucher()
     if (vouchers.isEmpty())
         return;
     const int row = table->currentRow();
-    vouchers.removeAt(row >= 0 && row < vouchers.size() ? row : vouchers.size() - 1);
+    const int index = row >= 0 && row < vouchers.size() ? row : vouchers.size() - 1;
+    const SalePayment &voucher = vouchers.at(index);
+    if (!AguaraForm::confirmRemoval(this, tr("Quitar comprobante"),
+            tr("%1 %2, Gs. %3. Si ya se cobró, hay que revertirlo en la terminal o el banco.")
+                .arg(AguaraSale::methodName(voucher.method), voucher.reference, AguaraMoney::format(voucher.amount)),
+            tr("Quitar comprobante"), tr("Dejarlo")))
+        return;
+    vouchers.removeAt(index);
     refresh();
 }
 
@@ -373,6 +429,7 @@ void PaymentDialog::refresh()
 
 void PaymentDialog::showChange()
 {
+    cashError->hide();
     if (due == 0) {
         changeLabel->clear();
         return;
@@ -389,11 +446,26 @@ void PaymentDialog::showChange()
 
 void PaymentDialog::accept()
 {
-    Money amount = due;
     const QString text = edit->text().trimmed();
+    // A stray Enter must not finish a sale: an empty field only proposes the
+    // exact amount, and the second Enter charges it.
+    if (due > 0 && text.isEmpty()) {
+        edit->setText(AguaraMoney::format(due));
+        edit->selectAll();
+        edit->setFocus();
+        return;
+    }
+    Money amount = due;
     if ((!text.isEmpty() && !AguaraMoney::parse(text, &amount)) || amount < due) {
         edit->selectAll();
         edit->setFocus();
+        return;
+    }
+    if (amount - due > kMaxChange) {
+        AguaraForm::showError(cashError, tr("Gs. %1 no parece lo que entregó el cliente. Revise el monto.")
+                                             .arg(AguaraMoney::format(amount)), edit);
+        edit->selectAll();
+        adjustSize();
         return;
     }
     value = amount;
@@ -404,10 +476,10 @@ void PaymentDialog::accept()
 void PaymentDialog::reject()
 {
     if (!vouchers.isEmpty()
-        && !askConfirm(this, tr("Cancelar el cobro"),
-                       tr("Se descartan los comprobantes cargados. Si ya se cobraron, hay que revertirlos en la "
-                          "terminal o el banco."),
-                       tr("Descartar")))
+        && !AguaraForm::confirmRemoval(this, tr("Cancelar el cobro"),
+               tr("Se descartan los comprobantes cargados. Si ya se cobraron, hay que revertirlos en la "
+                  "terminal o el banco."),
+               tr("Descartar"), tr("Volver al cobro")))
         return;
     QDialog::reject();
 }
@@ -545,11 +617,9 @@ ArticleSearchDialog::ArticleSearchDialog(ProductService *products, const QString
     filter->installEventFilter(this);
     layout->addWidget(filter);
 
-    proxy = new QSortFilterProxyModel(this);
+    proxy = new SearchProxyModel({ int(ProductColumn::Code), int(ProductColumn::Description), int(ProductColumn::Brand) }, this);
     proxy->setSourceModel(products->createProductTableModel(this));
-    proxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
-    proxy->setFilterKeyColumn(int(ProductColumn::Description));
-    proxy->setFilterFixedString(text);
+    proxy->setSearchText(text);
 
     view = new QTableView;
     view->setObjectName(QStringLiteral("articleTable"));
@@ -572,7 +642,7 @@ ArticleSearchDialog::ArticleSearchDialog(ProductService *products, const QString
     layout->addWidget(acceptCancel(this, tr("Agregar")));
     resize(720, 480);
 
-    connect(filter, &QLineEdit::textChanged, proxy, &QSortFilterProxyModel::setFilterFixedString);
+    connect(filter, &QLineEdit::textChanged, proxy, &SearchProxyModel::setSearchText);
     connect(filter, &QLineEdit::textChanged, this, [this]() { view->selectRow(0); });
     connect(view, &QTableView::doubleClicked, this, &ArticleSearchDialog::accept);
     view->selectRow(0);

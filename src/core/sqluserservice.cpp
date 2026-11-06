@@ -1,9 +1,11 @@
+#include "telemetry.h"
 #include "sqluserservice.h"
 #include "connectionmonitor.h"
 #include "errors.h"
 #include "logging.h"
 #include "passwordhash.h"
 
+#include <formcheck.h>
 #include <QDateTime>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -92,6 +94,10 @@ bool SqlUserService::createFirstAdmin(const QString &username, const QString &fu
         return false;
     }
     const QString name = username.trimmed();
+    if (!AguaraForm::validUsername(name)) {
+        m_lastError = tr("El usuario no puede tener espacios.");
+        return false;
+    }
     if (name.isEmpty() || fullName.trimmed().isEmpty()) {
         m_lastError = tr("Falta el usuario o el nombre.");
         return false;
@@ -293,6 +299,7 @@ void SqlUserService::writeAudit(const QString &userName, const QString &authoriz
                                 const QString &entity, const QString &entityId,
                                 const QString &before, const QString &after)
 {
+    Telemetry::count(action);       // what happened, never about whom or what
     QSqlQuery q(db());
     q.prepare(QStringLiteral("INSERT INTO auditoria (usuario_id, usuario, autorizado_por, puesto, accion,"
                              " entidad, entidad_id, antes, despues) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"));
@@ -453,6 +460,10 @@ bool SqlUserService::saveUser(const UserAccount &user, const QString &password)
     const QString fullName = user.fullName.trimmed();
     if (username.isEmpty() || fullName.isEmpty()) {
         m_lastError = tr("Falta el usuario o el nombre.");
+        return false;
+    }
+    if (!AguaraForm::validUsername(username)) {
+        m_lastError = tr("El usuario no puede tener espacios.");
         return false;
     }
     if (user.roleIds.isEmpty()) {

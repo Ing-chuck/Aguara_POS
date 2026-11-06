@@ -121,6 +121,17 @@ LoginDialog::LoginDialog(SqlUserService *users, Mode mode, QWidget *parent)
 
 void LoginDialog::accept()
 {
+    // a blank password is not an attempt: it must not count towards the lockout
+    if (username->text().trimmed().isEmpty()) {
+        showError(error, tr("Escriba su usuario."));
+        username->setFocus();
+        return;
+    }
+    if (password->text().isEmpty()) {
+        showError(error, tr("Escriba su contraseña."));
+        password->setFocus();
+        return;
+    }
     if (!users->login(username->text(), password->text())) {
         showError(error, users->lastError());
         password->clear();
@@ -209,6 +220,11 @@ ChangePasswordDialog::ChangePasswordDialog(UserService *users, bool forced, QWid
 
 void ChangePasswordDialog::accept()
 {
+    if (current->text().isEmpty()) {
+        showError(error, tr("Escriba su contraseña actual."));
+        current->setFocus();
+        return;
+    }
     if (replacement->text() != repeat->text()) {
         showError(error, tr("Las contraseñas nuevas no coinciden."));
         return;
@@ -235,8 +251,20 @@ bool askSupervisor(const QString &permissionDescription, const QString &reason, 
     auto error = addError(layout);
     if (!errorText.isEmpty())
         showError(error, errorText);
-    addButtons(&dialog, layout, QCoreApplication::translate("Session", "Autorizar"),
-               QCoreApplication::translate("Session", "Cancelar"));
+    QDialogButtonBox *buttons = addButtons(&dialog, layout, QCoreApplication::translate("Session", "Autorizar"),
+                                           QCoreApplication::translate("Session", "Cancelar"));
+    QAbstractButton *authorize = buttons->buttons().constFirst();
+    for (QAbstractButton *button : buttons->buttons()) {
+        if (buttons->buttonRole(button) == QDialogButtonBox::AcceptRole)
+            authorize = button;
+    }
+    // with a field blank there is nothing to check, and a failed try counts towards the lockout
+    const auto complete = [user, pass, authorize]() {
+        authorize->setEnabled(!user->text().trimmed().isEmpty() && !pass->text().isEmpty());
+    };
+    QObject::connect(user, &QLineEdit::textChanged, &dialog, complete);
+    QObject::connect(pass, &QLineEdit::textChanged, &dialog, complete);
+    complete();
     user->setFocus();
     if (dialog.exec() != QDialog::Accepted)
         return false;

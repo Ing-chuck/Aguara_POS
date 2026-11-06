@@ -16,6 +16,7 @@ class tst_Users : public QObject
 
 private slots:
     void discountLimitComesFromTheRoles();
+    void usernamesHaveNoSpaces();
     void lastAuthorizerNamesWhoAnswered();
     void initTestCase_data() { TestSupport::addBackendRows(); }
     void init() { PasswordHash::setDefaultIterations(200); }    // the rules, not the cost
@@ -501,6 +502,24 @@ void tst_Users::inactivityWatcher()
     watcher.setInterval(0);                 // off
     QTest::qWait(100);
     QCOMPARE(idle.count(), 0);
+}
+
+void tst_Users::usernamesHaveNoSpaces()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    m_users.reset(new SqlUserService(m_core.monitor.get()));
+    QVERIFY(!m_users->createFirstAdmin(QStringLiteral("el jefe"), QStringLiteral("Jefe"), QStringLiteral("secreto1")));
+    QVERIFY(m_users->lastError().contains(QStringLiteral("espacios")));
+    QVERIFY(m_users->createFirstAdmin(QStringLiteral("jefe"), QStringLiteral("Jefe"), QStringLiteral("secreto1")));
+
+    UserAccount user;
+    user.fullName = QStringLiteral("Ana Perez");
+    user.username = QStringLiteral("ana perez");
+    user.roleIds << m_users->roles().first().id;
+    QVERIFY(!m_users->saveUser(user, QStringLiteral("clave123")));
+    QVERIFY(m_users->lastError().contains(QStringLiteral("espacios")));
+    user.username = QStringLiteral("ana.perez");
+    QVERIFY(m_users->saveUser(user, QStringLiteral("clave123")));
 }
 
 void tst_Users::discountLimitComesFromTheRoles()

@@ -14,8 +14,8 @@
 <tr><td><b>F7</b></td><td>Recuperar una venta en espera</td></tr>
 <tr><td><b>F8</b></td><td>Elegir el cliente</td></tr>
 <tr><td><b>F12</b></td><td>Cobrar</td></tr>
-<tr><td><b>Flechas</b></td><td>Moverse entre las líneas</td></tr>
-<tr><td><b>Supr</b></td><td>Quitar la línea marcada</td></tr>
+<tr><td><b>Flechas</b></td><td>Moverse entre las líneas, o por la lista de sugerencias</td></tr>
+<tr><td><b>Supr</b></td><td>Quitar la línea marcada, después de confirmar</td></tr>
 <tr><td><b>Esc</b></td><td>Borrar lo escrito o cancelar la venta</td></tr>
 </table>
 
@@ -26,13 +26,19 @@
 
 <h2 class="page">2. Vender</h2>
 <p>Pase cada artículo por el lector. Si el código no lee, escríbalo y pulse Enter. El artículo aparece en la lista y el total se actualiza.</p>
-<img src="img/31-sale.png" width="440"/>
+<img src="img/31-sale.png" width="340"/>
 <ul>
 <li><b>Varios iguales:</b> escriba la cantidad, un asterisco y el código: <b>3*7840001000017</b>.</li>
-<li><b>Sin código:</b> escriba parte de la descripción y pulse Enter, o use <b>F3</b>.</li>
+<li><b>Sin código:</b> empiece a escribir la descripción o la marca. Debajo aparece una lista con precio y stock: baje con la flecha y pulse Enter. También sirve con cantidad: <b>3*yerba</b>.</li>
+<li><b>Búsqueda completa:</b> pulse Enter sin elegir de la lista, o use <b>F3</b>.</li>
 <li><b>Por peso:</b> la etiqueta de la balanza trae el peso o el precio, y se lee como cualquier código.</li>
 </ul>
+<img src="img/32-suggestions.png" width="300"/>
+<p>Las búsquedas no distinguen mayúsculas ni acentos, y las palabras van en cualquier orden: <b>azucar kilo</b> encuentra AZÚCAR BLANCA 1 KILO.</p>
 <p>Si un código no existe, el aviso aparece abajo, sin detener nada. Siga con el próximo artículo.</p>
+
+<h3>Quitar o cancelar</h3>
+<p>Antes de quitar una línea con <b>Supr</b> o cancelar la venta con <b>Esc</b>, el programa pregunta. <b>Enter</b> y <b>Esc</b> dejan todo como estaba. Para confirmar, pulse <b>Tab</b> y <b>Enter</b>, o haga clic en el botón rojo. Así, un Enter de más no borra nada.</p>
 
 <h3>Descuentos</h3>
 <p>Con <b>F4</b> descuenta la línea marcada y con <b>F5</b> la venta entera, en porcentaje o en guaraníes. Si pasa de su límite, el programa pide un supervisor.</p>
@@ -44,12 +50,14 @@
 <h3>Cliente</h3>
 <p>Sin elegir nada, la venta es para <b>Consumidor final</b>. Si el cliente da su nombre o su RUC, pulse <b>F8</b>, búsquelo y elíjalo. Si no está, use <b>Nuevo cliente</b>.</p>
 
-<h2 class="page">3. Cobrar</h2>
+<h2>3. Cobrar</h2>
 <p>Pulse <b>F12</b>. El monto grande es lo que hay que cobrar.</p>
 <img src="img/45-payment-start.png" width="175"/>
 
 <h3>En efectivo</h3>
-<p>Escriba lo que entrega el cliente y pulse Enter. Si le da justo, pulse Enter sin escribir nada. El vuelto queda a la vista.</p>
+<p>Escriba lo que entrega el cliente y pulse Enter. El vuelto queda a la vista.</p>
+<p>Si le da justo, pulse <b>Enter dos veces</b>. El primero pone el monto exacto en el campo y el segundo cobra. Así, un Enter suelto nunca termina una venta.</p>
+<p class="note"><b>El efectivo se escribe a mano.</b> Si pasa un artículo por el lector con el cursor en este campo, suena un aviso, el campo se borra y no se cobra nada. Tampoco se acepta un monto que supere en más de Gs. 1.000.000 lo que hay que cobrar.</p>
 <p class="note"><b>Redondeo:</b> la moneda más chica es de 50 guaraníes, así que el efectivo se redondea. De 85.910 se cobran 85.900. Tarjetas y transferencias cobran el monto exacto.</p>
 
 <h3>Con tarjeta, transferencia o QR</h3>
@@ -63,12 +71,12 @@
 <p class="note"><b>El código es lo que prueba el pago.</b> Cópielo con cuidado. Si ya se usó en otra venta, hace falta un supervisor.</p>
 
 <h3>Pago combinado</h3>
-<p>Cargue primero la tarjeta o la transferencia, con el monto que corresponde. Lo que falta se paga en efectivo. <b>F5</b> quita un comprobante mal cargado.</p>
+<p>Cargue primero la tarjeta o la transferencia, con el monto que corresponde. Lo que falta se paga en efectivo. <b>F5</b> quita un comprobante mal cargado, después de confirmar.</p>
 
 <h3>Nota de crédito</h3>
 <p>Es un vale por una devolución. Use la tecla de <b>Nota de crédito</b>, escriba su número, por ejemplo <b>NC-000012</b>, y el programa toma su saldo. Lo que falte se paga de otra forma.</p>
 
-<h2 class="page">4. Durante el día</h2>
+<h2>4. Durante el día</h2>
 <p>El botón <b>Caja</b>, arriba a la derecha, tiene todo lo demás. Varias opciones piden un supervisor.</p>
 <table>
 <tr><th>Opción</th><th>Para qué sirve</th><th>Quién</th></tr>
@@ -93,7 +101,7 @@
 <li>No apague el equipo por esto, y avise al encargado.</li>
 </ul>
 
-<h2 class="page">6. Cerrar la caja</h2>
+<h2>6. Cerrar la caja</h2>
 <ol>
 <li>Termine o ponga en espera la venta actual.</li>
 <li>En <b>Caja</b>, elija <b>Cerrar caja</b>.</li>
@@ -113,11 +121,14 @@
 </ul>
 
 <h2 class="page">Problemas frecuentes</h2>
+<p>Si aparece <b>Ayuda &gt; Reportar un problema</b>, cuente ahí qué estaba haciendo y qué pasó. No escriba datos de clientes ni contraseñas.</p>
 <table>
 <tr><th>Qué pasa</th><th>Qué hacer</th></tr>
 <tr><td>«Venta cobrada, sin ticket»</td><td>La venta está guardada. Revise papel y encendido, y reimprima en <b>Caja &gt; Ventas de la sesión</b>. Sale como original, sin marca de copia.</td></tr>
 <tr><td>«Hay una caja sin cerrar»</td><td>Quedó abierta de otro día. Un supervisor debe cerrarla antes de vender.</td></tr>
 <tr><td>Un artículo sin stock</td><td>Se vende igual, con aviso. Avise al encargado.</td></tr>
+<tr><td>«Eso parece un código de barras»</td><td>El lector escribió en el campo de efectivo. Escriba el monto a mano. Si le pasa al teclear muy rápido, escríbalo de nuevo.</td></tr>
+<tr><td>«No parece lo que entregó el cliente»</td><td>El monto es demasiado alto. Revíselo y corríjalo.</td></tr>
 <tr><td>«Sin conexión» al abrir el programa</td><td>La caja del servidor debe estar encendida. Avise al encargado.</td></tr>
 <tr><td>«Datos de una versión más nueva»</td><td>A este equipo le falta un parche. Avise al encargado.</td></tr>
 </table>

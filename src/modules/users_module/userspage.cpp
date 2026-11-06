@@ -1,5 +1,7 @@
 #include "userspage.h"
 
+#include <formcheck.h>
+
 #include <QCheckBox>
 #include <QDateEdit>
 #include <QDialog>
@@ -79,13 +81,17 @@ public:
                                            : QObject::tr("Dejar vacío para no cambiarla"));
         active = new QCheckBox(QObject::tr("Puede ingresar al programa"));
         active->setChecked(user.active);
-        form->addRow(QObject::tr("Nombre:"), fullName);
-        form->addRow(QObject::tr("Usuario:"), username);
-        form->addRow(QObject::tr("Contraseña:"), password);
+        fullName->setObjectName(QStringLiteral("userFullName"));
+        username->setObjectName(QStringLiteral("userName"));
+        password->setObjectName(QStringLiteral("userPassword"));
+        active->setObjectName(QStringLiteral("userActive"));
+        form->addRow(AguaraForm::required(QObject::tr("Nombre:")), fullName);
+        form->addRow(AguaraForm::required(QObject::tr("Usuario:")), username);
+        form->addRow(isNew ? AguaraForm::required(QObject::tr("Contraseña:")) : QObject::tr("Contraseña:"), password);
         form->addRow(QObject::tr("Activo:"), active);
         layout->addLayout(form);
 
-        auto section = new QLabel(QObject::tr("ROLES"));
+        auto section = new QLabel(AguaraForm::required(QObject::tr("ROLES")));
         AguaraStyle::setRole(section, AguaraStyle::Section);
         layout->addWidget(section);
         for (const UserRole &role : users->roles()) {
@@ -101,6 +107,9 @@ public:
         note->setWordWrap(true);
         AguaraStyle::setRole(note, AguaraStyle::Muted);
         layout->addWidget(note);
+        layout->addWidget(AguaraForm::requiredNote());
+        error = AguaraForm::errorLabel(QStringLiteral("userError"));
+        layout->addWidget(error);
 
         auto buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
         buttons->button(QDialogButtonBox::Save)->setText(QObject::tr("Guardar"));
@@ -122,8 +131,14 @@ public:
             if (box->isChecked())
                 saved.roleIds << box->property("roleId").toLongLong();
         }
+        if (user.id != 0 && user.active && !saved.active
+            && !AguaraForm::confirmRemoval(this, QObject::tr("Desactivar usuario"),
+                   QObject::tr("%1 ya no podrá ingresar al programa. Lo que hizo sigue en la auditoría, y se "
+                               "puede volver a activar.").arg(user.fullName),
+                   QObject::tr("Desactivar")))
+            return;
         if (!users->saveUser(saved, password->text())) {
-            QMessageBox::warning(this, QObject::tr("No se pudo guardar"), users->lastError());
+            AguaraForm::showError(error, users->lastError());
             return;
         }
         QDialog::accept();
@@ -136,6 +151,7 @@ private:
     QLineEdit *username;
     QLineEdit *password;
     QCheckBox *active;
+    QLabel *error;
     QList<QCheckBox *> roleBoxes;
 };
 
@@ -191,6 +207,7 @@ QWidget *UsersPage::buildUsersTab()
     auto bar = new QHBoxLayout;
     bar->addStretch();
     editUserButton = new QPushButton(AguaraStyle::icon(QStringLiteral("edit")), tr("Editar"));
+    editUserButton->setObjectName(QStringLiteral("userEdit"));
     editUserButton->setEnabled(false);
     auto add = new QPushButton(AguaraStyle::icon(QStringLiteral("plus"), AguaraStyle::color(Color::OnAccent)), tr("Nuevo usuario"));
     AguaraStyle::setRole(add, AguaraStyle::Primary);
@@ -264,6 +281,7 @@ QWidget *UsersPage::buildRolesTab()
     rolesList->setMaximumWidth(240);
     auto add = new QPushButton(AguaraStyle::icon(QStringLiteral("plus")), tr("Nuevo rol"));
     removeRoleButton = new QPushButton(AguaraStyle::icon(QStringLiteral("trash"), AguaraStyle::color(Color::Danger)), tr("Quitar rol"));
+    removeRoleButton->setObjectName(QStringLiteral("roleRemove"));
     AguaraStyle::setRole(removeRoleButton, AguaraStyle::Danger);
     left->addWidget(rolesList, 1);
     left->addWidget(add);
@@ -277,7 +295,7 @@ QWidget *UsersPage::buildRolesTab()
     form->setVerticalSpacing(8);
     roleName = new QLineEdit;
     roleDescription = new QLineEdit;
-    form->addRow(tr("Nombre:"), roleName);
+    form->addRow(AguaraForm::required(tr("Nombre:")), roleName);
     form->addRow(tr("Descripción:"), roleDescription);
     roleMaxDiscount = new QSpinBox;
     roleMaxDiscount->setObjectName(QStringLiteral("roleMaxDiscount"));
@@ -400,6 +418,10 @@ void UsersPage::onRemoveRole()
     const int row = rolesList->currentRow();
     if (row < 0 || row >= roleList.size())
         return;
+    if (!AguaraForm::confirmRemoval(this, tr("Quitar rol"),
+            tr("El rol %1 se borra con sus permisos. Esto no se puede deshacer.").arg(roleList.at(row).name),
+            tr("Quitar rol")))
+        return;
     if (!users->removeRole(roleList.at(row).id)) {
         QMessageBox::warning(this, tr("No se pudo quitar el rol"), users->lastError());
         return;
@@ -422,6 +444,7 @@ QWidget *UsersPage::buildAuditTab()
         edit->setCalendarPopup(true);
         edit->setDisplayFormat(QStringLiteral("dd/MM/yyyy"));
     }
+    AguaraForm::keepInOrder(auditFrom, auditTo);
     auditText = new QLineEdit;
     auditText->setPlaceholderText(tr("Buscar usuario, acción o artículo"));
     AguaraStyle::searchField(auditText);

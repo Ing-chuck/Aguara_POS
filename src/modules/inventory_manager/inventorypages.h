@@ -12,6 +12,7 @@ class QComboBox;
 class QDateEdit;
 class QDoubleSpinBox;
 class QLabel;
+class addItemDialog;
 class QLineEdit;
 class QPushButton;
 class QTableWidget;
@@ -24,9 +25,12 @@ class SuppliersPage : public QWidget
     Q_OBJECT
 public:
     SuppliersPage(InventoryService *inventory, UserService *users, QWidget *parent = nullptr);
+    /// The form of a supplier, from here or from an alta. Its id once saved, 0 if cancelled.
+    static qint64 showForm(InventoryService *inventory, const Supplier &supplier, QWidget *parent);
     void reload();
 
 private:
+    QLineEdit *search;
     void edit(const Supplier &supplier);
 
     InventoryService *inventory;
@@ -35,23 +39,36 @@ private:
     QList<Supplier> list;
 };
 
-/// Receive merchandise: supplier, invoice, and a line per article.
+/// Alta de productos: what arrived, as a sale is typed in. Supplier and invoice,
+/// a line per article with its quantity, cost and margin or price, and the way to
+/// create on the spot an article that doesn't exist yet.
 class PurchaseDialog : public QDialog
 {
     Q_OBJECT
 public:
-    PurchaseDialog(ProductService *products, InventoryService *inventory, QWidget *parent);
+    PurchaseDialog(ProductService *products, InventoryService *inventory, UserService *users, QWidget *parent);
     void accept() override;
+    /// After accepting: what came in.
+    QList<PurchaseLine> received() const { return saved; }
 
 private:
     void addFromEntry();
+    void addLine(const Product &product, Quantity quantity);
+    void createArticle(const QString &code = QString());
+    void createSupplier();
+    void fillSuppliers();
+    void showMargin(int row);
+    void applyMargin(int row);
     void onCellChanged(int row, int column);
     void updateTotal();
     void updateSuggested(int row);
-    Purchase build(bool *ok) const;
+    Purchase build(QString *refused) const;
 
     ProductService *products;
     InventoryService *inventory;
+    UserService *users;
+    addItemDialog *newArticle;
+    QList<PurchaseLine> saved;
     QComboBox *supplier;
     QLineEdit *invoice;
     QDateEdit *date;
@@ -60,6 +77,7 @@ private:
     QDoubleSpinBox *margin;
     QCheckBox *updateCosts;
     QLabel *total;
+    QLabel *problem;
     bool filling = false;
 };
 
@@ -70,6 +88,8 @@ class PurchasesPage : public QWidget
 public:
     PurchasesPage(ProductService *products, InventoryService *inventory, UserService *users, QWidget *parent = nullptr);
     void reload();
+    /// Alta de productos, from this page or from the articles' one.
+    void receive();
 
 private:
     void showSelected();

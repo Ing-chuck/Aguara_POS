@@ -4,6 +4,7 @@
 #include "connectionmonitor.h"
 #include "stockledger.h"
 
+#include <barcode.h>
 #include <aguarastyle.h>
 #include <inventoryservice.h>
 #include <userservice.h>
@@ -347,6 +348,28 @@ bool SqlProductService::saveProduct(const Product &product, const QString &previ
     }
     changed();
     return true;
+}
+
+QString SqlProductService::newInternalCode() const
+{
+    const QString prefix = QStringLiteral("299");
+    QSqlQuery q(db());
+    q.prepare(QStringLiteral("SELECT codigo FROM productos WHERE codigo LIKE ?"
+                             " UNION SELECT codigo FROM codigos_barras WHERE codigo LIKE ?"));
+    q.addBindValue(prefix + QLatin1Char('%'));
+    q.addBindValue(prefix + QLatin1Char('%'));
+    if (!exec(q))
+        return QString();
+    qint64 last = 0;
+    while (q.next()) {
+        const QString code = q.value(0).toString();
+        bool number = false;
+        const qint64 sequence = code.mid(prefix.size(), 9).toLongLong(&number);
+        if (code.size() == 13 && number)
+            last = qMax(last, sequence);
+    }
+    const QString first12 = prefix + QStringLiteral("%1").arg(last + 1, 9, 10, QLatin1Char('0'));
+    return first12 + QString::number(AguaraBarcode::ean13CheckDigit(first12));
 }
 
 bool SqlProductService::importProducts(const QList<Product> &products, int *saved)

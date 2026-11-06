@@ -95,6 +95,20 @@ QString DatabaseSettings::defaultSqlitePath()
            + QStringLiteral("/aguara.db");
 }
 
+namespace AguaraSecret {
+
+QByteArray protect(const QString &secret)
+{
+    return ::protect(secret);
+}
+
+bool unprotect(const QByteArray &stored, QString *secret)
+{
+    return ::unprotect(stored, secret);
+}
+
+} // namespace AguaraSecret
+
 DatabaseSettings DatabaseSettings::load()
 {
     DatabaseSettings s;

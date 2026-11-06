@@ -1,5 +1,7 @@
 #include "logging.h"
 
+#include "crashhandler.h"
+
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -79,6 +81,8 @@ void handler(QtMsgType type, const QMessageLogContext &context, const QString &m
             out.flush();
         }
     }
+    if (type == QtFatalMsg)
+        CrashHandler::fatalMessage();         // Qt ends the process right after this
     if (previous)
         previous(type, context, message);     // debugger / console, and abort() on qFatal
 }

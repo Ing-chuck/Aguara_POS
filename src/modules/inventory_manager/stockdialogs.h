@@ -10,6 +10,7 @@ class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
+class QPushButton;
 class QLineEdit;
 class QListWidget;
 class QRadioButton;
@@ -52,6 +53,7 @@ private:
     QLineEdit *quantity;
     QComboBox *reason;
     QLabel *result;
+    QLabel *problem;
 };
 
 /// An article's kardex, its price history and its alternate barcodes.
@@ -92,6 +94,7 @@ private:
     QComboBox *rounding;
     QTableWidget *preview;
     QLabel *summary;
+    QPushButton *applyButton;
 };
 
 /// Print shelf labels for the selected article or a whole category.
@@ -109,6 +112,20 @@ private:
     QRadioButton *onlySelected;
     QComboBox *category;
     QSpinBox *copies;
+};
+
+/// At the end of an alta: a label for each unit that came in, unless changed.
+class EntryLabelsDialog : public QDialog
+{
+    Q_OBJECT
+public:
+    EntryLabelsDialog(ProductService *products, const QList<PurchaseLine> &lines, QWidget *parent);
+    void accept() override;
+
+private:
+    QList<Product> articles;
+    QList<QSpinBox *> copies;
+    QLabel *problem;
 };
 
 #endif // STOCKDIALOGS_H

@@ -1,5 +1,6 @@
 #include "customerdialog.h"
 #include "aguarastyle.h"
+#include "formcheck.h"
 
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -41,13 +42,15 @@ CustomerDialog::CustomerDialog(CustomerService *customers, const Customer &custo
     auto form = new QFormLayout;
     form->setHorizontalSpacing(12);
     form->setVerticalSpacing(10);
-    form->addRow(tr("Nombre o razón social:"), name);
+    form->addRow(AguaraForm::required(tr("Nombre o razón social:")), name);
     form->addRow(tr("Documento:"), type);
-    form->addRow(tr("Número:"), document);
+    auto numberLabel = new QLabel(tr("Número:"));
+    form->addRow(numberLabel, document);
     form->addRow(tr("Dirección:"), address);
     form->addRow(tr("Teléfono:"), phone);
     form->addRow(tr("Correo:"), email);
     layout->addLayout(form);
+    layout->addWidget(AguaraForm::requiredNote());
 
     error = new QLabel;
     error->setObjectName(QStringLiteral("customerError"));
@@ -67,7 +70,11 @@ CustomerDialog::CustomerDialog(CustomerService *customers, const Customer &custo
     layout->addWidget(buttons);
     setMinimumWidth(460);
 
-    const auto documentRow = [this]() { document->setEnabled(type->currentIndex() != 0); };
+    const auto documentRow = [this, numberLabel]() {
+        const bool needed = type->currentIndex() != 0;
+        document->setEnabled(needed);
+        numberLabel->setText(needed ? AguaraForm::required(tr("Número:")) : tr("Número:"));
+    };
     connect(type, QOverload<int>::of(&QComboBox::currentIndexChanged), this, documentRow);
     documentRow();
     name->setFocus();

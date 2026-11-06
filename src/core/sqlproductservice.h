@@ -46,6 +46,7 @@ public:
     QAbstractItemModel *createProductTableModel(QObject *parent) override;
     std::optional<Product> product(const QString &code) const override;
     bool saveProduct(const Product &product, const QString &previousCode = QString()) override;
+    QString newInternalCode() const override;
     bool deactivateProduct(const QString &code) override;
     bool importProducts(const QList<Product> &products, int *saved = nullptr) override;
 

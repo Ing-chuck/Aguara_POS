@@ -1,3 +1,4 @@
+#include "telemetry.h"
 #include "errors.h"
 #include "logging.h"
 
@@ -70,6 +71,7 @@ QString forUser(const QSqlError &error)
 
 QString logAndExplain(const QSqlError &error, const QString &context)
 {
+    Telemetry::count(QStringLiteral("error.base_de_datos"));
     qCWarning(lcDatabase).noquote() << context << "failed:" << error.text()
                                     << "| code" << error.nativeErrorCode() << "| type" << int(error.type());
     return forUser(error);

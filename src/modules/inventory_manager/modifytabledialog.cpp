@@ -3,13 +3,13 @@
 #include "ui_modifytabledialog.h"
 
 #include <aguarastyle.h>
+#include <formcheck.h>
+#include <livesearch.h>
 
-#include <QAbstractProxyModel>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QCompleter>
 #include <QHeaderView>
 #include <QMessageBox>
 #include <QPushButton>
@@ -52,17 +52,14 @@ modifyTableDialog::modifyTableDialog(ProductService *products, List list, QWidge
     }
     reload();
 
-    ui->tableView->setModel(model);
+    visible = new SearchProxyModel({ 0 }, this);
+    visible->setSourceModel(model);
+    ui->tableView->setModel(visible);
     ui->tableView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     ui->tableView->verticalHeader()->setDefaultSectionSize(32);
 
-    // Search completer
-    searchCompleter = new QCompleter(model, this);
-    searchCompleter->setCaseSensitivity(Qt::CaseInsensitive);
-    searchCompleter->setCompletionMode(QCompleter::InlineCompletion);
-    ui->lineEdit_search->setCompleter(searchCompleter);
-
-    connect(searchCompleter, QOverload<const QModelIndex &>::of(&QCompleter::highlighted), this, &modifyTableDialog::onCompleterAccepted);
+    // The list narrows down as you type
+    connect(ui->lineEdit_search, &QLineEdit::textChanged, visible, &SearchProxyModel::setSearchText);
 
     // Connect add and remove buttons
     QObject::connect(ui->button_add, &QAbstractButton::clicked, this, &modifyTableDialog::onAddItem);
@@ -89,19 +86,13 @@ void modifyTableDialog::reload()
     }
 }
 
-void modifyTableDialog::onCompleterAccepted(const QModelIndex &index)
-{
-    auto proxy = qobject_cast<QAbstractProxyModel *>(searchCompleter->completionModel());
-    const QModelIndex source = proxy ? proxy->mapToSource(index) : index;
-    if (source.isValid())
-        ui->tableView->selectRow(source.row());
-}
-
 void modifyTableDialog::onAddItem()
 {
     const QString name = ui->lineEdit_add->text().trimmed();
-    if (name.isEmpty())
+    if (name.isEmpty()) {
+        ui->lineEdit_add->setFocus();
         return;
+    }
 
     const qint64 id = (list == Brands) ? products->addBrand(name)
                                        : products->addCategory(name, parentCombo ? parentCombo->currentData().toLongLong() : 0);
@@ -135,7 +126,7 @@ void modifyTableDialog::buildParentChoice()
     connect(moveButton, &QPushButton::clicked, this, [this]() {
         if (!ui->tableView->selectionModel()->hasSelection())
             return;
-        const qint64 id = model->data(ui->tableView->currentIndex(), Qt::UserRole).toLongLong();
+        const qint64 id = ui->tableView->currentIndex().data(Qt::UserRole).toLongLong();
         if (!products->setCategoryParent(id, parentCombo->currentData().toLongLong())) {
             QMessageBox::warning(this, tr("No se pudo mover"), products->lastError());
             return;
@@ -164,12 +155,10 @@ void modifyTableDialog::onRemoveItem()
         return;
 
     const QModelIndex indx = ui->tableView->currentIndex();
-    const qint64 id = model->data(indx, Qt::UserRole).toLongLong();
-    QString warningTitle = tr("Quitar de la lista");
-    QString warningBody = tr("¿Quitar \"%1\" de la lista?\n"
-                             "Los artículos que ya la tienen la conservan.").arg(model->data(indx).toString());
-    QMessageBox::StandardButton btn = QMessageBox::warning(this, warningTitle, warningBody, QMessageBox::Ok|QMessageBox::Cancel, QMessageBox::Cancel);
-    if (btn != QMessageBox::Ok)
+    const qint64 id = indx.data(Qt::UserRole).toLongLong();
+    if (!AguaraForm::confirmRemoval(this, tr("Quitar de la lista"),
+            tr("\"%1\" deja de aparecer en la lista. Los artículos que ya la tienen la conservan.")
+                .arg(indx.data().toString()), tr("Quitar")))
         return;
 
     const bool ok = (list == Brands) ? products->removeBrand(id) : products->removeCategory(id);
@@ -178,5 +167,6 @@ void modifyTableDialog::onRemoveItem()
         return;
     }
     reload();
+    reloadParents();
     emit listChanged();
 }

@@ -11,6 +11,7 @@ SUBDIRS += \
     tst_money \
     tst_csvreader \
     tst_logging \
+    tst_telemetry \
     tst_settings \
     tst_backup \
     tst_database \

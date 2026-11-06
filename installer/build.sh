@@ -38,6 +38,13 @@ mkdir -p "$STAGE/modules" "$STAGE/doc" "$STAGE/scripts"
 cp "$BIN/aguara.exe" "$BIN/aguara_interfaces.dll" "$STAGE/"
 cp "$BIN"/modules/*.dll "$STAGE/modules/"
 
+# The symbols go to a file for the telemetry server, and nothing that reaches a
+# till carries them. The full installer and the patch of one build get the same file.
+mkdir -p "$HERE/output"
+$PYTHON -B "$ROOT/scripts/export-symbols.py" --version "$VERSION" \
+    --output "$(cygpath -w "$HERE/output/aguarapos-simbolos-$VERSION.json.gz")" \
+    "$STAGE/aguara.exe" "$STAGE/aguara_interfaces.dll" "$STAGE"/modules/*.dll
+
 # Qt, its plugins (SQL drivers, printing, SVG icons), Spanish and the MinGW runtime
 windeployqt --compiler-runtime --no-opengl-sw --no-angle --no-system-d3d-compiler \
     --sql --printsupport --svg --translations es --dir "$STAGE" \

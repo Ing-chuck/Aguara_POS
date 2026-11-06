@@ -19,6 +19,7 @@ class SqlUserService;
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
+class Telemetry;
 class QAction;
 class QMenu;
 class QPushButton;
@@ -56,6 +57,7 @@ public:
     /// false: the data comes from the command line, not from aguara.ini, so
     /// Preferencias > Conexión a los datos would have no effect.
     void setConnectionEditable(bool editable);
+    void setTelemetry(Telemetry *telemetry, const QString &backend);
 
     /// Close to start again: whoever changed the connection was authorized.
     void closeForRestart();
@@ -83,6 +85,9 @@ private slots:
     void backupNow();
     void configureConnection();
     void configurePrinter();
+    void configureTelemetry();
+    void reportBug();
+    void openLogFolder();
     void about();
     void aboutModules();
 
@@ -168,6 +173,9 @@ private:
     QAction* importAct = nullptr;
     QAction* backupAct = nullptr;
     QAction* connectionAct = nullptr;
+    QAction* telemetryAct = nullptr;
+    QAction* bugReportAct = nullptr;
+    Telemetry *telemetry = nullptr;
     QAction* printerAct = nullptr;
     QAction* quitAct = nullptr;
     QAction* aboutAct = nullptr;

@@ -1,6 +1,8 @@
+#include "activitylog.h"
 #include "backup.h"
 #include "connectionmonitor.h"
 #include "corehost.h"
+#include "crashhandler.h"
 #include "database.h"
 #include "databasesettingsdialog.h"
 #include "logging.h"
@@ -16,6 +18,7 @@
 #include "sqlreturnservice.h"
 #include "sqlsalesservice.h"
 #include "sqluserservice.h"
+#include "telemetry.h"
 #include <aguarastyle.h>
 #include <apiversion.h>
 #include <version.h>
@@ -75,6 +78,21 @@ int main(int argc, char *argv[])
         a.installTranslator(&qtTranslator);
     else
         qCWarning(lcApp) << "Qt Spanish translation (qtbase_es.qm) not found: standard buttons stay in English";
+
+    // Always on, and only in this computer: what happened, and what went wrong
+    const QString crashes = QDir(AguaraLog::defaultDirectory()).filePath(QStringLiteral("crashes"));
+    QDir().mkpath(crashes);
+    CrashHandler::install(crashes, QString::fromLatin1(VERSION_STRING).mid(1));
+    ActivityLog::open(AguaraLog::defaultDirectory());
+    if (ActivityLog::lastRunEndedBadly()) {
+        qCWarning(lcApp) << "The last run didn't end normally: a crash, a forced close or a power cut";
+        ActivityLog::record(QStringLiteral("programa.cierre_inesperado"));
+    }
+    ActivityLog::record(QStringLiteral("programa.inicio"));
+
+    // Off until an administrator turns it on
+    Telemetry telemetry(Telemetry::defaultDirectory(), crashes);
+    telemetry.configure(TelemetrySettings::load());
 
     // The look: before any window (including the database settings dialog)
     AguaraStyle::apply(&a);
@@ -205,6 +223,7 @@ int main(int argc, char *argv[])
                                 .value(QStringLiteral("session/lock_minutes"), 10).toInt();
     w.setUsers(&users, lockMinutes);
     w.setConnectionEditable(!explicitFile);
+    w.setTelemetry(&telemetry, server ? QStringLiteral("postgresql") : QStringLiteral("sqlite"));
     bool restart = false;
     QObject::connect(&w, &MainWindow::restartRequested, &w, [&restart, &w]() {
         restart = true;
@@ -229,6 +248,8 @@ int main(int argc, char *argv[])
 
     const int result = a.exec();
     users.logout();
+    ActivityLog::record(QStringLiteral("programa.fin"));
+    ActivityLog::close();
     qCInfo(lcApp) << "Exiting, code" << result;
     if (restart) {
         QStringList arguments = QCoreApplication::arguments().mid(1);

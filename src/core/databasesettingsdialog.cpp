@@ -1,6 +1,7 @@
 #include "databasesettingsdialog.h"
 
 #include <aguarastyle.h>
+#include <formcheck.h>
 
 #include <QApplication>
 #include <QComboBox>
@@ -37,7 +38,7 @@ DatabaseSettingsDialog::DatabaseSettingsDialog(const DatabaseSettings &s, const 
     pathRow->addWidget(browse);
     auto sqlitePage = new QWidget;
     auto sqliteForm = new QFormLayout(sqlitePage);
-    sqliteForm->addRow(tr("Archivo:"), pathRow);
+    sqliteForm->addRow(AguaraForm::required(tr("Archivo:")), pathRow);
 
     // PostgreSQL page
     host = new QLineEdit(s.host);
@@ -52,10 +53,10 @@ DatabaseSettingsDialog::DatabaseSettingsDialog(const DatabaseSettings &s, const 
     password->setEchoMode(QLineEdit::Password);
     auto pgPage = new QWidget;
     auto pgForm = new QFormLayout(pgPage);
-    pgForm->addRow(tr("Servidor:"), host);
+    pgForm->addRow(AguaraForm::required(tr("Servidor:")), host);
     pgForm->addRow(tr("Puerto:"), port);
-    pgForm->addRow(tr("Base de datos:"), name);
-    pgForm->addRow(tr("Usuario:"), user);
+    pgForm->addRow(AguaraForm::required(tr("Base de datos:")), name);
+    pgForm->addRow(AguaraForm::required(tr("Usuario:")), user);
     pgForm->addRow(tr("Contraseña:"), password);
 
     pages = new QStackedWidget;
@@ -168,9 +169,27 @@ void DatabaseSettingsDialog::setChangingRunningProgram(const QString &text)
     notice->show();
 }
 
+/// What a connection can't be tried without. The password stays optional: the
+/// server may not ask for one.
+bool DatabaseSettingsDialog::complete()
+{
+    const auto missing = [this](QLineEdit *field, const QString &text) {
+        if (!field->text().trimmed().isEmpty())
+            return false;
+        showStatus(text, AguaraStyle::Error);
+        field->setFocus();
+        return true;
+    };
+    if (DatabaseSettings::Backend(backend->currentData().toInt()) == DatabaseSettings::SQLite)
+        return !missing(sqlitePath, tr("Indique el archivo de datos."));
+    return !missing(host, tr("Escriba la dirección o el nombre del servidor."))
+        && !missing(name, tr("Escriba el nombre de la base de datos."))
+        && !missing(user, tr("Escriba el usuario de la base de datos."));
+}
+
 void DatabaseSettingsDialog::accept()
 {
-    if (!mustConnect || tryConnection())
+    if (mustConnect ? tryConnection() : complete())
         QDialog::accept();
 }
 
@@ -181,6 +200,8 @@ void DatabaseSettingsDialog::onTest()
 
 bool DatabaseSettingsDialog::tryConnection()
 {
+    if (!complete())
+        return false;
     showStatus(tr("Conectando..."), AguaraStyle::Info);
     status->repaint();
     QApplication::setOverrideCursor(Qt::WaitCursor);

@@ -1,6 +1,8 @@
 #include "printersettingsdialog.h"
 
 #include <aguarastyle.h>
+#include <customerservice.h>
+#include <formcheck.h>
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -123,11 +125,12 @@ QWidget *PrinterSettingsDialog::buildStorePage(const StoreInfo &store)
     auto form = new QFormLayout(page);
     form->setHorizontalSpacing(12);
     form->setVerticalSpacing(10);
-    form->addRow(tr("Nombre:"), storeName);
+    form->addRow(AguaraForm::required(tr("Nombre:")), storeName);
     form->addRow(tr("RUC:"), ruc);
     form->addRow(tr("Dirección:"), address);
     form->addRow(tr("Teléfono:"), phone);
     form->addRow(tr("Pie del ticket:"), footer);
+    form->addRow(QString(), AguaraForm::requiredNote());
     return page;
 }
 
@@ -176,6 +179,24 @@ void PrinterSettingsDialog::accept()
     const PrinterSettings chosen = settings();
     if (chosen.kind != PrinterKind::None && chosen.name.isEmpty()) {
         showStatus(tr("Elija la impresora."), AguaraStyle::Error);
+        return;
+    }
+    const auto refuse = [this](QLineEdit *field, const QString &text) {
+        findChild<QTabWidget *>()->setCurrentWidget(field->parentWidget());
+        showStatus(text, AguaraStyle::Error);
+        field->setFocus();
+        field->selectAll();
+    };
+    if (storeName->text().trimmed().isEmpty()) {
+        refuse(storeName, tr("Escriba el nombre del comercio: encabeza los tickets."));
+        return;
+    }
+    if (!ruc->text().trimmed().isEmpty() && !AguaraCustomer::validRuc(ruc->text().trimmed())) {
+        refuse(ruc, tr("El RUC no es válido: revise el número y su dígito verificador (80009735-1)."));
+        return;
+    }
+    if (!AguaraForm::validPhone(phone->text())) {
+        refuse(phone, tr("El teléfono lleva solo números, por ejemplo 021 555 123."));
         return;
     }
     StoreInfo store;

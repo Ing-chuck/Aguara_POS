@@ -9,7 +9,10 @@
 
 #include <interfaces.h>
 
+#include <QCheckBox>
+#include <QDateEdit>
 #include <QDialog>
+#include <QDoubleSpinBox>
 #include <QDir>
 #include <QFile>
 #include <QLineEdit>
@@ -24,6 +27,10 @@
 #include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
+#include <barcode.h>
+#include <formcheck.h>
+#include "telemetry.h"
+#include <livesearch.h>
 #include <QPrinter>
 #include <QPushButton>
 #include <QTableView>
@@ -81,6 +88,27 @@ private slots:
     void creditNoteThroughThePaymentScreen();
     void paymentKeysFollowTheMethods();
     void configuringPaymentMethods();
+    void inventoryNarrowsAsYouType();
+    void articleSearchFindsCodesToo();
+    void tillSuggestsArticles();
+    void scanningNeverOpensTheSuggestions();
+    void suppliersNarrowAsYouType();
+    void altaDeProductos();
+    void altaCreatesTheArticleOnTheSpot();
+    void altaCreatesTheSupplierOnTheSpot();
+    void telemetrySeesWhatHappensNotAboutWhom();
+    void emptyEnterDoesNotCharge();
+    void scannerCantPayInCash();
+    void cashCantBeAbsurd();
+    void removalAsksAndEnterKeeps();
+    void removingARoleAsks();
+    void deactivatingAUserAsks();
+    void articleFormSaysWhatIsMissing();
+    void countRefusesWhatItCantRead();
+    void purchaseChecksItsLines();
+    void priceChangeNeedsSomethingToChange();
+    void cashMovementSaysWhatIsMissing();
+    void removingAVoucherAsks();
     void customersPage();
     void reportsPage();
     void chargingPrintsAndOpensTheDrawer();
@@ -300,6 +328,20 @@ static void whenDialogOpens(const std::function<void(QDialog *)> &steps)
     });
 }
 
+/// A person's pace: at full speed the keys look like a scanner.
+static void typeByHand(QWidget *field, const QString &text)
+{
+    QTest::keyClicks(field, text, Qt::NoModifier, 60);
+}
+
+/// Exact cash takes two Enters; anything else, one.
+static void enterUntilCharged(QDialog *payment)
+{
+    payment->accept();
+    if (payment->isVisible())
+        payment->accept();
+}
+
 void tst_Modules::purchaseThroughTheScreen()
 {
     QLineEdit *search = nullptr;
@@ -332,10 +374,13 @@ void tst_Modules::purchaseThroughTheScreen()
         };
         typeInCell(QStringLiteral("12"), Qt::Key_Tab);          // Cantidad
         typeInCell(QStringLiteral("4.000"), Qt::Key_Tab);       // Costo
-        typeInCell(QStringLiteral("6.500"), Qt::Key_unknown);   // Precio nuevo, still being typed when saving
-        QCOMPARE(lines->item(0, 5)->text(), QStringLiteral("48.000"));
+        typeInCell(QStringLiteral("35"), Qt::Key_Tab);          // Margen: 4.000 / 0,65, up to the next 100
+        QCOMPARE(lines->item(0, 5)->text(), QStringLiteral("6.200"));
+        typeInCell(QStringLiteral("6.500"), Qt::Key_unknown);   // Precio, still being typed when saving
+        QCOMPARE(lines->item(0, 6)->text(), QStringLiteral("48.000"));
         QVERIFY(dialog->findChild<QLabel *>(QStringLiteral("purchaseTotal"))->text().contains(QStringLiteral("48.000")));
         done = true;
+        whenDialogOpens([](QDialog *labels) { labels->reject(); });
         dialog->accept();
     });
     m_page->findChild<QPushButton *>(QStringLiteral("newPurchaseButton"))->click();
@@ -379,9 +424,10 @@ void tst_Modules::scannerNeverSavesThePurchase()
         QCOMPARE(lines->item(0, 2)->text(), QStringLiteral("3"));
         QCOMPARE(dialog->focusWidget(), static_cast<QWidget *>(entry));
 
-        scan();
+        scan();                                                 // as in a sale: one more on its line
         QVERIFY(dialog->isVisible());
-        QCOMPARE(lines->rowCount(), 2);
+        QCOMPARE(lines->rowCount(), 1);
+        QCOMPARE(lines->item(0, 2)->text(), QStringLiteral("4"));
         done = true;
         dialog->reject();
     });
@@ -457,7 +503,7 @@ void tst_Modules::aDayAtTheTill()
     whenDialogOpens([](QDialog *payment) {
         QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentTotal"))->text(), QStringLiteral("Gs. 15.950"));
         auto tendered = payment->findChild<QLineEdit *>(QStringLiteral("paymentTendered"));
-        QTest::keyClicks(tendered, QStringLiteral("20.000"));
+        typeByHand(tendered, QStringLiteral("20.000"));
         QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentChange"))->text(), QStringLiteral("Vuelto: Gs. 4.050"));
         QTest::keyClick(tendered, Qt::Key_Return);
     });
@@ -534,6 +580,11 @@ void tst_Modules::quantityPrefixAndRepeatedScans()
     press(Qt::Key_F2);
     QCOMPARE(label("saleTotal")->text(), QStringLiteral("22.000"));
 
+    whenDialogOpens([](QDialog *ask) { ask->reject(); });
+    press(Qt::Key_Delete);
+    QCOMPARE(saleLines()->rowCount(), 1);               // they changed their mind
+
+    whenDialogOpens([](QDialog *ask) { ask->accept(); });
     press(Qt::Key_Delete);
     QCOMPARE(saleLines()->rowCount(), 0);
     bool found = false;
@@ -567,7 +618,7 @@ void tst_Modules::scaleLabelsAtTheTill()
         QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentTotal"))->text(), QStringLiteral("Gs. 5.650"));
         QVERIFY(payment->findChild<QLabel *>(QStringLiteral("paymentRounding"))->text().contains(QStringLiteral("Gs. 5.625")));
         auto tendered = payment->findChild<QLineEdit *>(QStringLiteral("paymentTendered"));
-        QTest::keyClicks(tendered, QStringLiteral("10.000"));
+        typeByHand(tendered, QStringLiteral("10.000"));
         QTest::keyClick(tendered, Qt::Key_Return);
     });
     press(Qt::Key_F12);
@@ -679,7 +730,7 @@ void tst_Modules::voidingFromTheScreen()
         return true;
     });
     scan(QStringLiteral("2*7840001"));
-    whenDialogOpens([](QDialog *payment) { payment->accept(); });
+    whenDialogOpens([](QDialog *payment) { enterUntilCharged(payment); });
     press(Qt::Key_F12);
     QCOMPARE(m_core.products->product(QStringLiteral("7840001"))->stock, AguaraQuantity::whole(8));
 
@@ -762,7 +813,7 @@ void tst_Modules::cardAndCashTogether()
         QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentCaption"))->text(), QStringLiteral("Falta pagar en efectivo"));
         QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentTotal"))->text(), QStringLiteral("Gs. 5.000"));
         QVERIFY(payment->findChild<QLabel *>(QStringLiteral("paymentRounding"))->text().contains(QStringLiteral("Gs. 4.975")));
-        QTest::keyClicks(tendered, QStringLiteral("10.000"));
+        typeByHand(tendered, QStringLiteral("10.000"));
         QTest::keyClick(tendered, Qt::Key_Return);
     });
     press(Qt::Key_F12);
@@ -894,7 +945,7 @@ void tst_Modules::outageOnlyFinishesTheSaleInProgress()
     // the sale on the screen is finished
     whenDialogOpens([](QDialog *payment) {
         auto tendered = payment->findChild<QLineEdit *>(QStringLiteral("paymentTendered"));
-        QTest::keyClicks(tendered, QStringLiteral("20.000"));
+        typeByHand(tendered, QStringLiteral("20.000"));
         QTest::keyClick(tendered, Qt::Key_Return);
     });
     press(Qt::Key_F12);
@@ -941,7 +992,7 @@ void tst_Modules::customerOfTheSale()
     QCOMPARE(label("saleCustomer")->text(), QStringLiteral("DOÑA ROSA"));
 
     scan(QStringLiteral("7840001"));
-    whenDialogOpens([](QDialog *payment) { payment->accept(); });
+    whenDialogOpens([](QDialog *payment) { enterUntilCharged(payment); });
     press(Qt::Key_F12);
     QCOMPARE(m_core.sales->sessionSales(m_core.cash->currentSession()->id).first().customerName, QStringLiteral("DOÑA ROSA"));
     QCOMPARE(label("saleCustomer")->text(), QStringLiteral("Consumidor final"));    // the next sale starts clean
@@ -950,7 +1001,7 @@ void tst_Modules::customerOfTheSale()
 /// Up to the point of the sale; the cashier has charged 2 of the 7840001.
 static void chargeTwo(QDialog *payment)
 {
-    payment->accept();
+    enterUntilCharged(payment);
 }
 
 void tst_Modules::returnThroughTheScreen()
@@ -1014,7 +1065,7 @@ void tst_Modules::creditNoteThroughThePaymentScreen()
     QVERIFY(showSales());
     QVERIFY(openTill());
     scan(QStringLiteral("7840001"));
-    whenDialogOpens([](QDialog *payment) { payment->accept(); });
+    whenDialogOpens([](QDialog *payment) { enterUntilCharged(payment); });
     press(Qt::Key_F12);
 
     ReturnRequest r;
@@ -1042,7 +1093,7 @@ void tst_Modules::creditNoteThroughThePaymentScreen()
         QTest::keyClick(payment->findChild<QLineEdit *>(QStringLiteral("paymentTendered")), Qt::Key_F7);
         QCOMPARE(payment->findChild<QTableWidget *>(QStringLiteral("paymentVouchers"))->item(0, 2)->text(), QStringLiteral("11.000"));
         QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentTotal"))->text(), QStringLiteral("Gs. 4.950"));
-        payment->accept();
+        enterUntilCharged(payment);
     });
     press(Qt::Key_F12);
 
@@ -1075,7 +1126,7 @@ void tst_Modules::paymentKeysFollowTheMethods()
         });
         tigoButton->click();
         QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentCaption"))->text(), QStringLiteral("Pago completo"));
-        payment->accept();
+        enterUntilCharged(payment);
     });
     press(Qt::Key_F12);
     QCOMPARE(saleLines()->rowCount(), 0);
@@ -1098,6 +1149,22 @@ void tst_Modules::configuringPaymentMethods()
         dialog->findChild<QLineEdit *>(QStringLiteral("methodsNew"))->setText(QStringLiteral("Cheque"));
         dialog->findChild<QPushButton *>(QStringLiteral("methodsAdd"))->click();
         QCOMPARE(table->rowCount(), 5);
+
+        const auto add = [&](const QString &name) {
+            dialog->findChild<QLineEdit *>(QStringLiteral("methodsNew"))->setText(name);
+            dialog->findChild<QPushButton *>(QStringLiteral("methodsAdd"))->click();
+        };
+        auto error = dialog->findChild<QLabel *>(QStringLiteral("methodsError"));
+        add(QString());
+        QVERIFY(!error->isHidden());
+        add(QStringLiteral("CHEQUE"));                  // the same one, written differently
+        add(QStringLiteral("Efectivo"));                // always there
+        QCOMPARE(table->rowCount(), 5);
+
+        whenDialogOpens([](QDialog *ask) { ask->reject(); });
+        dialog->accept();
+        QVERIFY(dialog->isVisible());                   // taking QR away has to be confirmed
+        whenDialogOpens([](QDialog *ask) { ask->accept(); });
         dialog->accept();
     });
     trigger("actionPaymentMethods");
@@ -1147,9 +1214,681 @@ void tst_Modules::customersPage()
         ++asked;
         return false;
     });
+    whenDialogOpens([](QDialog *ask) { ask->reject(); });
+    m_page->findChild<QPushButton *>(QStringLiteral("customerToggle"))->click();
+    QCOMPARE(asked, 0);                                 // no one is called for nothing
+
+    whenDialogOpens([](QDialog *ask) { ask->accept(); });
     m_page->findChild<QPushButton *>(QStringLiteral("customerToggle"))->click();
     QCOMPARE(asked, 1);
     QCOMPARE(m_core.customers->customers().size(), 1);
+}
+
+void tst_Modules::inventoryNarrowsAsYouType()
+{
+    QLineEdit *search = nullptr;
+    QTableView *table = showInventory(&search);
+    QVERIFY(table && search);
+    const int all = table->model()->rowCount();
+    QVERIFY(all > 1);
+
+    search->setFocus();
+    QTest::keyClicks(search, QStringLiteral("surtidas galletitas"));
+    QTRY_COMPARE(table->model()->rowCount(), 1);
+    QCOMPARE(table->model()->index(0, int(ProductColumn::Description)).data().toString(),
+             QStringLiteral("GALLETITAS SURTIDAS"));
+
+    QTest::keyClick(search, Qt::Key_Escape);
+    QVERIFY(search->text().isEmpty());
+    QTRY_COMPARE(table->model()->rowCount(), all);
+
+    // a second barcode isn't in the table's columns: Enter brings its article
+    QVERIFY(m_core.inventory->addBarcode(QStringLiteral("7840001"), QStringLiteral("555666")));
+    QTest::keyClicks(search, QStringLiteral("555666"));
+    QTest::keyClick(search, Qt::Key_Return);
+    QCOMPARE(table->model()->rowCount(), 1);
+    QCOMPARE(table->model()->index(table->currentIndex().row(), int(ProductColumn::Code)).data().toString(),
+             QStringLiteral("7840001"));
+}
+
+void tst_Modules::articleSearchFindsCodesToo()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    bool checked = false;
+    whenDialogOpens([&](QDialog *dialog) {
+        auto table = dialog->findChild<QTableView *>(QStringLiteral("articleTable"));
+        auto filter = dialog->findChild<QLineEdit *>(QStringLiteral("articleFilter"));
+        filter->setText(QStringLiteral("7840001"));
+        QCOMPARE(table->model()->rowCount(), 1);
+        filter->setText(QStringLiteral("no existe"));
+        QCOMPARE(table->model()->rowCount(), 0);
+        checked = true;
+    });
+    press(Qt::Key_F3);
+    QVERIFY(checked);
+}
+
+void tst_Modules::tillSuggestsArticles()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    auto entry = saleEntry();
+    QApplication::setActiveWindow(entry->window());     // the list opens only for the field with the focus
+    entry->setFocus();
+    QVERIFY(entry->hasFocus());
+    auto list = entry->findChild<QListWidget *>(QStringLiteral("suggestions"));
+    QVERIFY(list);
+
+    QTest::keyClicks(entry, QStringLiteral("3*arti"));
+    QTRY_VERIFY(list->isVisible());
+    QVERIFY(entry->hasFocus());                         // the cursor stays in the field
+    QVERIFY(list->item(0)->text().contains(QStringLiteral("ARTICULO")));
+
+    QTest::keyClick(entry, Qt::Key_Down);
+    QCOMPARE(saleLines()->rowCount(), 0);               // not the lines of the sale
+    QTest::keyClick(entry, Qt::Key_Return);
+    QVERIFY(!list->isVisible());
+    QCOMPARE(saleLines()->rowCount(), 1);
+    QVERIFY(saleLines()->item(0, 1)->text().contains(QStringLiteral("ARTICULO")));
+    QCOMPARE(saleLines()->item(0, 2)->text(), QStringLiteral("3"));
+    QVERIFY(entry->text().isEmpty());
+
+    // Esc closes the list, and leaves the sale alone
+    QTest::keyClicks(entry, QStringLiteral("arti"));
+    QTRY_VERIFY(list->isVisible());
+    QTest::keyClick(entry, Qt::Key_Escape);
+    QVERIFY(!list->isVisible());
+    QCOMPARE(entry->text(), QStringLiteral("arti"));
+    QCOMPARE(saleLines()->rowCount(), 1);
+}
+
+void tst_Modules::scanningNeverOpensTheSuggestions()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    auto entry = saleEntry();
+    QApplication::setActiveWindow(entry->window());     // the list opens only for the field with the focus
+    entry->setFocus();
+    QVERIFY(entry->hasFocus());
+    auto list = entry->findChild<QListWidget *>(QStringLiteral("suggestions"));
+
+    scan(QStringLiteral("7840001"));                    // digits and Enter
+    QTest::qWait(250);
+    QVERIFY(!list->isVisible());
+    QCOMPARE(saleLines()->rowCount(), 1);
+
+    QTest::keyClicks(entry, QStringLiteral("7840"));    // digits alone never open it either
+    QTest::qWait(250);
+    QVERIFY(!list->isVisible());
+}
+
+void tst_Modules::suppliersNarrowAsYouType()
+{
+    QLineEdit *search = nullptr;
+    QVERIFY(showInventory(&search));
+    Supplier one, other;
+    one.name = QStringLiteral("DISTRIBUIDORA NÚÑEZ");
+    other.name = QStringLiteral("MAYORISTA DEL SUR");
+    QVERIFY(m_core.inventory->saveSupplier(one));
+    QVERIFY(m_core.inventory->saveSupplier(other));
+    m_page->findChild<QTabWidget *>(QStringLiteral("inventorySections"))->setCurrentIndex(2);
+
+    auto table = m_page->findChild<QTableWidget *>(QStringLiteral("suppliersTable"));
+    QCOMPARE(table->rowCount(), 2);
+    const auto shown = [table]() {
+        int count = 0;
+        for (int row = 0; row < table->rowCount(); ++row)
+            count += table->isRowHidden(row) ? 0 : 1;
+        return count;
+    };
+    m_page->findChild<QLineEdit *>(QStringLiteral("supplierSearch"))->setText(QStringLiteral("nunez"));
+    QCOMPARE(shown(), 1);
+}
+
+void tst_Modules::altaDeProductos()
+{
+    QLineEdit *search = nullptr;
+    QVERIFY(showInventory(&search));
+    Supplier supplier;
+    supplier.name = QStringLiteral("DISTRIBUIDORA");
+    QVERIFY(m_core.inventory->saveSupplier(supplier));
+    const Quantity before = m_core.products->product(QStringLiteral("7840001"))->stock;
+    const Money cost = m_core.products->product(QStringLiteral("7840001"))->cost;
+
+    bool saved = false, offered = false;
+    whenDialogOpens([&](QDialog *dialog) {
+        auto entry = dialog->findChild<QLineEdit *>(QStringLiteral("purchaseEntry"));
+        auto lines = dialog->findChild<QTableWidget *>(QStringLiteral("purchaseLines"));
+        const auto scan = [entry](const QString &code) {
+            entry->setFocus();
+            QTest::keyClicks(entry, code);
+            QTest::keyClick(entry, Qt::Key_Return);
+        };
+        scan(QStringLiteral("7840001"));
+        scan(QStringLiteral("7840001"));
+        QCOMPARE(lines->rowCount(), 1);
+        QCOMPARE(lines->item(0, 2)->text(), QStringLiteral("2"));
+
+        lines->setCurrentItem(nullptr);
+        lines->item(0, 3)->setText(QStringLiteral("10.000"));   // the margin follows the cost
+        lines->item(0, 5)->setText(QStringLiteral("20.000"));
+        QCOMPARE(lines->item(0, 4)->text(), QLocale().toString(50.0, 'f', 1));
+        lines->item(0, 4)->setText(QStringLiteral("abc"));      // not a margin: it goes back
+        QCOMPARE(lines->item(0, 4)->text(), QLocale().toString(50.0, 'f', 1));
+        QCOMPARE(lines->item(0, 5)->text(), QStringLiteral("20.000"));
+        lines->item(0, 4)->setText(QStringLiteral("60"));       // 10.000 / 0,40
+        QCOMPARE(lines->item(0, 5)->text(), QStringLiteral("25.000"));
+        saved = true;
+
+        whenDialogOpens([&](QDialog *labels) {
+            QCOMPARE(labels->objectName(), QStringLiteral("entryLabels"));
+            auto table = labels->findChild<QTableWidget *>(QStringLiteral("entryLabelsTable"));
+            QCOMPARE(table->rowCount(), 1);
+            QCOMPARE(qobject_cast<QSpinBox *>(table->cellWidget(0, 2))->value(), 2);    // one per unit
+            QCOMPARE(table->item(0, 1)->text(), QStringLiteral("25.000"));              // the price just set
+            qobject_cast<QSpinBox *>(table->cellWidget(0, 2))->setValue(0);
+            labels->accept();
+            QVERIFY(labels->isVisible());                                               // nothing to print
+            QVERIFY(!labels->findChild<QLabel *>(QStringLiteral("entryLabelsError"))->isHidden());
+
+            qobject_cast<QSpinBox *>(table->cellWidget(0, 2))->setValue(3);
+            whenDialogOpens([](QDialog *preview) { preview->reject(); });               // the sheet, ready to print
+            labels->accept();
+            QVERIFY(!labels->isVisible());
+            offered = true;
+        });
+        dialog->accept();
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("receiveButton"))->click();
+    QVERIFY(saved);
+    QVERIFY(offered);
+
+    const auto article = m_core.products->product(QStringLiteral("7840001"));
+    QCOMPARE(article->stock, before + AguaraQuantity::whole(2));
+    QCOMPARE(article->price, Money(25000));
+    QCOMPARE(article->cost, Money(10000));
+    QVERIFY(article->cost != cost);
+}
+
+void tst_Modules::altaCreatesTheArticleOnTheSpot()
+{
+    QLineEdit *search = nullptr;
+    QVERIFY(showInventory(&search));
+    Supplier supplier;
+    supplier.name = QStringLiteral("DISTRIBUIDORA");
+    QVERIFY(m_core.inventory->saveSupplier(supplier));
+
+    QString generated;
+    bool done = false;
+    whenDialogOpens([&](QDialog *dialog) {
+        auto lines = dialog->findChild<QTableWidget *>(QStringLiteral("purchaseLines"));
+        const auto form = [dialog]() {
+            for (QDialog *d : dialog->findChildren<QDialog *>()) {
+                if (d->objectName() == QLatin1String("addItemDialog"))
+                    return d;
+            }
+            return static_cast<QDialog *>(nullptr);
+        };
+        const auto fill = [&](const QString &description) {
+            form()->findChild<QLineEdit *>(QStringLiteral("lineEdit_description"))->setText(description);
+            form()->findChild<QLineEdit *>(QStringLiteral("lineEdit_price"))->setText(QStringLiteral("7.000"));
+            form()->findChild<QLineEdit *>(QStringLiteral("lineEdit_cost"))->setText(QStringLiteral("5.000"));
+            form()->accept();
+        };
+
+        // a code nobody knows: the form opens with it, without a stock of its own
+        auto entry = dialog->findChild<QLineEdit *>(QStringLiteral("purchaseEntry"));
+        entry->setFocus();
+        QTest::keyClicks(entry, QStringLiteral("7799001"));
+        QTest::keyClick(entry, Qt::Key_Return);
+        QVERIFY(form()->isVisible());
+        QCOMPARE(form()->findChild<QLineEdit *>(QStringLiteral("lineEdit_code"))->text(), QStringLiteral("7799001"));
+        QVERIFY(form()->findChild<QLineEdit *>(QStringLiteral("lineEdit_stock"))->isReadOnly());
+        fill(QStringLiteral("ARTICULO CON CODIGO"));
+        QCOMPARE(lines->rowCount(), 1);
+
+        // the button, and a code of the shop's own
+        dialog->findChild<QPushButton *>(QStringLiteral("purchaseNewArticle"))->click();
+        QVERIFY(form()->isVisible());
+        form()->findChild<QPushButton *>(QStringLiteral("generateCode"))->click();
+        generated = form()->findChild<QLineEdit *>(QStringLiteral("lineEdit_code"))->text();
+        fill(QStringLiteral("ARTICULO SIN CODIGO"));
+        QCOMPARE(lines->rowCount(), 2);
+        QCOMPARE(lines->item(1, 0)->text(), generated);
+        QCOMPARE(lines->item(1, 5)->text(), QStringLiteral("7.000"));
+
+        lines->setCurrentItem(nullptr);
+        lines->item(1, 2)->setText(QStringLiteral("5"));
+        done = true;
+        whenDialogOpens([](QDialog *labels) { labels->reject(); });
+        dialog->accept();
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("receiveButton"))->click();
+    QVERIFY(done);
+
+    QVERIFY(generated.startsWith(QStringLiteral("299")));
+    QVERIFY(AguaraBarcode::isValidEan13(generated));
+    QCOMPARE(m_core.products->product(generated)->stock, AguaraQuantity::whole(5));     // only what came in
+    QCOMPARE(m_core.products->product(QStringLiteral("7799001"))->stock, AguaraQuantity::whole(1));
+    QCOMPARE(m_core.inventory->movements(generated).size(), 1);
+}
+
+void tst_Modules::altaCreatesTheSupplierOnTheSpot()
+{
+    QLineEdit *search = nullptr;
+    QVERIFY(showInventory(&search));
+    QVERIFY(m_core.inventory->suppliers().isEmpty());       // the first alta of a new shop
+
+    bool done = false;
+    whenDialogOpens([&](QDialog *dialog) {
+        auto supplier = dialog->findChild<QComboBox *>(QStringLiteral("purchaseSupplier"));
+        auto button = dialog->findChild<QPushButton *>(QStringLiteral("purchaseNewSupplier"));
+        auto error = dialog->findChild<QLabel *>(QStringLiteral("purchaseError"));
+        QCOMPARE(supplier->count(), 0);
+
+        auto entry = dialog->findChild<QLineEdit *>(QStringLiteral("purchaseEntry"));
+        entry->setFocus();
+        QTest::keyClicks(entry, QStringLiteral("7840001"));
+        QTest::keyClick(entry, Qt::Key_Return);
+        dialog->findChild<QTableWidget *>(QStringLiteral("purchaseLines"))->setCurrentItem(nullptr);
+        dialog->accept();
+        QVERIFY(dialog->isVisible());                       // who it comes from can't stay empty
+        QVERIFY(error->text().contains(QStringLiteral("proveedor")));
+
+        const auto save = [](QDialog *form) {
+            form->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Save)->click();
+        };
+        whenDialogOpens([&](QDialog *form) {                // no name: the form stays, and nothing changes
+            save(form);
+            QVERIFY(form->isVisible());
+            QVERIFY(!form->findChild<QLabel *>(QStringLiteral("supplierError"))->isHidden());
+            form->reject();
+        });
+        button->click();
+        QCOMPARE(supplier->count(), 0);
+
+        whenDialogOpens([&](QDialog *form) {
+            form->findChild<QLineEdit *>(QStringLiteral("supplierName"))->setText(QStringLiteral("DISTRIBUIDORA NUEVA"));
+            save(form);
+        });
+        button->click();
+        QCOMPARE(supplier->count(), 1);
+        QCOMPARE(supplier->currentText(), QStringLiteral("DISTRIBUIDORA NUEVA"));   // already chosen
+        QVERIFY(error->isHidden());
+
+        done = true;
+        whenDialogOpens([](QDialog *labels) { labels->reject(); });
+        dialog->accept();
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("receiveButton"))->click();
+    QVERIFY(done);
+
+    const QList<Purchase> purchases = m_core.inventory->purchases(QDate::currentDate(), QDate::currentDate());
+    QCOMPARE(purchases.size(), 1);
+    QCOMPARE(purchases.first().supplierName, QStringLiteral("DISTRIBUIDORA NUEVA"));
+}
+
+void tst_Modules::telemetrySeesWhatHappensNotAboutWhom()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+
+    Customer customer;
+    customer.name = QStringLiteral("Ana Secreta");
+    customer.documentType = QString::fromLatin1(DocumentType::Ci);
+    customer.document = QStringLiteral("7654321");
+    customer.phone = QStringLiteral("0981 555 777");
+    customer.email = QStringLiteral("ana@secreta.com.py");
+    m_core.customers->setUsers(m_users.get());
+
+    QTemporaryDir folder;
+    Telemetry telemetry(folder.path());
+    TelemetrySettings settings;
+    settings.enabled = true;
+    settings.endpoint = QStringLiteral("http://127.0.0.1:9");
+    settings.key = QStringLiteral("clave");
+    telemetry.configure(settings);
+
+    // the real services, with real data in what they audit
+    QVERIFY(m_core.customers->saveCustomer(customer) != 0);
+    scan(QStringLiteral("7840001"));
+    whenDialogOpens([](QDialog *payment) { enterUntilCharged(payment); });
+    press(Qt::Key_F12);
+    m_users->audit(QStringLiteral("prueba.accion"), QStringLiteral("cliente"), QStringLiteral("7654321"),
+                   QStringLiteral("Ana Secreta"), QStringLiteral("Gs. 987.654"));
+    m_core.reports->run(QStringLiteral("ventas.periodo"), ReportFilter());
+
+    const QByteArray report = telemetry.report();
+    for (const char *happened : { "cliente.crear", "venta.cobrar", "prueba.accion", "reporte.ventas.periodo" })
+        QVERIFY2(report.contains(happened), happened);
+    for (const char *secret : { "Ana", "Secreta", "7654321", "0981", "secreta.com", "987.654", "cajero", "7840001", "ARTICULO" })
+        QVERIFY2(!report.contains(secret), secret);
+}
+
+void tst_Modules::emptyEnterDoesNotCharge()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    scan(QStringLiteral("7840001"));
+    QCOMPARE(saleLines()->rowCount(), 1);
+
+    bool checked = false;
+    whenDialogOpens([&](QDialog *payment) {
+        auto tendered = payment->findChild<QLineEdit *>(QStringLiteral("paymentTendered"));
+        QVERIFY(tendered->text().isEmpty());
+        QTest::keyClick(tendered, Qt::Key_Return);
+        QVERIFY(payment->isVisible());                  // a stray Enter sells nothing
+        QCOMPARE(tendered->text(), QStringLiteral("11.000"));
+        QCOMPARE(payment->findChild<QLabel *>(QStringLiteral("paymentChange"))->text(), QStringLiteral("Vuelto: Gs. 0"));
+        QTest::keyClick(tendered, Qt::Key_Return);
+        QVERIFY(!payment->isVisible());
+        checked = true;
+    });
+    press(Qt::Key_F12);
+    QVERIFY(checked);
+    QCOMPARE(saleLines()->rowCount(), 0);               // charged
+}
+
+void tst_Modules::scannerCantPayInCash()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    scan(QStringLiteral("7840001"));
+
+    bool checked = false;
+    whenDialogOpens([&](QDialog *payment) {
+        auto tendered = payment->findChild<QLineEdit *>(QStringLiteral("paymentTendered"));
+        auto error = payment->findChild<QLabel *>(QStringLiteral("paymentError"));
+        QTest::keyClicks(tendered, QStringLiteral("7840001000017"));
+        QTest::keyClick(tendered, Qt::Key_Return);      // the scanner's own Enter
+        QVERIFY(payment->isVisible());
+        QVERIFY(tendered->text().isEmpty());            // no code, and no exact amount proposed either
+        QVERIFY(!error->isHidden());
+
+        QTest::qWait(200);                              // then the cashier just types it
+        typeByHand(tendered, QStringLiteral("20.000"));
+        QVERIFY(error->isHidden());
+        QTest::keyClick(tendered, Qt::Key_Return);
+        QVERIFY(!payment->isVisible());
+        checked = true;
+    });
+    press(Qt::Key_F12);
+    QVERIFY(checked);
+    QCOMPARE(saleLines()->rowCount(), 0);
+}
+
+void tst_Modules::cashCantBeAbsurd()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    scan(QStringLiteral("7840001"));
+
+    bool checked = false;
+    whenDialogOpens([&](QDialog *payment) {
+        auto tendered = payment->findChild<QLineEdit *>(QStringLiteral("paymentTendered"));
+        tendered->setText(QStringLiteral("7840001"));   // a scanner too slow to be told from a hand
+        payment->accept();
+        QVERIFY(payment->isVisible());
+        QVERIFY(!payment->findChild<QLabel *>(QStringLiteral("paymentError"))->isHidden());
+        tendered->setText(QStringLiteral("500.000"));   // odd, but it can be real
+        payment->accept();
+        QVERIFY(!payment->isVisible());
+        checked = true;
+    });
+    press(Qt::Key_F12);
+    QVERIFY(checked);
+}
+
+void tst_Modules::removalAsksAndEnterKeeps()
+{
+    whenDialogOpens([](QDialog *ask) {
+        QCOMPARE(ask->objectName(), QStringLiteral("confirmRemoval"));
+        QVERIFY(ask->findChild<QPushButton *>(QStringLiteral("confirmNo"))->isDefault());
+        QTest::keyClick(ask, Qt::Key_Return);
+    });
+    QVERIFY(!AguaraForm::confirmRemoval(nullptr, QStringLiteral("Quitar"), QStringLiteral("Algo"), QStringLiteral("Quitar")));
+
+    whenDialogOpens([](QDialog *ask) { QTest::keyClick(ask, Qt::Key_Escape); });
+    QVERIFY(!AguaraForm::confirmRemoval(nullptr, QStringLiteral("Quitar"), QStringLiteral("Algo"), QStringLiteral("Quitar")));
+
+    whenDialogOpens([](QDialog *ask) {                  // with the keyboard: Tab to the button, then Enter
+        QApplication::setActiveWindow(ask);
+        auto yes = ask->findChild<QPushButton *>(QStringLiteral("confirmYes"));
+        QTest::keyClick(ask->focusWidget(), Qt::Key_Tab);
+        QCOMPARE(ask->focusWidget(), static_cast<QWidget *>(yes));
+        QTest::keyClick(yes, Qt::Key_Return);
+    });
+    QVERIFY(AguaraForm::confirmRemoval(nullptr, QStringLiteral("Quitar"), QStringLiteral("Algo"), QStringLiteral("Quitar")));
+
+    whenDialogOpens([](QDialog *ask) { ask->findChild<QPushButton *>(QStringLiteral("confirmYes"))->click(); });
+    QVERIFY(AguaraForm::confirmRemoval(nullptr, QStringLiteral("Quitar"), QStringLiteral("Algo"), QStringLiteral("Quitar")));
+}
+
+void tst_Modules::removingARoleAsks()
+{
+    openUsers();
+    UserRole role;
+    role.name = QStringLiteral("TEMPORAL");
+    QVERIFY(m_users->saveRole(role));
+    const auto named = [this]() {
+        for (const UserRole &r : m_users->roles()) {
+            if (r.name == QLatin1String("TEMPORAL"))
+                return true;
+        }
+        return false;
+    };
+
+    auto widgets = qobject_cast<WidgetModuleInterface *>(load(QStringLiteral("modulo_usuarios.dll")));
+    QVERIFY(widgets);
+    std::unique_ptr<QWidget> page(widgets->createWidget());
+    auto list = page->findChild<QListWidget *>(QStringLiteral("rolesList"));
+    const QList<QListWidgetItem *> found = list->findItems(QStringLiteral("TEMPORAL"), Qt::MatchExactly);
+    QCOMPARE(found.size(), 1);
+    list->setCurrentItem(found.first());
+
+    auto remove = page->findChild<QPushButton *>(QStringLiteral("roleRemove"));
+    whenDialogOpens([](QDialog *ask) { ask->reject(); });
+    remove->click();
+    QVERIFY(named());
+    whenDialogOpens([](QDialog *ask) { ask->accept(); });
+    remove->click();
+    QVERIFY(!named());
+}
+
+void tst_Modules::deactivatingAUserAsks()
+{
+    openUsers();
+    const auto cashier = [this]() {
+        for (const UserAccount &u : m_users->users()) {
+            if (u.username == QLatin1String("cajero"))
+                return u;
+        }
+        return UserAccount();
+    };
+    auto widgets = qobject_cast<WidgetModuleInterface *>(load(QStringLiteral("modulo_usuarios.dll")));
+    QVERIFY(widgets);
+    std::unique_ptr<QWidget> page(widgets->createWidget());
+    auto table = page->findChild<QTableWidget *>(QStringLiteral("usersTable"));
+    int row = -1;
+    for (int i = 0; i < table->rowCount(); ++i) {
+        if (table->item(i, 1)->text() == QLatin1String("cajero"))
+            row = i;
+    }
+    QVERIFY(row >= 0);
+    table->selectRow(row);
+
+    whenDialogOpens([&](QDialog *form) {
+        form->findChild<QCheckBox *>(QStringLiteral("userActive"))->setChecked(false);
+        whenDialogOpens([](QDialog *ask) { ask->reject(); });
+        form->accept();
+        QVERIFY(form->isVisible());
+        QVERIFY(cashier().active);
+        whenDialogOpens([](QDialog *ask) { ask->accept(); });
+        form->accept();
+    });
+    page->findChild<QPushButton *>(QStringLiteral("userEdit"))->click();
+    QVERIFY(!cashier().active);
+}
+
+void tst_Modules::articleFormSaysWhatIsMissing()
+{
+    QLineEdit *search = nullptr;
+    QVERIFY(showInventory(&search));
+    m_page->findChild<QPushButton *>(QStringLiteral("itemAddButton"))->click();
+    QDialog *form = nullptr;
+    for (QDialog *d : m_page->findChildren<QDialog *>()) {
+        if (d->isVisible())
+            form = d;
+    }
+    QVERIFY(form);
+    auto error = form->findChild<QLabel *>(QStringLiteral("itemError"));
+    const auto set = [form](const char *name, const QString &text) {
+        form->findChild<QLineEdit *>(QLatin1String(name))->setText(text);
+    };
+    const auto refuses = [&](const QString &word) {
+        error->hide();
+        form->accept();
+        return form->isVisible() && !error->isHidden() && error->text().contains(word);
+    };
+
+    QVERIFY(refuses(QStringLiteral("código")));
+    set("lineEdit_code", QStringLiteral("555"));
+    QVERIFY(refuses(QStringLiteral("descripción")));
+    set("lineEdit_description", QStringLiteral("ARTICULO NUEVO"));
+    QVERIFY(refuses(QStringLiteral("precio")));
+    set("lineEdit_price", QStringLiteral("0"));
+    QVERIFY(refuses(QStringLiteral("mayor que cero")));         // it would sell for free
+    set("lineEdit_price", QStringLiteral("5.000"));
+    set("lineEdit_stock", QStringLiteral("1,5"));
+    QVERIFY(refuses(QStringLiteral("decimales")));              // sold by the unit
+    QVERIFY(!m_core.products->product(QStringLiteral("555")));
+
+    set("lineEdit_stock", QStringLiteral("2"));
+    form->accept();
+    QVERIFY(!form->isVisible());
+    QCOMPARE(m_core.products->product(QStringLiteral("555"))->price, Money(5000));
+}
+
+void tst_Modules::countRefusesWhatItCantRead()
+{
+    QLineEdit *search = nullptr;
+    QVERIFY(showInventory(&search));
+    m_page->findChild<QTabWidget *>(QStringLiteral("inventorySections"))->setCurrentIndex(3);
+    m_page->findChild<QPushButton *>(QStringLiteral("countPrepare"))->click();
+    auto table = m_page->findChild<QTableWidget *>(QStringLiteral("countTable"));
+    QVERIFY(table->rowCount() > 0);
+
+    for (const QString &typed : { QStringLiteral("12x"), QStringLiteral("-1"), QStringLiteral("1,5") }) {
+        table->item(0, 3)->setText(typed);
+        QCOMPARE(table->item(0, 4)->text(), QStringLiteral("revisar"));
+        m_page->findChild<QPushButton *>(QStringLiteral("countApply"))->click();    // it would hang on a question
+        QVERIFY(m_page->findChild<QLabel *>(QStringLiteral("countSummary"))->text().contains(QStringLiteral("Revise")));
+        QCOMPARE(table->currentRow(), 0);
+    }
+}
+
+void tst_Modules::purchaseChecksItsLines()
+{
+    QLineEdit *search = nullptr;
+    QVERIFY(showInventory(&search));
+    Supplier supplier;
+    supplier.name = QStringLiteral("DISTRIBUIDORA");
+    QVERIFY(m_core.inventory->saveSupplier(supplier));
+    m_page->findChild<QTabWidget *>(QStringLiteral("inventorySections"))->setCurrentIndex(1);
+
+    bool checked = false;
+    whenDialogOpens([&](QDialog *dialog) {
+        QVERIFY(dialog->findChild<QDateEdit *>(QStringLiteral("purchaseDate"))->maximumDate() == QDate::currentDate());
+        auto entry = dialog->findChild<QLineEdit *>(QStringLiteral("purchaseEntry"));
+        QTest::keyClicks(entry, QStringLiteral("7840001"));
+        QTest::keyClick(entry, Qt::Key_Return);
+        auto lines = dialog->findChild<QTableWidget *>(QStringLiteral("purchaseLines"));
+        auto error = dialog->findChild<QLabel *>(QStringLiteral("purchaseError"));
+        for (const QString &quantity : { QStringLiteral("0"), QStringLiteral("-2"), QStringLiteral("x"), QStringLiteral("1,5") }) {
+            lines->closePersistentEditor(lines->item(0, 2));
+            lines->setCurrentItem(nullptr);
+            lines->item(0, 2)->setText(quantity);
+            error->hide();
+            dialog->accept();
+            QVERIFY(dialog->isVisible());
+            QVERIFY(!error->isHidden());
+        }
+        checked = true;
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("newPurchaseButton"))->click();
+    QVERIFY(checked);
+    QVERIFY(m_core.inventory->purchases(QDate::currentDate(), QDate::currentDate()).isEmpty());
+}
+
+void tst_Modules::priceChangeNeedsSomethingToChange()
+{
+    QLineEdit *search = nullptr;
+    QVERIFY(showInventory(&search));
+    bool checked = false;
+    whenDialogOpens([&](QDialog *dialog) {
+        auto apply = dialog->findChild<QPushButton *>(QStringLiteral("priceApply"));
+        QVERIFY(apply->isEnabled());
+        dialog->findChild<QDoubleSpinBox *>()->setValue(0);
+        QVERIFY(!apply->isEnabled());
+        QVERIFY(dialog->findChild<QLabel *>(QStringLiteral("priceSummary"))->text().contains(QStringLiteral("0 %")));
+        checked = true;
+    });
+    QMenu *menu = m_page->findChild<QPushButton *>(QStringLiteral("moreButton"))->menu();
+    for (QAction *action : menu->actions()) {
+        if (action->text().startsWith(QStringLiteral("Cambio de precios")))
+            action->trigger();
+    }
+    QVERIFY(checked);
+}
+
+void tst_Modules::cashMovementSaysWhatIsMissing()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    m_users->setSupervisorPrompt([](const QString &, const QString &, const QString &, QWidget *,
+                                    QString *username, QString *password) {
+        *username = QStringLiteral("encargado");
+        *password = QStringLiteral("clave123");
+        return true;
+    });
+    bool checked = false;
+    whenDialogOpens([&](QDialog *dialog) {
+        auto error = dialog->findChild<QLabel *>(QStringLiteral("movementError"));
+        dialog->accept();
+        QVERIFY(dialog->isVisible());
+        QVERIFY(error->text().contains(QStringLiteral("monto")));
+        dialog->findChild<QLineEdit *>(QStringLiteral("movementAmount"))->setText(QStringLiteral("10.000"));
+        dialog->accept();
+        QVERIFY(dialog->isVisible());
+        QVERIFY(error->text().contains(QStringLiteral("motivo")));
+        checked = true;
+    });
+    trigger("actionCashMovement");
+    QVERIFY(checked);
+}
+
+void tst_Modules::removingAVoucherAsks()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    scan(QStringLiteral("7840001"));
+    int left = -1;
+    whenDialogOpens([&](QDialog *payment) {
+        whenDialogOpens([](QDialog *voucher) { fillVoucher(voucher, QStringLiteral("1")); });
+        QTest::keyClick(payment, Qt::Key_F2);
+        auto vouchers = payment->findChild<QTableWidget *>(QStringLiteral("paymentVouchers"));
+        QCOMPARE(vouchers->rowCount(), 1);
+        auto remove = payment->findChild<QPushButton *>(QStringLiteral("paymentRemove"));
+        whenDialogOpens([](QDialog *ask) { ask->reject(); });
+        remove->click();
+        QCOMPARE(vouchers->rowCount(), 1);
+        whenDialogOpens([](QDialog *ask) { ask->accept(); });
+        remove->click();
+        left = vouchers->rowCount();
+    });
+    press(Qt::Key_F12);
+    QCOMPARE(left, 0);
 }
 
 void tst_Modules::reportsPage()
@@ -1246,7 +1985,7 @@ void tst_Modules::chargingPrintsAndOpensTheDrawer()
     QVERIFY(openTill());
     m_core.print->savePrinterSettings(thermal());
     scan(QStringLiteral("7840001"));
-    whenDialogOpens([](QDialog *payment) { payment->accept(); });
+    whenDialogOpens([](QDialog *payment) { enterUntilCharged(payment); });
     press(Qt::Key_F12);
 
     QCOMPARE(m_core.printed.size(), 1);
@@ -1262,7 +2001,7 @@ void tst_Modules::printerFailureDoesNotStopTheSale()
     m_core.print->savePrinterSettings(thermal());
     m_core.printerFails = true;
     scan(QStringLiteral("7840001"));
-    whenDialogOpens([](QDialog *payment) { payment->accept(); });
+    whenDialogOpens([](QDialog *payment) { enterUntilCharged(payment); });
     press(Qt::Key_F12);
 
     QCOMPARE(saleLines()->rowCount(), 0);               // charged all the same
@@ -1286,7 +2025,7 @@ void tst_Modules::copyNeedsASupervisor()
         return true;
     });
     scan(QStringLiteral("7840001"));
-    whenDialogOpens([](QDialog *payment) { payment->accept(); });
+    whenDialogOpens([](QDialog *payment) { enterUntilCharged(payment); });
     press(Qt::Key_F12);
     QCOMPARE(m_core.printed.size(), 1);
 
@@ -1360,7 +2099,7 @@ void tst_Modules::holdAndRecall()
     scan(QStringLiteral("7840002"));                    // the next customer
     press(Qt::Key_F7);                                  // refused while a sale is on the screen
     QVERIFY(!QApplication::activeModalWidget());
-    whenDialogOpens([](QDialog *payment) { payment->accept(); });
+    whenDialogOpens([](QDialog *payment) { enterUntilCharged(payment); });
     press(Qt::Key_F12);
 
     whenDialogOpens([](QDialog *held) {

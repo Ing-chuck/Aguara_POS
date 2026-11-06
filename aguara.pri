@@ -13,6 +13,10 @@ lessThan(QT_MAJOR_VERSION, 5) | greaterThan(QT_MAJOR_VERSION, 5) {
 
 CONFIG += c++17
 
+# The release link keeps its symbols: installer/build.sh takes them out to a file
+# for the telemetry server, and strips what goes to the tills.
+QMAKE_LFLAGS_RELEASE -= -Wl,-s
+
 # Everything links against the shared interfaces library.
 INCLUDEPATH += $$AGUARA_SRC_ROOT/src/interfaces
 DEPENDPATH  += $$AGUARA_SRC_ROOT/src/interfaces

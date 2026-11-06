@@ -1,5 +1,7 @@
 #include "sqlreportservice.h"
 #include "connectionmonitor.h"
+#include "reportpainter.h"
+#include "telemetry.h"
 #include "sqlproductservice.h"
 
 #include <cashservice.h>
@@ -11,12 +13,13 @@
 #include <QFile>
 #include <QHash>
 #include <QMap>
+#include <QMarginsF>
 #include <QPageLayout>
+#include <QPageSize>
 #include <QPrinter>
 #include <QSaveFile>
 #include <QSet>
 #include <QSqlQuery>
-#include <QTextDocument>
 
 #include <algorithm>
 
@@ -156,6 +159,7 @@ QString SqlReportService::describe(const ReportFilter &f, int filters) const
 
 std::optional<ReportResult> SqlReportService::run(const QString &id, const ReportFilter &filter)
 {
+    Telemetry::count(QStringLiteral("reporte.") + id);
     ReportResult result;
     for (const Entry &entry : entries()) {
         if (entry.definition.id != id)
@@ -965,6 +969,7 @@ bool SqlReportService::auditLog(const ReportFilter &f, ReportResult *r)
 
 bool SqlReportService::exportCsv(const ReportResult &report, const QString &fileName)
 {
+    Telemetry::count(QStringLiteral("reporte.csv"));
     QSaveFile file(fileName);
     if (!file.open(QIODevice::WriteOnly) || file.write(AguaraReport::toCsv(report)) < 0 || !file.commit()) {
         m_lastError = tr("No se pudo guardar %1.").arg(fileName);
@@ -976,19 +981,21 @@ bool SqlReportService::exportCsv(const ReportResult &report, const QString &file
 void SqlReportService::print(const ReportResult &report, QPrinter *printer)
 {
     // A report is wide: on its side, whatever the printer's default is
+    Telemetry::count(QStringLiteral("reporte.imprimir"));
     printer->setPageOrientation(report.columns.size() > 5 ? QPageLayout::Landscape : QPageLayout::Portrait);
-    QTextDocument document;
-    document.setHtml(AguaraReport::toHtml(report));
-    document.print(printer);
+    ReportPainter::paint(report, printer);
 }
 
 bool SqlReportService::exportPdf(const ReportResult &report, const QString &fileName)
 {
+    Telemetry::count(QStringLiteral("reporte.pdf"));
     QPrinter printer(QPrinter::HighResolution);
     printer.setOutputFormat(QPrinter::PdfFormat);
     printer.setOutputFileName(fileName);
-    print(report, &printer);
-    if (printer.printerState() == QPrinter::Error || !QFile::exists(fileName)) {
+    printer.setPageSize(QPageSize(QPageSize::A4));
+    printer.setPageMargins(QMarginsF(12, 12, 12, 12), QPageLayout::Millimeter);
+    printer.setPageOrientation(report.columns.size() > 5 ? QPageLayout::Landscape : QPageLayout::Portrait);
+    if (!ReportPainter::paint(report, &printer) || printer.printerState() == QPrinter::Error || !QFile::exists(fileName)) {
         m_lastError = tr("No se pudo guardar %1.").arg(fileName);
         return false;
     }

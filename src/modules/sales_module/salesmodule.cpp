@@ -3,6 +3,8 @@
 #include "cashdialogs.h"
 #include "saledialogs.h"
 
+#include <formcheck.h>
+#include <livesearch.h>
 #include <QAction>
 #include <QApplication>
 #include <QDialog>
@@ -163,6 +165,17 @@ QWidget *SalesModule::buildSalePage()
     AguaraStyle::searchField(entry);
     entry->installEventFilter(this);
     left->addWidget(entry);
+
+    // "2*yer" looks for "yer", and the 2 stays in front of what is chosen
+    const SuggestionBox::Source articles = SuggestionBox::articles(products, this);
+    auto suggestions = new SuggestionBox(entry, [articles](const QString &text) {
+        return articles(text.mid(text.indexOf(QLatin1Char('*')) + 1));
+    });
+    connect(suggestions, &SuggestionBox::chosen, this, [this](const QString &code) {
+        const QString text = entry->text();
+        entry->setText(text.left(text.indexOf(QLatin1Char('*')) + 1) + code);
+        submitEntry();
+    });
 
     table = makeSalesTable({ tr("Código"), tr("Descripción"), tr("Cantidad"), tr("Precio"), tr("Descuento"), tr("Importe") });
     table->setObjectName(QStringLiteral("saleLines"));
@@ -554,6 +567,13 @@ void SalesModule::removeLine()
     const int row = currentLine();
     if (row < 0)
         return;
+    const SaleLine &chosen = draft.lines.at(row);
+    if (!AguaraForm::confirmRemoval(this, tr("Quitar de la venta"),
+            tr("%1 x %2").arg(AguaraQuantity::format(chosen.quantity, chosen.decimals), chosen.description),
+            tr("Quitar"), tr("Dejarlo"))) {
+        entry->setFocus();
+        return;
+    }
     const SaleLine line = draft.lines.takeAt(row);
     users->audit(QStringLiteral("venta.quitar_linea"), QStringLiteral("venta"), line.code, QString(),
                  tr("%1 x %2").arg(AguaraQuantity::format(line.quantity, line.decimals), line.description));
@@ -668,7 +688,8 @@ void SalesModule::cancelSale()
 {
     if (draft.lines.isEmpty())
         return;
-    if (askConfirm(this, tr("Cancelar la venta"), tr("Se quitan todos los artículos de la venta."), tr("Cancelar la venta"))) {
+    if (AguaraForm::confirmRemoval(this, tr("Cancelar la venta"), tr("Se quitan todos los artículos de la venta."),
+                                   tr("Cancelar la venta"), tr("Seguir con la venta"))) {
         users->audit(QStringLiteral("venta.cancelar"), QStringLiteral("venta"), QString(), QString(),
                      tr("%1 líneas, Gs. %2").arg(draft.lines.size())
                          .arg(AguaraMoney::format(AguaraSale::totals(draft).total)));
@@ -906,7 +927,8 @@ void SalesModule::renameRegister()
 {
     if (!users->authorize(QStringLiteral("caja.configurar"), tr("Cambiar el nombre de la caja"), this))
         return;
-    const QString name = askReason(this, tr("Nombre de esta caja"), tr("Actualmente: %1").arg(cash->currentRegister().name));
+    const QString name = askReason(this, tr("Nombre de esta caja"), tr("Actualmente: %1").arg(cash->currentRegister().name),
+                                   tr("Nombre de la caja"));
     if (name.isEmpty())
         return;
     if (!cash->renameRegister(name))

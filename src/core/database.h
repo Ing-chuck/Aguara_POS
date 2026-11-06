@@ -90,4 +90,10 @@ private:
 /// The core's own schema: products, brands, categories, IVA, suppliers.
 QList<Migration> coreMigrations();
 
+/// Secrets in aguara.ini: encrypted with DPAPI, for this Windows user on this computer.
+namespace AguaraSecret {
+QByteArray protect(const QString &secret);
+bool unprotect(const QByteArray &stored, QString *secret);
+} // namespace AguaraSecret
+
 #endif // DATABASE_H

@@ -111,6 +111,12 @@ public:
     /// previousCode. Saving an inactive product's code reactivates it.
     virtual bool saveProduct(const Product &product, const QString &previousCode = QString()) = 0;
 
+    /// A code no article or barcode of this store uses yet. A valid EAN-13, so
+    /// that the labels print its bars, in the 299 range kept for internal use
+    /// (the scales print 20-29, but their article numbers are 7 digits long and
+    /// a code that exists is always found first). Empty if it can't be worked out.
+    virtual QString newInternalCode() const = 0;
+
     /// Hide a product from lists (it stays in the database, so past sales
     /// that refer to it remain valid).
     virtual bool deactivateProduct(const QString &code) = 0;

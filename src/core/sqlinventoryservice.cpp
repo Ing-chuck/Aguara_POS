@@ -4,6 +4,7 @@
 #include "sqlproductservice.h"
 #include "stockledger.h"
 
+#include <formcheck.h>
 #include <barcode.h>
 #include <userservice.h>
 
@@ -243,6 +244,10 @@ bool SqlInventoryService::addBarcode(const QString &code, const QString &barcode
         m_lastError = tr("Falta el código de barras.");
         return false;
     }
+    if (!AguaraForm::validCode(text)) {
+        m_lastError = tr("El código %1 no es válido: hasta 20 letras, números o guiones.").arg(text);
+        return false;
+    }
     if (m_products->product(text)) {
         m_lastError = tr("El código %1 ya es el código principal de un artículo.").arg(text);
         return false;
@@ -312,6 +317,30 @@ qint64 SqlInventoryService::saveSupplier(const Supplier &supplier)
         m_lastError = tr("Falta el nombre del proveedor.");
         return 0;
     }
+    if (!AguaraForm::validPhone(supplier.phone)) {
+        m_lastError = tr("El teléfono lleva solo números, por ejemplo 0981 123 456.");
+        return 0;
+    }
+    if (!AguaraForm::validEmail(supplier.email)) {
+        m_lastError = tr("El correo no es válido: debe ser como nombre@dominio.com.");
+        return 0;
+    }
+    if (!AguaraForm::validWeb(supplier.web)) {
+        m_lastError = tr("La web no es válida: debe ser como www.proveedor.com.py.");
+        return 0;
+    }
+    QSqlQuery same(db());
+    same.prepare(QStringLiteral("SELECT id FROM proveedores WHERE es_activo = 1 AND lower(nombre) = lower(?) AND id <> ?"));
+    same.addBindValue(name);
+    same.addBindValue(supplier.id);
+    if (!exec(same))
+        return 0;
+    if (same.next()) {
+        m_lastError = tr("Ya existe el proveedor %1.").arg(name);
+        return 0;
+    }
+    same.finish();
+
     QSqlQuery q(db());
     if (supplier.id) {
         q.prepare(QStringLiteral("UPDATE proveedores SET nombre = ?, direccion = ?, telefono = ?, email = ?, contacto = ?,"
@@ -321,12 +350,12 @@ qint64 SqlInventoryService::saveSupplier(const Supplier &supplier)
                                  " otros_detalles, es_activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"));
     }
     q.addBindValue(name);
-    q.addBindValue(supplier.address);
-    q.addBindValue(supplier.phone);
-    q.addBindValue(supplier.email);
-    q.addBindValue(supplier.contact);
-    q.addBindValue(supplier.web);
-    q.addBindValue(supplier.notes);
+    q.addBindValue(supplier.address.trimmed());
+    q.addBindValue(supplier.phone.trimmed());
+    q.addBindValue(supplier.email.trimmed());
+    q.addBindValue(supplier.contact.trimmed());
+    q.addBindValue(supplier.web.trimmed());
+    q.addBindValue(supplier.notes.trimmed());
     q.addBindValue(supplier.active ? 1 : 0);
     if (supplier.id)
         q.addBindValue(supplier.id);

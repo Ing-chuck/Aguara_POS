@@ -8,6 +8,7 @@ un subproyecto de `Aguara_POS.pro`). Los ejecutables quedan en `<compilación>/t
 | `tst_money` | Montos en guaraníes, cantidades con decimales, EAN-13 y códigos de balanza |
 | `tst_csvreader` | Lectura de CSV: comillas (RFC 4180), separador, UTF-8 y Windows-1252 |
 | `tst_logging` | Archivo de registro: niveles, categorías y rotación |
+| `tst_telemetry` | Qué sale del equipo y cuándo, cierres reales en un proceso aparte. Con `AGUARA_TEST_TELEMETRY_URL` y `AGUARA_TEST_TELEMETRY_KEY`, también contra el servidor real |
 | `tst_settings` | `aguara.ini`: valores guardados y contraseña cifrada (DPAPI), nunca en texto plano |
 | `tst_backup` | Copia de seguridad de SQLite: copia en caliente, copia diaria y retención |
 | `tst_database` | Apertura y migraciones *(SQLite y PostgreSQL)* |

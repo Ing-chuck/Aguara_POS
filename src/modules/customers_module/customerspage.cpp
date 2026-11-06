@@ -1,6 +1,7 @@
 #include "customerspage.h"
 
 #include <customerdialog.h>
+#include <formcheck.h>
 
 #include <QCheckBox>
 #include <QHBoxLayout>
@@ -137,7 +138,12 @@ void CustomersPage::toggleSelected()
     if (row < 0 || row >= list.size())
         return;
     const Customer c = list.at(row);
-    if (!users->authorize(QStringLiteral("clientes.baja"), tr("Dar de baja a %1").arg(c.name), this))
+    if (c.active && !AguaraForm::confirmRemoval(this, tr("Dar de baja"),
+            tr("%1 deja de aparecer en la lista y al elegir el cliente de una venta. Sus ventas no cambian, "
+               "y se puede reactivar.").arg(c.name), tr("Dar de baja")))
+        return;
+    if (!users->authorize(QStringLiteral("clientes.baja"),
+                          (c.active ? tr("Dar de baja a %1") : tr("Reactivar a %1")).arg(c.name), this))
         return;
     problem->setVisible(!customers->setCustomerActive(c.id, !c.active));
     problem->setText(customers->lastError());

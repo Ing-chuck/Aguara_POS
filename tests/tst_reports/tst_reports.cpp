@@ -99,6 +99,9 @@ private slots:
     void csvCantCarryFormulas();
     void cellsAreFormatted();
     void exportsToFiles();
+    void longReportsBecomePages();
+    void pdfOfNothingAndOfLongText();
+    void pdfThatCantBeWrittenSaysSo();
     void modulesAddReports();
     void unknownReportIsReported();
     void everyReportRuns();
@@ -670,6 +673,88 @@ void tst_Reports::exportsToFiles()
     QVERIFY(QFile::remove(csv));
 
     QVERIFY(!m_core.reports->exportCsv(r, QStringLiteral("Z:/no/existe/aqui.csv")));
+}
+
+/// A built report: no database needed to know how it goes on paper.
+static ReportResult sampleReport(int rows)
+{
+    ReportResult r;
+    r.title = QStringLiteral("Libro de ventas");
+    r.subtitle = QStringLiteral("Del 01/01/2025 al 31/12/2026");
+    r.note = QStringLiteral("Borrador");
+    r.columns = { { QStringLiteral("Fecha"), ReportCell::Date }, { QStringLiteral("Cliente"), ReportCell::Text },
+                  { QStringLiteral("Cantidad"), ReportCell::Quantity }, { QStringLiteral("Total"), ReportCell::Money },
+                  { QStringLiteral("Margen"), ReportCell::Percent }, { QStringLiteral("Items"), ReportCell::Integer } };
+    for (int i = 0; i < rows; ++i)
+        r.rows << QVector<QVariant>{ QDate(2026, 1, 1 + i % 28), QStringLiteral("Cliente número %1").arg(i),
+                                     qint64(AguaraQuantity::whole(i % 9 + 1)), qint64(10000 + i), 27.5, i % 40 };
+    r.totals = { QStringLiteral("Total"), QVariant(), QVariant(), qint64(rows) * 10000, QVariant(), QVariant() };
+    return r;
+}
+
+static int pagesOf(const QString &pdf)
+{
+    QFile file(pdf);
+    if (!file.open(QIODevice::ReadOnly))
+        return -1;
+    const QByteArray bytes = file.readAll();
+    return bytes.count("/Type /Page\n") + bytes.count("/Type /Page\r") + bytes.count("/Type /Page/")
+         + bytes.count("/Type /Page>") + bytes.count("/Type /Page ");
+}
+
+void tst_Reports::longReportsBecomePages()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    const QString pdf = m_tmp.filePath(QStringLiteral("largo.pdf"));
+
+    // With HTML this took minutes, and 177.000 rows ran the program out of memory
+    QElapsedTimer timer;
+    timer.start();
+    QVERIFY2(m_core.reports->exportPdf(sampleReport(30000), pdf), qPrintable(m_core.reports->lastError()));
+    QVERIFY2(timer.elapsed() < 30000, qPrintable(QStringLiteral("%1 ms").arg(timer.elapsed())));
+
+    const int many = pagesOf(pdf);
+    QVERIFY2(many > 300, qPrintable(QString::number(many)));
+    QVERIFY(m_core.reports->exportPdf(sampleReport(20), pdf));
+    QCOMPARE(pagesOf(pdf), 1);
+    QVERIFY(m_core.reports->exportPdf(sampleReport(40), pdf));      // on its side, a page takes some 28
+    QCOMPARE(pagesOf(pdf), 2);
+    QVERIFY(QFile::remove(pdf));
+}
+
+void tst_Reports::pdfOfNothingAndOfLongText()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    const QString pdf = m_tmp.filePath(QStringLiteral("borde.pdf"));
+
+    ReportResult empty = sampleReport(0);
+    empty.totals.clear();
+    QVERIFY(m_core.reports->exportPdf(empty, pdf));
+    QCOMPARE(pagesOf(pdf), 1);
+
+    ReportResult bare;                      // nothing at all, not even columns
+    bare.title = QStringLiteral("Vacío");
+    QVERIFY(m_core.reports->exportPdf(bare, pdf));
+
+    // text longer than any column, than a page, and no spaces to break it at
+    ReportResult wide = sampleReport(3);
+    wide.rows[0][1] = QString(20000, QLatin1Char('x'));
+    wide.rows[1][1] = QStringLiteral("palabra ").repeated(5000);
+    QVERIFY(m_core.reports->exportPdf(wide, pdf));
+    QVERIFY(pagesOf(pdf) >= 1);
+
+    // rows shorter than the columns, as a module's report could send
+    ReportResult shorter = sampleReport(1);
+    shorter.rows[0].resize(2);
+    QVERIFY(m_core.reports->exportPdf(shorter, pdf));
+    QVERIFY(QFile::remove(pdf));
+}
+
+void tst_Reports::pdfThatCantBeWrittenSaysSo()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    QVERIFY(!m_core.reports->exportPdf(sampleReport(5), QStringLiteral("Z:/no/existe/aqui.pdf")));
+    QVERIFY(!m_core.reports->lastError().isEmpty());
 }
 
 void tst_Reports::modulesAddReports()

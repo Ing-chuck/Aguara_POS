@@ -1,8 +1,10 @@
 #include "reportspage.h"
 
+#include <formcheck.h>
 #include <QComboBox>
 #include <QDateEdit>
 #include <QFileDialog>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -94,6 +96,7 @@ ReportsPage::ReportsPage(ReportService *reports, UserService *users, SalesServic
 
     auto choices = new QHBoxLayout;
     choices->setSpacing(8);
+    AguaraForm::keepInOrder(from, to);
     cashRegister = new QComboBox;
     cashRegister->setObjectName(QStringLiteral("reportRegister"));
     user = new QComboBox;
@@ -351,7 +354,12 @@ void ReportsPage::exportPdf()
     const QString suggested = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
                               + QLatin1Char('/') + result->title + QStringLiteral(".pdf");
     const QString file = QFileDialog::getSaveFileName(this, tr("Guardar PDF"), suggested, tr("Documento PDF (*.pdf)"));
-    if (!file.isEmpty() && !reports->exportPdf(*result, file))
+    if (file.isEmpty())
+        return;
+    QGuiApplication::setOverrideCursor(Qt::WaitCursor);     // a long report takes some seconds
+    const bool saved = reports->exportPdf(*result, file);
+    QGuiApplication::restoreOverrideCursor();
+    if (!saved)
         showProblem(reports->lastError());
 }
 

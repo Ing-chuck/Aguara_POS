@@ -1,3 +1,4 @@
+#include "telemetry.h"
 #include "sqlsalesservice.h"
 #include "connectionmonitor.h"
 #include "errors.h"
@@ -303,6 +304,7 @@ bool SqlSalesService::settle(const QList<SalePayment> &payments, SaleTotals *tot
 
 qint64 SqlSalesService::checkout(const SaleDraft &draft, const QList<SalePayment> &payments)
 {
+    Telemetry::count(QStringLiteral("venta.cobrar"));
     const std::optional<CashSession> session = m_cash->currentSession();
     if (!session) {
         m_lastError = tr("La caja está cerrada: ábrala para vender.");

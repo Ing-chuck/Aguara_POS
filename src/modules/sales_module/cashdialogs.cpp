@@ -2,6 +2,8 @@
 #include "closingsheet.h"
 #include "saledialogs.h"
 
+#include <formcheck.h>
+
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -132,9 +134,12 @@ CashMovementDialog::CashMovementDialog(QWidget *parent)
     reasonEdit = new QLineEdit;
     reasonEdit->setObjectName(QStringLiteral("movementReason"));
     form->addRow(tr("Tipo:"), kind);
-    form->addRow(tr("Monto:"), amountEdit);
-    form->addRow(tr("Motivo:"), reasonEdit);
+    form->addRow(AguaraForm::required(tr("Monto:")), amountEdit);
+    form->addRow(AguaraForm::required(tr("Motivo:")), reasonEdit);
     layout->addLayout(form);
+    layout->addWidget(AguaraForm::requiredNote());
+    error = AguaraForm::errorLabel(QStringLiteral("movementError"));
+    layout->addWidget(error);
     layout->addWidget(acceptCancel(this, tr("Registrar")));
     setMinimumWidth(420);
     amountEdit->setFocus();
@@ -158,12 +163,11 @@ void CashMovementDialog::accept()
 {
     Money amount = 0;
     if (!AguaraMoney::parse(amountEdit->text(), &amount) || amount <= 0) {
-        amountEdit->setFocus();
-        amountEdit->selectAll();
+        AguaraForm::showError(error, tr("Escriba un monto mayor que cero."), amountEdit);
         return;
     }
     if (reason().isEmpty()) {
-        reasonEdit->setFocus();
+        AguaraForm::showError(error, tr("Indique el motivo del movimiento."), reasonEdit);
         return;
     }
     value = amount;

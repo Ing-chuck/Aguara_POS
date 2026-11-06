@@ -4,10 +4,10 @@
 #include "inventorypages.h"
 #include "stockdialogs.h"
 
-#include <QAbstractProxyModel>
+#include <livesearch.h>
+
 #include <QEvent>
 #include <QApplication>
-#include <QCompleter>
 #include <QHeaderView>
 #include <QKeySequence>
 #include <QMenu>
@@ -15,6 +15,7 @@
 #include <QPushButton>
 #include <QTabWidget>
 #include <QShortcut>
+#include <QTimer>
 
 inventoryWidget::inventoryWidget(ProductService *products, InventoryService *inventory, UserService *users,
                                  QWidget *parent)
@@ -28,6 +29,9 @@ inventoryWidget::inventoryWidget(ProductService *products, InventoryService *inv
     , model(products->createProductTableModel(this))   // refreshes itself on every change
 {
     ui->setupUi(this);
+    visible = new SearchProxyModel({ int(ProductColumn::Code), int(ProductColumn::Description),
+                                     int(ProductColumn::Brand), int(ProductColumn::Category) }, this);
+    visible->setSourceModel(model);
 
     // Connect add and edit buttons
     QObject::connect(ui->itemAddButton, &QPushButton::clicked, this, &inventoryWidget::onItemAddPressed);
@@ -35,13 +39,11 @@ inventoryWidget::inventoryWidget(ProductService *products, InventoryService *inv
 
     loadTable();
 
-    // Search completer
-    searchCompleter = new QCompleter(model, this);
-    //searchCompleter->setCompletionMode(QCompleter::InlineCompletion);
-    searchCompleter->setCompletionColumn(int(ProductColumn::Description));
-    ui->itemSearch->setCompleter(searchCompleter);
-
-    connect(searchCompleter, QOverload<const QModelIndex &>::of(&QCompleter::highlighted), this, &inventoryWidget::onCompleterAccepted);
+    // The table narrows down as you type
+    searchTimer = AguaraSearch::afterTyping(ui->itemSearch, [this]() {
+        visible->setSearchText(ui->itemSearch->text());
+        updateSummary();
+    });
 
     // Select the saved item after an add or edit
     QObject::connect(addDialog, &addItemDialog::itemAddedEdited, this, &inventoryWidget::onItemAddedEdited);
@@ -102,9 +104,16 @@ void inventoryWidget::buildSections()
     moreButton->setMenu(moreMenu);
     ui->headerLayout->insertWidget(ui->headerLayout->indexOf(ui->itemRemoveButton), moreButton);
 
-    connect(sections, &QTabWidget::currentChanged, this, [this, purchases, suppliers](int index) {
+    auto receiveButton = new QPushButton(tabIcon("cart"), tr("Alta de productos"));
+    receiveButton->setObjectName(QStringLiteral("receiveButton"));
+    receiveButton->setToolTip(tr("Cargar lo que llegó: cantidades, costos y precios, y al final sus etiquetas"));
+    ui->headerLayout->insertWidget(ui->headerLayout->indexOf(moreButton), receiveButton);
+    connect(receiveButton, &QPushButton::clicked, purchases, &PurchasesPage::receive);
+
+    connect(sections, &QTabWidget::currentChanged, this, [this, purchases, suppliers, receiveButton](int index) {
         for (QWidget *button : { static_cast<QWidget *>(ui->itemAddButton), static_cast<QWidget *>(ui->itemEditButton),
-                                 static_cast<QWidget *>(ui->itemRemoveButton), static_cast<QWidget *>(moreButton) })
+                                 static_cast<QWidget *>(ui->itemRemoveButton), static_cast<QWidget *>(moreButton),
+                                 static_cast<QWidget *>(receiveButton) })
             button->setVisible(index == 0);
         if (sections->widget(index) == purchases)
             purchases->reload();
@@ -155,7 +164,10 @@ void inventoryWidget::updateSummary()
     for (int row = 0; row < count; ++row)
         low += model->index(row, int(ProductColumn::Stock)).data(ProductLowStockRole).toBool() ? 1 : 0;
 
-    ui->summary->setText(count == 1 ? tr("1 artículo") : tr("%1 artículos").arg(count));
+    if (visible->rowCount() != count)
+        ui->summary->setText(tr("%1 de %2 artículos").arg(visible->rowCount()).arg(count));
+    else
+        ui->summary->setText(count == 1 ? tr("1 artículo") : tr("%1 artículos").arg(count));
     if (low > 0) {
         ui->lowStock->setText(low == 1 ? tr("1 artículo con stock bajo") : tr("%1 artículos con stock bajo").arg(low));
         AguaraStyle::setRole(ui->lowStock, AguaraStyle::Warning);
@@ -196,6 +208,10 @@ void inventoryWidget::setUpKeyboard()
     remove->setContext(Qt::WidgetShortcut);
     connect(remove, &QShortcut::activated, this, &inventoryWidget::onItemRemovePressed);
 
+    auto clearSearch = new QShortcut(QKeySequence(Qt::Key_Escape), ui->itemSearch);
+    clearSearch->setContext(Qt::WidgetShortcut);
+    connect(clearSearch, &QShortcut::activated, ui->itemSearch, &QLineEdit::clear);
+
     connect(ui->tableView, &QAbstractItemView::activated, this, &inventoryWidget::onItemEditPressed);
     connect(ui->itemSearch, &QLineEdit::returnPressed, this, &inventoryWidget::onSearchEntered);
 
@@ -225,8 +241,8 @@ void inventoryWidget::onItemAddPressed()
 }
 
 /// Enter in the search box: an exact code (what a scanner sends) selects
-/// that article; otherwise the first article whose description contains the
-/// text. The text stays selected so the next scan replaces it.
+/// that article; otherwise the first article left on the table. The text
+/// stays selected so the next scan replaces it.
 void inventoryWidget::onSearchEntered()
 {
     const QString text = ui->itemSearch->text().trimmed();
@@ -236,14 +252,15 @@ void inventoryWidget::onSearchEntered()
     // the main code, another barcode of the article, or a scale's code
     const ScanResult scan = inventory->resolveScan(text);
     const QString wanted = scan.found ? scan.product.code : text;
-    int found = -1;
-    for (int row = 0; row < model->rowCount() && found < 0; ++row) {
-        if (model->index(row, int(ProductColumn::Code)).data().toString().compare(wanted, Qt::CaseInsensitive) == 0)
+    searchTimer->stop();                // a scan doesn't wait for the pause in the typing
+    visible->setSearchText(wanted);     // a second barcode isn't on the table: its article is
+    updateSummary();
+    int found = visible->rowCount() > 0 ? 0 : -1;
+    for (int row = 0; row < visible->rowCount(); ++row) {
+        if (visible->index(row, int(ProductColumn::Code)).data().toString().compare(wanted, Qt::CaseInsensitive) == 0) {
             found = row;
-    }
-    for (int row = 0; row < model->rowCount() && found < 0; ++row) {
-        if (model->index(row, int(ProductColumn::Description)).data().toString().contains(text, Qt::CaseInsensitive))
-            found = row;
+            break;
+        }
     }
 
     if (found < 0) {
@@ -253,7 +270,7 @@ void inventoryWidget::onSearchEntered()
                               MsgPriority::PriorityLow, 5));
     } else {
         ui->tableView->selectRow(found);
-        ui->tableView->scrollTo(model->index(found, 0));
+        ui->tableView->scrollTo(visible->index(found, 0));
     }
     ui->itemSearch->selectAll();
 }
@@ -266,7 +283,7 @@ inventoryWidget::~inventoryWidget()
 void inventoryWidget::loadTable()
 {
     QTableView *table = ui->tableView;
-    table->setModel(model);     // columns already in display order (ProductColumn)
+    table->setModel(visible);   // columns already in display order (ProductColumn)
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setSelectionMode(QAbstractItemView::SingleSelection);
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);  // edit through the dialog
@@ -308,18 +325,30 @@ QString inventoryWidget::selectedCode() const
     if (!ui->tableView->selectionModel()->hasSelection())
         return QString();
     const int row = ui->tableView->currentIndex().row();
-    return model->index(row, int(ProductColumn::Code)).data().toString();
+    return visible->index(row, int(ProductColumn::Code)).data().toString();
 }
 
 /// Select the added/edited row (the model has already refreshed)
 void inventoryWidget::onItemAddedEdited(QString id)
 {
-    for (int row = 0; row < model->rowCount(); row++) {
-        if (model->index(row, int(ProductColumn::Code)).data().toString() == id) {
-            ui->tableView->selectRow(row);
-            ui->tableView->scrollTo(model->index(row, 0));
-            break;
+    const auto select = [this, &id]() {
+        for (int row = 0; row < visible->rowCount(); row++) {
+            if (visible->index(row, int(ProductColumn::Code)).data().toString() == id) {
+                ui->tableView->selectRow(row);
+                ui->tableView->scrollTo(visible->index(row, 0));
+                return true;
+            }
         }
+        return false;
+    };
+    if (!select()) {                    // the search leaves it out: show it anyway
+        searchTimer->stop();
+        ui->itemSearch->blockSignals(true);
+        ui->itemSearch->clear();
+        ui->itemSearch->blockSignals(false);
+        visible->setSearchText(QString());
+        updateSummary();
+        select();
     }
 }
 
@@ -337,7 +366,7 @@ void inventoryWidget::onItemRemovePressed()
         return;
 
     const int row = ui->tableView->currentIndex().row();
-    const QString name = model->index(row, int(ProductColumn::Description)).data().toString();
+    const QString name = visible->index(row, int(ProductColumn::Description)).data().toString();
     QMessageBox box(QMessageBox::Warning, tr("Dar de baja"),
                     tr("¿Dar de baja \"%1\"?").arg(name), QMessageBox::NoButton, this);
     box.setInformativeText(tr("Deja de aparecer en el inventario. Si vuelve a cargarlo con el mismo "
@@ -354,13 +383,3 @@ void inventoryWidget::onItemRemovePressed()
         QMessageBox::warning(this, tr("No se pudo dar de baja"), products->lastError());
 }
 
-void inventoryWidget::onCompleterAccepted(const QModelIndex &index)
-{
-    // the completer reports rows of its own (filtered) model: map back to ours
-    auto proxy = qobject_cast<QAbstractProxyModel *>(searchCompleter->completionModel());
-    const QModelIndex source = proxy ? proxy->mapToSource(index) : index;
-    if (source.isValid()) {
-        ui->tableView->selectRow(source.row());
-        ui->tableView->scrollTo(source);
-    }
-}

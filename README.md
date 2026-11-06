@@ -398,6 +398,27 @@ PostgreSQL, avisa a las demas cajas con `NOTIFY`.
 * En el codigo, usar las categorias de `src/core/logging.h`, por ejemplo
   `qCWarning(lcDatabase) << ...`.
 
+# Registros locales
+
+Siempre activos, y no salen del equipo. Estan en `%APPDATA%\Aguara\AguaraPOS\logs`, y **Ayuda > Carpeta de registros** abre esa carpeta.
+
+- `aguara.log`: errores tecnicos, ver [Registro y errores](#registro-y-errores).
+- `actividad-AAAA-MM.log` (`src/core/activitylog.cpp`): hora y nombre de cada evento, un mes por archivo, los ultimos 12. Pasa por `Telemetry::count()`, el mismo filtro de la telemetria: solo identificadores simples. El detalle de quien hizo que esta en la auditoria, en la base.
+- `crashes\crash-<id>.json`: lo que deja `CrashHandler`, activo aunque la telemetria este apagada. Si se envian, quedan como `.enviado`. Se guardan los ultimos 50.
+- `programa-en-uso`: existe mientras el programa corre. Si sigue ahi al arrancar, la vez anterior no termino bien, y queda `programa.cierre_inesperado` en la actividad.
+
+# Telemetria
+
+Apagada hasta que un administrador la activa en **Preferencias > Telemetría**, equipo por equipo. Envía a un servidor propio el uso de módulos y funciones, los cierres inesperados y los reportes de **Ayuda > Reportar un problema**. El servidor es un proyecto aparte, `Aguara_Telemetry`, y se instala en un equipo Linux.
+
+- `src/core/telemetry.cpp`: `build()` es el único lugar que decide qué sale del equipo, y **Ver lo que se envía** muestra exactamente eso.
+- Los servicios llaman a `Telemetry::count("evento")`. Sin telemetría activa no hace nada. Un nombre que no sea un identificador simple se descarta, así que un texto no puede pasar como evento.
+- Casi todo el uso sale del registro de auditoría, pero solo el nombre de la acción: nunca su detalle, que puede nombrar clientes o montos.
+- `src/core/crashhandler.cpp`: deja un archivo al caerse el programa y se envía al próximo inicio. Solo código de error y lugares `modulo+0xdesplazamiento`: nada de memoria ni de registros, que pueden tener datos reales.
+- `installer/build.sh` saca los simbolos a `installer/output/aguarapos-simbolos-<version>.json.gz` y limpia los binarios: el instalador no los lleva. Por eso el enlace de release no usa `-s`, y `bin/` conserva los simbolos.
+- `scripts/upload-symbols.py` los carga en el servidor, que muestra funciones en vez de direcciones. Guarde ese archivo con cada build que llegue a una caja: un build sin simbolos queda en direcciones para siempre.
+- Cada build se reconoce por la marca de tiempo PE de cada modulo, no por la version. `strip` la borra y `scripts/export-symbols.py` la repone.
+
 # Teclado
 Todo se puede hacer sin mouse. El lector de codigos de barras funciona como un teclado: escribe
 el codigo y presiona Enter.

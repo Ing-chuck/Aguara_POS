@@ -41,6 +41,7 @@ private slots:
 
 private:
     void showStatus(const QString &text, const char *role);
+    bool complete();
     bool tryConnection();
 
 private:

@@ -4,6 +4,7 @@
 #include <interfaces.h>
 
 #include <QDialog>
+#include <QElapsedTimer>
 
 class QAbstractItemModel;
 class QDialogButtonBox;
@@ -13,7 +14,7 @@ class QLabel;
 class QLineEdit;
 class QComboBox;
 class QPushButton;
-class QSortFilterProxyModel;
+class SearchProxyModel;
 class QTableView;
 class QTableWidget;
 class QTableWidgetItem;
@@ -28,7 +29,7 @@ QTableWidgetItem *rightItem(const QString &text);
 /// Yes or no, in the program's own look. true on yes.
 bool askConfirm(QWidget *parent, const QString &title, const QString &text, const QString &yesText);
 /// A required reason. Empty when cancelled.
-QString askReason(QWidget *parent, const QString &title, const QString &text);
+QString askReason(QWidget *parent, const QString &title, const QString &text, const QString &placeholder = QString());
 
 /// Change a line's quantity.
 class QuantityDialog : public QDialog
@@ -109,6 +110,7 @@ public:
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     void addMethodButtons(QGridLayout *grid);
@@ -132,8 +134,12 @@ private:
     QPushButton *removeButton;
     QLineEdit *edit;
     QLabel *changeLabel;
+    QLabel *cashError;
     QPushButton *okButton;
     Money value = 0;
+    QElapsedTimer sinceLastKey;
+    int quickKeys = 0;
+    bool scanning = false;
 };
 
 /// Find an article by description or code.
@@ -151,7 +157,7 @@ protected:
 private:
     QLineEdit *filter;
     QTableView *view;
-    QSortFilterProxyModel *proxy;
+    SearchProxyModel *proxy;
     QString selected;
 };
 

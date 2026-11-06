@@ -1,5 +1,9 @@
 #include "inventorypages.h"
 #include "stockdialogs.h"
+#include "additemdialog.h"
+
+#include <formcheck.h>
+#include <livesearch.h>
 
 #include <QApplication>
 #include <QCheckBox>
@@ -12,10 +16,14 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLocale>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QShortcut>
 #include <QTableWidget>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 using AguaraStyle::Color;
 
@@ -59,7 +67,12 @@ SuppliersPage::SuppliersPage(InventoryService *inventory, UserService *users, QW
 {
     auto layout = pageLayout(this);
     auto bar = new QHBoxLayout;
-    bar->addStretch();
+    search = new QLineEdit;
+    search->setObjectName(QStringLiteral("supplierSearch"));
+    search->setPlaceholderText(tr("Nombre, contacto o teléfono"));
+    AguaraStyle::searchField(search);
+    bar->addWidget(search, 1);
+    bar->addSpacing(8);
     auto remove = new QPushButton(AguaraStyle::icon(QStringLiteral("trash"), AguaraStyle::color(Color::Danger)), tr("Dar de baja"));
     AguaraStyle::setRole(remove, AguaraStyle::Danger);
     auto editButton = new QPushButton(AguaraStyle::icon(QStringLiteral("edit")), tr("Editar"));
@@ -81,6 +94,7 @@ SuppliersPage::SuppliersPage(InventoryService *inventory, UserService *users, QW
         if (row >= 0 && row < list.size())
             edit(list.at(row));
     };
+    connect(search, &QLineEdit::textChanged, this, [this](const QString &text) { AguaraSearch::filterTable(table, text); });
     connect(add, &QPushButton::clicked, this, [this]() { edit(Supplier()); });
     connect(editButton, &QPushButton::clicked, this, editSelected);
     connect(table, &QTableWidget::activated, this, editSelected);
@@ -89,12 +103,14 @@ SuppliersPage::SuppliersPage(InventoryService *inventory, UserService *users, QW
         if (row < 0 || row >= list.size())
             return;
         const Supplier s = list.at(row);
+        if (!AguaraForm::confirmRemoval(this, tr("Dar de baja"),
+                tr("%1 deja de aparecer en la lista y al cargar compras. Sus compras no cambian.").arg(s.name),
+                tr("Dar de baja")))
+            return;
         if (!isAuthorized(this->users, QStringLiteral("inventario.proveedores"), tr("Dar de baja a %1").arg(s.name), this))
             return;
-        if (QMessageBox::question(this, tr("Dar de baja"), tr("¿Dar de baja a %1?").arg(s.name),
-                                  QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
-            return;
-        this->inventory->deactivateSupplier(s.id);
+        if (!this->inventory->deactivateSupplier(s.id))
+            QMessageBox::warning(this, tr("No se pudo dar de baja"), this->inventory->lastError());
         reload();
     });
     reload();
@@ -112,6 +128,7 @@ void SuppliersPage::reload()
         table->setItem(row, 3, new QTableWidgetItem(s.email));
         table->setItem(row, 4, new QTableWidgetItem(s.address));
     }
+    AguaraSearch::filterTable(table, search->text());
 }
 
 void SuppliersPage::edit(const Supplier &supplier)
@@ -119,21 +136,27 @@ void SuppliersPage::edit(const Supplier &supplier)
     const QString reason = supplier.id ? tr("Modificar a %1").arg(supplier.name) : tr("Nuevo proveedor");
     if (!isAuthorized(users, QStringLiteral("inventario.proveedores"), reason, this))
         return;
+    if (showForm(inventory, supplier, this))
+        reload();
+}
 
-    QDialog dialog(this);
+qint64 SuppliersPage::showForm(InventoryService *inventory, const Supplier &supplier, QWidget *parent)
+{
+    QDialog dialog(parent);
     auto layout = dialogHeader(&dialog, supplier.id ? tr("Modificar proveedor") : tr("Nuevo proveedor"));
     dialog.setMinimumWidth(460);
     auto form = new QFormLayout;
     form->setHorizontalSpacing(12);
     form->setVerticalSpacing(8);
     auto name = new QLineEdit(supplier.name);
+    name->setObjectName(QStringLiteral("supplierName"));
     auto contact = new QLineEdit(supplier.contact);
     auto phone = new QLineEdit(supplier.phone);
     auto email = new QLineEdit(supplier.email);
     auto address = new QLineEdit(supplier.address);
     auto web = new QLineEdit(supplier.web);
     auto notes = new QLineEdit(supplier.notes);
-    form->addRow(tr("Nombre:"), name);
+    form->addRow(AguaraForm::required(tr("Nombre:")), name);
     form->addRow(tr("Contacto:"), contact);
     form->addRow(tr("Teléfono:"), phone);
     form->addRow(tr("Email:"), email);
@@ -141,12 +164,16 @@ void SuppliersPage::edit(const Supplier &supplier)
     form->addRow(tr("Web:"), web);
     form->addRow(tr("Notas:"), notes);
     layout->addLayout(form);
+    layout->addWidget(AguaraForm::requiredNote());
+    auto problem = AguaraForm::errorLabel(QStringLiteral("supplierError"));
+    layout->addWidget(problem);
     auto buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
     buttons->button(QDialogButtonBox::Save)->setText(tr("Guardar"));
     buttons->button(QDialogButtonBox::Save)->setDefault(true);
     buttons->button(QDialogButtonBox::Cancel)->setText(tr("Cancelar"));
     layout->addWidget(buttons);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    qint64 saved = 0;
     connect(buttons, &QDialogButtonBox::accepted, &dialog, [&]() {
         Supplier s = supplier;
         s.name = name->text();
@@ -156,41 +183,50 @@ void SuppliersPage::edit(const Supplier &supplier)
         s.address = address->text();
         s.web = web->text();
         s.notes = notes->text();
-        if (!inventory->saveSupplier(s)) {
-            QMessageBox::warning(&dialog, tr("No se pudo guardar"), inventory->lastError());
+        saved = inventory->saveSupplier(s);
+        if (!saved) {
+            AguaraForm::showError(problem, inventory->lastError(), s.name.trimmed().isEmpty() ? name : nullptr);
             return;
         }
         dialog.accept();
     });
-    if (dialog.exec() == QDialog::Accepted)
-        reload();
+    name->setFocus();
+    return dialog.exec() == QDialog::Accepted ? saved : 0;
 }
 
 // --- PurchaseDialog ------------------------------------------------------------
 
-enum LineColumn { LineCode, LineDescription, LineQuantity, LineCost, LinePrice, LineSubtotal, LineColumns };
+enum LineColumn { LineCode, LineDescription, LineQuantity, LineCost, LineMargin, LinePrice, LineSubtotal, LineColumns };
 
-PurchaseDialog::PurchaseDialog(ProductService *products, InventoryService *inventory, QWidget *parent)
-    : QDialog(parent), products(products), inventory(inventory)
+PurchaseDialog::PurchaseDialog(ProductService *products, InventoryService *inventory, UserService *users, QWidget *parent)
+    : QDialog(parent), products(products), inventory(inventory), users(users), newArticle(new addItemDialog(products, this))
 {
-    auto layout = dialogHeader(this, tr("Nueva compra"),
-        tr("Escanee o escriba cada artículo. Cantidad, costo y precio nuevo se editan en la tabla."));
-    resize(900, 620);
+    auto layout = dialogHeader(this, tr("Alta de productos"),
+        tr("Escanee o busque cada artículo, como en una venta. En la tabla se edita la cantidad, el costo y el margen o el precio."));
+    resize(980, 640);
 
     supplier = new QComboBox;
     supplier->setObjectName(QStringLiteral("purchaseSupplier"));
-    for (const Supplier &s : inventory->suppliers())
-        supplier->addItem(s.name, s.id);
+    supplier->setPlaceholderText(tr("Sin proveedores: cree uno"));
+    supplier->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);    // a long name mustn't widen the window
+    supplier->setMinimumContentsLength(16);
+    fillSuppliers();
+    auto newSupplier = new QPushButton(AguaraStyle::icon(QStringLiteral("plus")), tr("Nuevo proveedor"));
+    newSupplier->setObjectName(QStringLiteral("purchaseNewSupplier"));
+    newSupplier->setAutoDefault(false);
     invoice = new QLineEdit;
     invoice->setObjectName(QStringLiteral("purchaseInvoice"));
     invoice->setPlaceholderText(tr("001-001-0000123"));
+    invoice->setMinimumWidth(170);                  // a whole invoice number
     date = new QDateEdit(QDate::currentDate());
+    date->setObjectName(QStringLiteral("purchaseDate"));
     date->setCalendarPopup(true);
     date->setDisplayFormat(QStringLiteral("dd/MM/yyyy"));
+    date->setMaximumDate(QDate::currentDate());
 
     auto head = new QHBoxLayout;
     head->setSpacing(8);
-    head->addWidget(new QLabel(tr("Proveedor")));
+    head->addWidget(new QLabel(AguaraForm::required(tr("Proveedor"))));
     head->addWidget(supplier, 1);
     head->addWidget(new QLabel(tr("Factura")));
     head->addWidget(invoice);
@@ -200,16 +236,30 @@ PurchaseDialog::PurchaseDialog(ProductService *products, InventoryService *inven
 
     entry = new QLineEdit;
     entry->setObjectName(QStringLiteral("purchaseEntry"));
-    entry->setPlaceholderText(tr("Código del artículo y Enter"));
+    entry->setPlaceholderText(tr("Código o descripción del artículo"));
     AguaraStyle::searchField(entry);
-    layout->addWidget(entry);
+    auto newButton = new QPushButton(AguaraStyle::icon(QStringLiteral("plus")), tr("Nuevo artículo"));
+    newButton->setObjectName(QStringLiteral("purchaseNewArticle"));
+    newButton->setAutoDefault(false);
+    newButton->setToolTip(tr("Crea un artículo que todavía no existe (Ins)"));
+    auto entryRow = new QHBoxLayout;
+    entryRow->setSpacing(8);
+    entryRow->addWidget(entry, 1);
+    entryRow->addWidget(newButton);
+    entryRow->addWidget(newSupplier);
+    layout->addLayout(entryRow);
 
-    lines = makeInventoryTable({ tr("Código"), tr("Descripción"), tr("Cantidad"), tr("Costo"), tr("Precio nuevo"), tr("Subtotal") });
+    lines = makeInventoryTable({ tr("Código"), tr("Descripción"), tr("Cantidad"), tr("Costo"), tr("Margen %"), tr("Precio de venta"), tr("Subtotal") });
     lines->setObjectName(QStringLiteral("purchaseLines"));
     lines->setEditTriggers(QAbstractItemView::AllEditTriggers);
     lines->setSelectionBehavior(QAbstractItemView::SelectItems);
     lines->horizontalHeader()->setSectionResizeMode(LineDescription, QHeaderView::Stretch);
     fitCodeColumn(lines, LineCode);
+    lines->setColumnWidth(LineQuantity, 84);        // figures: the free width is for the description
+    lines->setColumnWidth(LineCost, 92);
+    lines->setColumnWidth(LineMargin, 100);
+    lines->setColumnWidth(LinePrice, 136);
+    lines->setColumnWidth(LineSubtotal, 100);
     returnFocusOnEnter(lines, entry);
     layout->addWidget(lines, 1);
 
@@ -236,9 +286,11 @@ PurchaseDialog::PurchaseDialog(ProductService *products, InventoryService *inven
     options->addStretch();
     options->addWidget(total);
     layout->addLayout(options);
+    problem = AguaraForm::errorLabel(QStringLiteral("purchaseError"));
+    layout->addWidget(problem);
 
     auto buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
-    buttons->button(QDialogButtonBox::Save)->setText(tr("Guardar compra"));
+    buttons->button(QDialogButtonBox::Save)->setText(tr("Dar de alta"));
     buttons->button(QDialogButtonBox::Save)->setAutoDefault(false);
     AguaraStyle::setRole(buttons->button(QDialogButtonBox::Save), AguaraStyle::Primary);
     buttons->button(QDialogButtonBox::Cancel)->setText(tr("Cancelar"));
@@ -249,14 +301,29 @@ PurchaseDialog::PurchaseDialog(ProductService *products, InventoryService *inven
 
     keepEnterInDialog(this);
     connect(entry, &QLineEdit::returnPressed, this, &PurchaseDialog::addFromEntry);
+    connect(new SuggestionBox(entry, SuggestionBox::articles(products, this)), &SuggestionBox::chosen,
+            this, [this](const QString &code) {
+                entry->setText(code);
+                addFromEntry();
+            });
     connect(lines, &QTableWidget::cellChanged, this, &PurchaseDialog::onCellChanged);
+    connect(newButton, &QPushButton::clicked, this, [this]() { createArticle(); });
+    connect(newSupplier, &QPushButton::clicked, this, &PurchaseDialog::createSupplier);
+    connect(new QShortcut(QKeySequence(Qt::Key_Insert), this), &QShortcut::activated, this, [this]() { createArticle(); });
+    connect(newArticle, &addItemDialog::itemAddedEdited, this, [this](const QString &code) {
+        if (const std::optional<Product> created = this->products->product(code))
+            addLine(*created, AguaraQuantity::One);
+    });
     connect(margin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this]() {
         for (int row = 0; row < lines->rowCount(); ++row)
             updateSuggested(row);
     });
     connect(removeLine, &QPushButton::clicked, this, [this]() {
-        if (lines->currentRow() >= 0)
-            lines->removeRow(lines->currentRow());
+        const int row = lines->currentRow();
+        if (row < 0 || !AguaraForm::confirmRemoval(this, tr("Quitar línea"),
+                tr("%1 sale de esta compra.").arg(lines->item(row, LineDescription)->text()), tr("Quitar línea")))
+            return;
+        lines->removeRow(row);
         updateTotal();
     });
     updateTotal();
@@ -270,31 +337,94 @@ void PurchaseDialog::addFromEntry()
         return;
     const ScanResult scan = inventory->resolveScan(text);
     entry->clear();
-    if (!scan.found) {
-        QApplication::beep();
-        QMessageBox::warning(this, tr("Artículo no encontrado"),
-                             tr("No hay artículos con el código %1. Créelo primero en la pestaña Artículos.").arg(text));
+    problem->hide();
+    if (scan.found) {
+        addLine(scan.product, scan.quantity);
+        return;
+    }
+    QApplication::beep();
+    // digits are a code read from what just arrived: it's a new article
+    const bool isCode = std::all_of(text.cbegin(), text.cend(), [](QChar c) { return c.isDigit(); });
+    if (isCode && AguaraForm::validCode(text))
+        createArticle(text);
+    else
+        AguaraForm::showError(problem, tr("No hay artículos con \"%1\". Si es nuevo, use Nuevo artículo.").arg(text), entry);
+}
+
+void PurchaseDialog::fillSuppliers()
+{
+    supplier->clear();
+    for (const Supplier &s : inventory->suppliers())
+        supplier->addItem(s.name, s.id);
+    supplier->setCurrentIndex(supplier->count() > 0 ? 0 : -1);   // with a placeholder, a combo stays on none
+}
+
+/// The new one is who this alta comes from.
+void PurchaseDialog::createSupplier()
+{
+    if (!isAuthorized(users, QStringLiteral("inventario.proveedores"), tr("Nuevo proveedor"), this))
+        return;
+    const qint64 id = SuppliersPage::showForm(inventory, Supplier(), this);
+    if (!id)
+        return;
+    fillSuppliers();
+    supplier->setCurrentIndex(supplier->findData(id));
+    problem->hide();
+    entry->setFocus();
+}
+
+void PurchaseDialog::createArticle(const QString &code)
+{
+    if (isAuthorized(users, QStringLiteral("inventario.editar"), tr("Nuevo artículo"), this))
+        newArticle->addForEntry(code);
+}
+
+/// As in a sale: the same article again is one more on its line.
+void PurchaseDialog::addLine(const Product &p, Quantity quantity)
+{
+    for (int row = 0; row < lines->rowCount(); ++row) {
+        if (lines->item(row, LineCode)->text() != p.code)
+            continue;
+        Quantity current = 0;
+        AguaraQuantity::parse(lines->item(row, LineQuantity)->text(), &current);
+        lines->item(row, LineQuantity)->setText(AguaraQuantity::format(current + quantity, p.unit.decimals));
+        lines->setCurrentCell(row, LineQuantity);
         return;
     }
 
     filling = true;
     const int row = lines->rowCount();
     lines->insertRow(row);
-    const Product &p = scan.product;
     lines->setItem(row, LineCode, readOnly(new QTableWidgetItem(p.code)));
     lines->setItem(row, LineDescription, readOnly(new QTableWidgetItem(p.description)));
-    lines->setItem(row, LineQuantity, rightAligned(AguaraQuantity::format(scan.quantity, p.unit.decimals)));
+    lines->setItem(row, LineQuantity, rightAligned(AguaraQuantity::format(quantity, p.unit.decimals)));
+    lines->item(row, LineQuantity)->setData(Qt::UserRole, p.unit.decimals);
     lines->setItem(row, LineCost, rightAligned(AguaraMoney::format(p.cost)));
+    lines->setItem(row, LineMargin, rightAligned(QString()));
+    lines->setItem(row, LinePrice, rightAligned(AguaraMoney::format(p.price)));
     lines->setItem(row, LineSubtotal, readOnly(rightAligned(QString())));
-    lines->setItem(row, LinePrice, rightAligned(QString()));
     filling = false;
     updateSuggested(row);
+    showMargin(row);
     updateTotal();
     lines->setCurrentCell(row, LineQuantity);
     lines->editItem(lines->item(row, LineQuantity));
 }
 
-/// With a margin: price = cost / (1 - margin), up to the next 100 Gs.
+namespace {
+
+/// price = cost / (1 - margin), up to the next 100 Gs.
+Money priceWithMargin(Money cost, double percent)
+{
+    Money price = qRound64(double(cost) / (1.0 - percent / 100.0));
+    if (price % 100 != 0)
+        price += 100 - price % 100;
+    return price;
+}
+
+} // namespace
+
+/// With a suggested margin for the whole list, each cost gives its price.
 void PurchaseDialog::updateSuggested(int row)
 {
     if (margin->value() <= 0)
@@ -302,20 +432,54 @@ void PurchaseDialog::updateSuggested(int row)
     Money cost = 0;
     if (!AguaraMoney::parse(lines->item(row, LineCost)->text(), &cost) || cost <= 0)
         return;
-    Money price = qRound64(double(cost) / (1.0 - margin->value() / 100.0));
-    if (price % 100 != 0)
-        price += 100 - price % 100;
     filling = true;
-    lines->item(row, LinePrice)->setText(AguaraMoney::format(price));
+    lines->item(row, LinePrice)->setText(AguaraMoney::format(priceWithMargin(cost, margin->value())));
     filling = false;
+    showMargin(row);
+}
+
+/// What the price leaves over the cost, as in the article's form.
+void PurchaseDialog::showMargin(int row)
+{
+    Money cost = 0, price = 0;
+    const bool known = AguaraMoney::parse(lines->item(row, LineCost)->text(), &cost)
+                    && AguaraMoney::parse(lines->item(row, LinePrice)->text(), &price) && price > 0 && cost > 0;
+    filling = true;
+    lines->item(row, LineMargin)->setText(known ? QLocale().toString(100.0 * double(price - cost) / double(price), 'f', 1) : QString());
+    filling = false;
+}
+
+/// A margin typed by hand sets the price. One that can't be used goes back.
+void PurchaseDialog::applyMargin(int row)
+{
+    QString typed = lines->item(row, LineMargin)->text();
+    typed.remove(QLatin1Char('%'));
+    typed.replace(QLatin1Char(','), QLatin1Char('.'));
+    bool number = false;
+    const double percent = typed.trimmed().toDouble(&number);
+    Money cost = 0;
+    if (number && percent >= 0 && percent < 100
+        && AguaraMoney::parse(lines->item(row, LineCost)->text(), &cost) && cost > 0) {
+        filling = true;
+        lines->item(row, LinePrice)->setText(AguaraMoney::format(priceWithMargin(cost, percent)));
+        filling = false;
+        return;
+    }
+    showMargin(row);
 }
 
 void PurchaseDialog::onCellChanged(int row, int column)
 {
     if (filling)
         return;
-    if (column == LineCost)
+    if (column == LineCost) {
         updateSuggested(row);
+        showMargin(row);
+    } else if (column == LineMargin) {
+        applyMargin(row);
+    } else if (column == LinePrice) {
+        showMargin(row);
+    }
     updateTotal();
 }
 
@@ -336,24 +500,31 @@ void PurchaseDialog::updateTotal()
     total->setText(tr("Total: %1").arg(AguaraMoney::formatWithSymbol(sum)));
 }
 
-Purchase PurchaseDialog::build(bool *ok) const
+Purchase PurchaseDialog::build(QString *refused) const
 {
     Purchase purchase;
     purchase.supplierId = supplier->currentData().toLongLong();
     purchase.invoice = invoice->text();
     purchase.date = date->date();
     purchase.updateCosts = updateCosts->isChecked();
-    *ok = true;
     for (int row = 0; row < lines->rowCount(); ++row) {
         PurchaseLine line;
         line.code = lines->item(row, LineCode)->text();
+        const QString name = lines->item(row, LineDescription)->text();
         const QString price = lines->item(row, LinePrice)->text().trimmed();
-        if (!AguaraQuantity::parse(lines->item(row, LineQuantity)->text(), &line.quantity)
-            || !AguaraMoney::parse(lines->item(row, LineCost)->text(), &line.unitCost)
-            || (!price.isEmpty() && !AguaraMoney::parse(price, &line.newPrice))) {
-            *ok = false;
+        const auto refuse = [&](int column, const QString &text) {
+            *refused = text;
+            lines->setCurrentCell(row, column);
             return purchase;
-        }
+        };
+        if (!AguaraQuantity::parse(lines->item(row, LineQuantity)->text(), &line.quantity) || line.quantity <= 0)
+            return refuse(LineQuantity, tr("La cantidad de %1 debe ser mayor que cero.").arg(name));
+        if (!AguaraForm::fitsUnit(line.quantity, lines->item(row, LineQuantity)->data(Qt::UserRole).toInt()))
+            return refuse(LineQuantity, tr("La cantidad de %1 tiene más decimales de los que admite su unidad.").arg(name));
+        if (!AguaraMoney::parse(lines->item(row, LineCost)->text(), &line.unitCost) || line.unitCost < 0)
+            return refuse(LineCost, tr("Revise el costo de %1.").arg(name));
+        if (!price.isEmpty() && (!AguaraMoney::parse(price, &line.newPrice) || line.newPrice <= 0))
+            return refuse(LinePrice, tr("Revise el precio nuevo de %1.").arg(name));
         purchase.lines << line;
     }
     return purchase;
@@ -362,16 +533,17 @@ Purchase PurchaseDialog::build(bool *ok) const
 void PurchaseDialog::accept()
 {
     commitOpenEditor(lines);
-    bool ok = false;
-    const Purchase purchase = build(&ok);
-    if (!ok) {
-        QMessageBox::warning(this, tr("Revise la compra"), tr("Hay una cantidad, costo o precio que no es un número válido."));
+    QString refused;
+    const Purchase purchase = build(&refused);
+    if (!refused.isEmpty()) {
+        AguaraForm::showError(problem, refused);
         return;
     }
     if (!inventory->savePurchase(purchase)) {
-        QMessageBox::warning(this, tr("No se pudo guardar"), inventory->lastError());
+        AguaraForm::showError(problem, inventory->lastError());
         return;
     }
+    saved = purchase.lines;
     QDialog::accept();
 }
 
@@ -389,12 +561,13 @@ PurchasesPage::PurchasesPage(ProductService *products, InventoryService *invento
         edit->setCalendarPopup(true);
         edit->setDisplayFormat(QStringLiteral("dd/MM/yyyy"));
     }
+    AguaraForm::keepInOrder(from, to);
     bar->addWidget(new QLabel(tr("Desde")));
     bar->addWidget(from);
     bar->addWidget(new QLabel(tr("Hasta")));
     bar->addWidget(to);
     bar->addStretch();
-    auto add = primaryButton(tr("Nueva compra"));
+    auto add = primaryButton(tr("Alta de productos"));
     add->setObjectName(QStringLiteral("newPurchaseButton"));
     bar->addWidget(add);
     layout->addLayout(bar);
@@ -408,18 +581,19 @@ PurchasesPage::PurchasesPage(ProductService *products, InventoryService *invento
     connect(from, &QDateEdit::dateChanged, this, &PurchasesPage::reload);
     connect(to, &QDateEdit::dateChanged, this, &PurchasesPage::reload);
     connect(table, &QTableWidget::activated, this, &PurchasesPage::showSelected);
-    connect(add, &QPushButton::clicked, this, [this]() {
-        if (this->inventory->suppliers().isEmpty()) {
-            QMessageBox::information(this, tr("Nueva compra"), tr("Primero cargue un proveedor en la pestaña Proveedores."));
-            return;
-        }
-        if (!isAuthorized(this->users, QStringLiteral("inventario.compras"), tr("Cargar una compra"), this))
-            return;
-        PurchaseDialog dialog(this->products, this->inventory, this);
-        if (dialog.exec() == QDialog::Accepted)
-            reload();
-    });
+    connect(add, &QPushButton::clicked, this, &PurchasesPage::receive);
     reload();
+}
+
+void PurchasesPage::receive()
+{
+    if (!isAuthorized(users, QStringLiteral("inventario.compras"), tr("Dar de alta productos"), this))
+        return;
+    PurchaseDialog dialog(products, inventory, users, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+    reload();
+    EntryLabelsDialog(products, dialog.received(), this).exec();
 }
 
 void PurchasesPage::reload()
@@ -491,7 +665,7 @@ CountsPage::CountsPage(ProductService *products, InventoryService *inventory, Us
     prepareButton->setObjectName(QStringLiteral("countPrepare"));
     entry = new QLineEdit;
     entry->setObjectName(QStringLiteral("countEntry"));
-    entry->setPlaceholderText(tr("Escanee un artículo: suma uno a lo contado"));
+    entry->setPlaceholderText(tr("Escanee o busque un artículo: suma uno a lo contado"));
     AguaraStyle::searchField(entry);
     bar->addWidget(new QLabel(tr("Rubro")));
     bar->addWidget(category);
@@ -510,6 +684,7 @@ CountsPage::CountsPage(ProductService *products, InventoryService *inventory, Us
 
     auto bottom = new QHBoxLayout;
     summary = new QLabel;
+    summary->setObjectName(QStringLiteral("countSummary"));
     AguaraStyle::setRole(summary, AguaraStyle::Muted);
     applyButton = new QPushButton(tr("Aplicar recuento"));
     applyButton->setObjectName(QStringLiteral("countApply"));
@@ -521,6 +696,11 @@ CountsPage::CountsPage(ProductService *products, InventoryService *inventory, Us
 
     connect(prepareButton, &QPushButton::clicked, this, &CountsPage::prepare);
     connect(entry, &QLineEdit::returnPressed, this, &CountsPage::scan);
+    connect(new SuggestionBox(entry, SuggestionBox::articles(products, this)), &SuggestionBox::chosen,
+            this, [this](const QString &code) {
+                entry->setText(code);
+                scan();
+            });
     connect(table, &QTableWidget::cellChanged, this, &CountsPage::onCellChanged);
     connect(applyButton, &QPushButton::clicked, this, &CountsPage::apply);
 }
@@ -576,7 +756,8 @@ void CountsPage::updateRow(int row)
     CountLine &line = sheet[row];
     const QString text = table->item(row, CountCounted)->text().trimmed();
     Quantity counted = 0;
-    line.wasCounted = !text.isEmpty() && AguaraQuantity::parse(text, &counted);
+    line.wasCounted = !text.isEmpty() && AguaraQuantity::parse(text, &counted)
+                      && counted >= 0 && AguaraForm::fitsUnit(counted, line.decimals);
     line.counted = line.wasCounted ? counted : line.expected;
 
     filling = true;
@@ -597,6 +778,15 @@ void CountsPage::updateRow(int row)
 void CountsPage::apply()
 {
     commitOpenEditor(table);
+    // a cell that says "revisar" was typed: skipping it would leave the article uncounted
+    for (int row = 0; row < sheet.size(); ++row) {
+        if (!sheet.at(row).wasCounted && !table->item(row, CountCounted)->text().trimmed().isEmpty()) {
+            summary->setText(tr("Revise lo contado de %1: no es una cantidad válida.").arg(sheet.at(row).description));
+            table->setCurrentCell(row, CountCounted);
+            table->scrollToItem(table->item(row, CountCounted));
+            return;
+        }
+    }
     int counted = 0, different = 0;
     for (const CountLine &line : qAsConst(sheet)) {
         counted += line.wasCounted ? 1 : 0;

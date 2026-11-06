@@ -9,7 +9,7 @@ QT_BEGIN_NAMESPACE
 namespace Ui {
 class modifyTableDialog;
 }
-class QCompleter;
+class SearchProxyModel;
 class QStandardItemModel;
 QT_END_NAMESPACE
 
@@ -32,7 +32,7 @@ private:
     class QComboBox *parentCombo = nullptr;
     class QPushButton *moveButton = nullptr;
     Ui::modifyTableDialog *ui;
-    QCompleter *searchCompleter;
+    SearchProxyModel *visible;
     QStandardItemModel *model;
     ProductService *products;
     List list;
@@ -42,7 +42,6 @@ private:
     void reloadParents();
 
 private slots:
-    void onCompleterAccepted(const QModelIndex &index);
     void onAddItem();
     void onRemoveItem();
 };

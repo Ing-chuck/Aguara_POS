@@ -3,15 +3,19 @@
 #include "modifytabledialog.h"
 
 #include <aguarastyle.h>
+#include <formcheck.h>
 
 #include <QDate>
 #include <QDialogButtonBox>
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QLocale>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
 #include <QToolButton>
+#include <QVBoxLayout>
 
 addItemDialog::addItemDialog(ProductService *products, QWidget *parent) :
     QDialog(parent),
@@ -30,7 +34,34 @@ addItemDialog::addItemDialog(ProductService *products, QWidget *parent) :
         b->setFixedSize(32, 32);
     }
 
+    // a code of the shop's own, for what comes without a barcode
+    auto generate = new QPushButton(tr("Generar"));
+    generate->setObjectName(QStringLiteral("generateCode"));
+    generate->setAutoDefault(false);
+    generate->setToolTip(tr("Crea un código interno que ningún artículo usa. Sus barras salen en las etiquetas."));
+    ui->lineEdit_code->setPlaceholderText(tr("Barras o interno"));
+    ui->codeLayout->removeWidget(ui->lineEdit_code);
+    auto codeRow = new QHBoxLayout;
+    codeRow->setSpacing(6);
+    codeRow->addWidget(ui->lineEdit_code, 1);
+    codeRow->addWidget(generate);
+    ui->codeLayout->addLayout(codeRow);
+    connect(generate, &QPushButton::clicked, this, [this]() {
+        const QString code = this->products->newInternalCode();
+        if (code.isEmpty()) {
+            refuse(this->products->lastError(), ui->lineEdit_code);
+            return;
+        }
+        ui->lineEdit_code->setText(code);
+        ui->lineEdit_description->setFocus();
+    });
+
+    problem = AguaraForm::errorLabel(QStringLiteral("itemError"));
+    auto dialogLayout = static_cast<QVBoxLayout *>(layout());
+    dialogLayout->insertWidget(dialogLayout->indexOf(ui->buttonBox), problem);
+
     // Set current date for dateEdit
+    ui->dateEdit->setMaximumDate(QDate::currentDate());     // bought: it already happened
     ui->dateEdit->setDate(QDate::currentDate());
 
     // Setup validators for lineEdits
@@ -104,13 +135,17 @@ void addItemDialog::reloadLists()
     ui->comboBox_vat->setCurrentIndex(idx >= 0 ? idx : 0);   // 0 = highest rate (10%)
 
     if (ui->comboBox_unit->count() == 0) {
-        for (const StockUnit &unit : products->units())
+        for (const StockUnit &unit : products->units()) {
             ui->comboBox_unit->addItem(unit.name, unit.id);
+            ui->comboBox_unit->setItemData(ui->comboBox_unit->count() - 1, unit.decimals, Qt::UserRole + 1);
+        }
     }
 }
 
 void addItemDialog::showModal()
 {
+    problem->hide();
+    ui->dateEdit->setMaximumDate(QDate::currentDate());
     open();
     (editing ? ui->lineEdit_description : ui->lineEdit_code)->setFocus();
 }
@@ -172,6 +207,16 @@ void addItemDialog::addItem()
     showModal();
 }
 
+void addItemDialog::addForEntry(const QString &code)
+{
+    addItem();
+    setStockEditable(false);
+    ui->lineEdit_stock->setToolTip(tr("El stock entra con la cantidad de esta alta"));
+    ui->lineEdit_stockmin->setFocus();
+    ui->lineEdit_code->setText(code);
+    (code.isEmpty() ? ui->lineEdit_code : ui->lineEdit_description)->setFocus();
+}
+
 /// Prepare Dialog to edit an existing item and show
 void addItemDialog::editItem(const QString &code)
 {
@@ -205,9 +250,15 @@ void addItemDialog::editItem(const QString &code)
     showModal();
 }
 
+void addItemDialog::refuse(const QString &text, QWidget *field)
+{
+    AguaraForm::showError(problem, text, field);
+}
+
 /// Read the form into *product; shows a message and returns false if invalid
 bool addItemDialog::readInput(Product *product)
 {
+    problem->hide();
     Product p;
     p.code        = ui->lineEdit_code->text().trimmed();
     p.description = ui->lineEdit_description->text().trimmed();
@@ -218,22 +269,53 @@ bool addItemDialog::readInput(Product *product)
     p.vatRate     = ui->comboBox_vat->currentData().toInt();
     p.purchased   = ui->dateEdit->date();
     p.unit.id     = ui->comboBox_unit->currentData().toLongLong();
+    const int decimals = ui->comboBox_unit->currentData(Qt::UserRole + 1).toInt();
+
+    if (p.code.isEmpty()) {
+        refuse(tr("Escriba el código del artículo."), ui->lineEdit_code);
+        return false;
+    }
+    if (p.description.isEmpty()) {
+        refuse(tr("Escriba la descripción del artículo."), ui->lineEdit_description);
+        return false;
+    }
 
     const QString stockText = ui->lineEdit_stock->text().isEmpty() ? QStringLiteral("0") : ui->lineEdit_stock->text();
     const QString minimumText = ui->lineEdit_stockmin->text().isEmpty() ? QStringLiteral("0") : ui->lineEdit_stockmin->text();
-    if (!AguaraQuantity::parse(stockText, &p.stock) || !AguaraQuantity::parse(minimumText, &p.stockMin)) {
-        QMessageBox::warning(this, tr("Stock inválido"), tr("El stock debe ser una cantidad, por ejemplo 24 o 2,750."));
+    if (!AguaraQuantity::parse(stockText, &p.stock)) {
+        refuse(tr("El stock debe ser una cantidad, por ejemplo 24 o 2,750."), ui->lineEdit_stock);
+        return false;
+    }
+    if (!AguaraQuantity::parse(minimumText, &p.stockMin)) {
+        refuse(tr("El stock mínimo debe ser una cantidad, por ejemplo 24 o 2,750."), ui->lineEdit_stockmin);
+        return false;
+    }
+    // the stock of an article that exists doesn't change here
+    if (!ui->lineEdit_stock->isReadOnly() && !AguaraForm::fitsUnit(p.stock, decimals)) {
+        refuse(tr("Esta unidad de venta no admite tantos decimales."), ui->lineEdit_stock);
+        return false;
+    }
+    if (!AguaraForm::fitsUnit(p.stockMin, decimals)) {
+        refuse(tr("Esta unidad de venta no admite tantos decimales."), ui->lineEdit_stockmin);
         return false;
     }
 
     const QString priceText = ui->lineEdit_price->text();
     const QString costText  = ui->lineEdit_cost->text();
-    if (!AguaraMoney::parse(priceText.isEmpty() ? QStringLiteral("0") : priceText, &p.price)) {
-        QMessageBox::warning(this, tr("Precio inválido"), tr("El precio \"%1\" no es un monto válido.").arg(priceText));
+    if (priceText.trimmed().isEmpty()) {
+        refuse(tr("Escriba el precio de venta."), ui->lineEdit_price);
+        return false;
+    }
+    if (!AguaraMoney::parse(priceText, &p.price)) {
+        refuse(tr("El precio \"%1\" no es un monto válido.").arg(priceText), ui->lineEdit_price);
+        return false;
+    }
+    if (p.price <= 0) {     // it would go through the till for free
+        refuse(tr("El precio de venta debe ser mayor que cero."), ui->lineEdit_price);
         return false;
     }
     if (!AguaraMoney::parse(costText.isEmpty() ? QStringLiteral("0") : costText, &p.cost)) {
-        QMessageBox::warning(this, tr("Costo inválido"), tr("El costo \"%1\" no es un monto válido.").arg(costText));
+        refuse(tr("El costo \"%1\" no es un monto válido.").arg(costText), ui->lineEdit_cost);
         return false;
     }
 
@@ -282,7 +364,7 @@ void addItemDialog::accept()
     }
 
     if (!products->saveProduct(p, editing ? previousCode : QString())) {
-        QMessageBox::warning(this, tr("No se pudo guardar"), products->lastError());
+        refuse(products->lastError());
         return;
     }
 

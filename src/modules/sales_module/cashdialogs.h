@@ -45,6 +45,7 @@ public:
     void accept() override;
 
 private:
+    QLabel *error;
     QComboBox *kind;
     QLineEdit *amountEdit;
     QLineEdit *reasonEdit;

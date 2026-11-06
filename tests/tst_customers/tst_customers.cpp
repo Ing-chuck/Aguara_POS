@@ -2,6 +2,9 @@
 // of a sale, also held or in the queue.
 #include "testsupport.h"
 
+#include <formcheck.h>
+#include <livesearch.h>
+
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -19,6 +22,10 @@ private slots:
     void checkDigit();
     void rucNeedsItsRightDigit();
     void ciIsDigitsOnly();
+    void optionalDataHasToMakeSense();
+    void searchForgivesAccentsAndOrder();
+    void quantitiesFitTheirUnit();
+    void savingChecksTheContactData();
 
     void saveAndFind();
     void documentIsNotRepeated();
@@ -107,6 +114,80 @@ void tst_Customers::rucNeedsItsRightDigit()
     QVERIFY(!AguaraCustomer::validRuc(QString()));
     // two digits swapped: what a check digit exists to catch
     QVERIFY(!AguaraCustomer::validRuc(QStringLiteral("80009753-1")));
+}
+
+void tst_Customers::optionalDataHasToMakeSense()
+{
+    for (const char *good : { "", "  ", "0981 123 456", "(021) 555-123", "+595 981 123456", "021 555 / 021 556" })
+        QVERIFY2(AguaraForm::validPhone(QString::fromUtf8(good)), good);
+    for (const char *bad : { "ver contrato", "123", "0981-CASA", "1234567890123456789012345678901" })
+        QVERIFY2(!AguaraForm::validPhone(QString::fromUtf8(bad)), bad);
+
+    for (const char *good : { "", "ventas@comercio.com.py", " ana.perez@gmail.com " })
+        QVERIFY2(AguaraForm::validEmail(QString::fromUtf8(good)), good);
+    for (const char *bad : { "ventas", "ventas@comercio", "@comercio.com", "a b@c.com", "a@b..com" })
+        QVERIFY2(!AguaraForm::validEmail(QString::fromUtf8(bad)), bad);
+
+    for (const char *good : { "", "www.comercio.com.py", "https://comercio.com/tienda" })
+        QVERIFY2(AguaraForm::validWeb(QString::fromUtf8(good)), good);
+    for (const char *bad : { "comercio", "con espacios.com" })
+        QVERIFY2(!AguaraForm::validWeb(QString::fromUtf8(bad)), bad);
+
+    QVERIFY(AguaraForm::validUsername(QStringLiteral("  maria.perez ")));
+    QVERIFY(!AguaraForm::validUsername(QStringLiteral("maria perez")));
+    QVERIFY(AguaraForm::validCode(QStringLiteral("7840001-A")));
+    QVERIFY(!AguaraForm::validCode(QString()));
+    QVERIFY(!AguaraForm::validCode(QStringLiteral("78 40")));
+    QVERIFY(!AguaraForm::validCode(QString(21, QLatin1Char('1'))));
+}
+
+void tst_Customers::searchForgivesAccentsAndOrder()
+{
+    QVERIFY(AguaraSearch::matches(QStringLiteral("azucar kilo"), QStringLiteral("AZÚCAR BLANCA 1 KILO")));
+    QVERIFY(AguaraSearch::matches(QStringLiteral("kilo AZÚCAR"), QStringLiteral("azucar blanca 1 kilo")));
+    QVERIFY(AguaraSearch::matches(QStringLiteral("  "), QStringLiteral("cualquier cosa")));
+    QVERIFY(AguaraSearch::matches(QStringLiteral("nandu"), QStringLiteral("ÑANDÚ")));
+    QVERIFY(!AguaraSearch::matches(QStringLiteral("azucar negra"), QStringLiteral("AZÚCAR BLANCA")));
+
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    Customer c;
+    c.name = QStringLiteral("GONZÁLEZ PÉREZ, Ana");
+    c.documentType = QString::fromLatin1(DocumentType::Ci);
+    c.document = QStringLiteral("1234567");
+    QVERIFY(m_core.customers->saveCustomer(c) != 0);
+    QCOMPARE(m_core.customers->customers(QStringLiteral("gonzalez")).size(), 1);
+    QCOMPARE(m_core.customers->customers(QStringLiteral("perez ana")).size(), 1);
+    QCOMPARE(m_core.customers->customers(QStringLiteral("4567")).size(), 1);
+    QCOMPARE(m_core.customers->customers(QStringLiteral("gomez")).size(), 0);
+}
+
+void tst_Customers::quantitiesFitTheirUnit()
+{
+    QVERIFY(AguaraForm::fitsUnit(AguaraQuantity::whole(3), 0));
+    QVERIFY(!AguaraForm::fitsUnit(1500, 0));        // 1,5 of something sold by the unit
+    QVERIFY(AguaraForm::fitsUnit(1500, 1));
+    QVERIFY(!AguaraForm::fitsUnit(1250, 1));
+    QVERIFY(AguaraForm::fitsUnit(1250, 3));
+}
+
+void tst_Customers::savingChecksTheContactData()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    Customer c;
+    c.name = QStringLiteral("ANA");
+    c.phone = QStringLiteral("ver contrato");
+    QCOMPARE(m_core.customers->saveCustomer(c), qint64(0));
+    QVERIFY(m_core.customers->lastError().contains(QStringLiteral("teléfono")));
+    c.phone = QStringLiteral("0981 123 456");
+    c.email = QStringLiteral("ana");
+    QCOMPARE(m_core.customers->saveCustomer(c), qint64(0));
+    QVERIFY(m_core.customers->lastError().contains(QStringLiteral("correo")));
+    c.email = QStringLiteral("ana@correo.com");
+    c.documentType = QString::fromLatin1(DocumentType::Ci);
+    QCOMPARE(m_core.customers->saveCustomer(c), qint64(0));         // a type without its number
+    QVERIFY(m_core.customers->lastError().contains(QStringLiteral("número")));
+    c.documentType.clear();
+    QVERIFY(m_core.customers->saveCustomer(c) != 0);
 }
 
 void tst_Customers::ciIsDigitsOnly()

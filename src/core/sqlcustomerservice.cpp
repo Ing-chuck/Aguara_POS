@@ -1,6 +1,8 @@
 #include "sqlcustomerservice.h"
 #include "connectionmonitor.h"
 
+#include <formcheck.h>
+#include <livesearch.h>
 #include <userservice.h>
 
 #include <QSqlQuery>
@@ -53,23 +55,21 @@ void SqlCustomerService::audit(const QString &action, qint64 id, const QString &
 QList<Customer> SqlCustomerService::customers(const QString &filter, bool inactive) const
 {
     QList<Customer> result;
-    const QString text = filter.trimmed().toLower();
-    QString sql = QStringLiteral("SELECT %1 FROM clientes WHERE 1 = 1").arg(QLatin1String(kColumns));
+    // Matched here: SQLite's lower() and LIKE only know plain ASCII, so "gonzalez"
+    // wouldn't find "GONZÁLEZ". A shop's customers are thousands at most.
+    QString sql = QStringLiteral("SELECT %1 FROM clientes").arg(QLatin1String(kColumns));
     if (!inactive)
-        sql += QStringLiteral(" AND activo = 1");
-    if (!text.isEmpty())
-        sql += QStringLiteral(" AND (lower(nombre) LIKE ? OR lower(documento) LIKE ?)");
+        sql += QStringLiteral(" WHERE activo = 1");
     QSqlQuery q(db());
-    q.prepare(sql + QStringLiteral(" ORDER BY lower(nombre) LIMIT 500"));
-    if (!text.isEmpty()) {
-        const QString like = QLatin1Char('%') + text + QLatin1Char('%');
-        q.addBindValue(like);
-        q.addBindValue(like);
-    }
+    q.setForwardOnly(true);
+    q.prepare(sql + QStringLiteral(" ORDER BY lower(nombre)"));
     if (!exec(q))
         return result;
-    while (q.next())
-        result << read(q);
+    while (q.next() && result.size() < 500) {
+        const Customer c = read(q);
+        if (AguaraSearch::matches(filter, c.name + QLatin1Char(' ') + c.document))
+            result << c;
+    }
     return result;
 }
 
@@ -96,12 +96,24 @@ qint64 SqlCustomerService::saveCustomer(const Customer &customer)
         m_lastError = tr("Escriba el nombre del cliente.");
         return 0;
     }
+    if (!c.documentType.isEmpty() && c.document.isEmpty()) {
+        m_lastError = tr("Escriba el número de documento, o elija Sin documento.");
+        return 0;
+    }
     if (c.documentType == QLatin1String(DocumentType::Ruc) && !AguaraCustomer::validRuc(c.document)) {
         m_lastError = tr("El RUC no es válido: revise el número y su dígito verificador (80009735-1).");
         return 0;
     }
     if (c.documentType == QLatin1String(DocumentType::Ci) && !AguaraCustomer::validCi(c.document)) {
         m_lastError = tr("La cédula lleva solo números.");
+        return 0;
+    }
+    if (!AguaraForm::validPhone(c.phone)) {
+        m_lastError = tr("El teléfono lleva solo números, por ejemplo 0981 123 456.");
+        return 0;
+    }
+    if (!AguaraForm::validEmail(c.email)) {
+        m_lastError = tr("El correo no es válido: debe ser como nombre@dominio.com.");
         return 0;
     }
     if (c.documentType.isEmpty())

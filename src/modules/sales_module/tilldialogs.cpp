@@ -2,6 +2,7 @@
 #include "saledialogs.h"
 
 #include <customerdialog.h>
+#include <formcheck.h>
 
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -144,7 +145,7 @@ ReturnDialog::ReturnDialog(ReturnService *returns, SalesService *sales, const QS
     reason->setEnabled(false);
     form->addRow(tr("Devolver por:"), method);
     form->addRow(tr("Comprobante:"), reference);
-    form->addRow(tr("Motivo:"), reason);
+    form->addRow(AguaraForm::required(tr("Motivo:")), reason);
     layout->addLayout(form);
 
     error = new QLabel;
@@ -313,8 +314,11 @@ PaymentMethodsDialog::PaymentMethodsDialog(SalesService *sales, QWidget *parent)
     table->setObjectName(QStringLiteral("methodsTable"));
     table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     layout->addWidget(table, 1);
-    for (const PaymentMethodInfo &method : sales->paymentMethods(true))
+    for (const PaymentMethodInfo &method : sales->paymentMethods(true)) {
         addRow(method);
+        if (method.active)
+            inUse << method.code;
+    }
 
     auto row = new QHBoxLayout;
     newName = new QLineEdit;
@@ -360,14 +364,36 @@ void PaymentMethodsDialog::addNew()
 {
     PaymentMethodInfo method;
     method.code = newName->text().simplified();
-    if (method.code.isEmpty())
+    if (method.code.isEmpty()) {
+        AguaraForm::showError(error, tr("Escriba el nombre del medio de pago."), newName);
         return;
+    }
+    QStringList names = { AguaraSale::methodName(QString::fromLatin1(PaymentMethod::Cash)),
+                          AguaraSale::methodName(QString::fromLatin1(PaymentMethod::CreditNote)) };
+    for (int row = 0; row < table->rowCount(); ++row)
+        names << table->item(row, 0)->text();
+    if (names.contains(method.code, Qt::CaseInsensitive)) {
+        AguaraForm::showError(error, tr("%1 ya existe.").arg(method.code), newName);
+        return;
+    }
+    error->hide();
     addRow(method);
     newName->clear();
 }
 
 void PaymentMethodsDialog::accept()
 {
+    QStringList leaving;
+    for (int row = 0; row < table->rowCount(); ++row) {
+        if (inUse.contains(table->item(row, 0)->data(Qt::UserRole).toString())
+            && table->item(row, 2)->checkState() != Qt::Checked)
+            leaving << table->item(row, 0)->text();
+    }
+    if (!leaving.isEmpty() && !AguaraForm::confirmRemoval(this, tr("Dejar de usar"),
+            tr("%1: ya no se ofrece al cobrar. Las ventas anteriores no cambian.").arg(leaving.join(QStringLiteral(", "))),
+            tr("Dejar de usar")))
+        return;
+
     for (int row = 0; row < table->rowCount(); ++row) {
         PaymentMethodInfo method;
         method.code = table->item(row, 0)->data(Qt::UserRole).toString();
