@@ -120,6 +120,8 @@ void MainWindow::setUsers(SqlUserService *service, int lockMinutes)
 
     QList<PermissionInfo> permissions = {
         { QStringLiteral("articulos.importar"), tr("Importar artículos desde archivos"), tr("Inventario") },
+        // not clientes.editar, which a cashier has: a file can rewrite the whole list
+        { QStringLiteral("clientes.importar"), tr("Importar clientes desde archivos"), tr("Clientes") },
         { QStringLiteral("datos.respaldar"), tr("Hacer copias de seguridad"), tr("Sistema") },
         { QStringLiteral("datos.conexion"), tr("Cambiar la conexión a los datos"), tr("Sistema"), false },
         { QStringLiteral("sistema.impresion"), tr("Configurar la impresora y los datos del comercio"), tr("Sistema") },
@@ -549,47 +551,61 @@ void MainWindow::changeEvent(QEvent *event)
         syncNavigation();
 }
 
-/// Import articles from a file. With `only` set, offer only that module's
-/// file types; otherwise every importer's, and the file's extension picks
-/// the module.
-void MainWindow::Import(ImportArticlesInterface *only)
+/// Archivo > Importar. The file's extension picks the module.
+void MainWindow::Import(ImportKind kind)
 {
-    if (users && !users->authorize(QStringLiteral("articulos.importar"), tr("Importar artículos"), this))
+    QString title, permission, files;
+    switch (kind) {
+    case ImportKind::Articles:
+        title = tr("Importar artículos");
+        permission = QStringLiteral("articulos.importar");
+        files = tr("Archivos de artículos");
+        break;
+    case ImportKind::Customers:
+        title = tr("Importar clientes");
+        permission = QStringLiteral("clientes.importar");
+        files = tr("Archivos de clientes");
+        break;
+    case ImportKind::Suppliers:
+        title = tr("Importar proveedores");
+        permission = QStringLiteral("inventario.proveedores");
+        files = tr("Archivos de proveedores");
+        break;
+    }
+    if (users && !users->authorize(permission, title, this))
         return;
 
     QStringList patterns;
     for (const LoadedModule &module : qAsConst(modules)) {
-        if (module.importer && (!only || module.importer == only)) {
+        if (module.importer && module.importer->canImport(kind)) {
             for (const QString &type : module.importer->fileTypes())
                 patterns << QStringLiteral("*.") + type;
         }
     }
     if (patterns.isEmpty()) {
-        QMessageBox::information(this, tr("Importar artículos"),
-                                 tr("No hay ningún módulo de importación instalado."));
+        QMessageBox::information(this, title, tr("No hay ningún módulo de importación instalado."));
         return;
     }
     patterns.removeDuplicates();
 
     if (lastImportDir.isEmpty())
         lastImportDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-    const QString file = QFileDialog::getOpenFileName(this, tr("Importar artículos"), lastImportDir,
-        tr("Archivos de artículos (%1)").arg(patterns.join(QLatin1Char(' '))));
+    const QString file = QFileDialog::getOpenFileName(this, title, lastImportDir,
+        QStringLiteral("%1 (%2)").arg(files, patterns.join(QLatin1Char(' '))));
     if (file.isEmpty())
         return;
     lastImportDir = QFileInfo(file).absolutePath();
 
     const QString extension = QFileInfo(file).suffix().toLower();
     for (const LoadedModule &module : qAsConst(modules)) {
-        if (!module.importer || (only && module.importer != only)
+        if (!module.importer || !module.importer->canImport(kind)
             || !module.importer->fileTypes().contains(extension))
             continue;
         qCInfo(lcModules) << "Importing" << file << "with" << module.info.name;
-        module.importer->importFrom(file);     // the module reports the result as a notification
+        module.importer->importFrom(file, kind);    // the module reports the result as a notification
         return;
     }
-    QMessageBox::warning(this, tr("Importar artículos"),
-                         tr("Ningún módulo puede importar archivos .%1.").arg(extension));
+    QMessageBox::warning(this, title, tr("Ningún módulo puede importar archivos .%1.").arg(extension));
 }
 
 /// Archivo > Copia de seguridad...
@@ -778,11 +794,21 @@ void MainWindow::aboutModules()
 void MainWindow::createActions()
 {
     // Ctrl+I, not Ctrl+N: "new" belongs to the open page (e.g. a new article).
-    importAct = new QAction(AguaraStyle::icon(QStringLiteral("import")), tr("&Importar artículos..."), this);
+    importAct = new QAction(tr("&Artículos..."), this);
     importAct->setObjectName(QStringLiteral("importAction"));
     importAct->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_I));
     importAct->setEnabled(false);               // until an import module loads
-    connect(importAct, &QAction::triggered, this, [this]() { Import(); });
+    connect(importAct, &QAction::triggered, this, [this]() { Import(ImportKind::Articles); });
+
+    importCustomersAct = new QAction(tr("&Clientes..."), this);
+    importCustomersAct->setObjectName(QStringLiteral("importCustomersAction"));
+    importCustomersAct->setEnabled(false);
+    connect(importCustomersAct, &QAction::triggered, this, [this]() { Import(ImportKind::Customers); });
+
+    importSuppliersAct = new QAction(tr("&Proveedores..."), this);
+    importSuppliersAct->setObjectName(QStringLiteral("importSuppliersAction"));
+    importSuppliersAct->setEnabled(false);
+    connect(importSuppliersAct, &QAction::triggered, this, [this]() { Import(ImportKind::Suppliers); });
 
     backupAct = new QAction(AguaraStyle::icon(QStringLiteral("backup")), tr("&Copia de seguridad..."), this);
     backupAct->setObjectName(QStringLiteral("backupAction"));
@@ -821,7 +847,10 @@ void MainWindow::createMenus()
 {
     // essential module independant menus
     fileMenu = menuBar()->addMenu(tr("&Archivo"));
-    fileMenu->addAction(importAct);
+    importMenu = fileMenu->addMenu(AguaraStyle::icon(QStringLiteral("import")), tr("&Importar"));
+    importMenu->addAction(importAct);
+    importMenu->addAction(importCustomersAct);
+    importMenu->addAction(importSuppliersAct);
     fileMenu->addAction(backupAct);
     fileMenu->addSeparator();
     fileMenu->addAction(quitAct);
@@ -943,7 +972,7 @@ void MainWindow::loadPlugins()
         loaded.instance = plugin;
         loaded.info     = module->moduleInfo();
         loaded.widgets  = qobject_cast<WidgetModuleInterface *>(plugin);
-        loaded.importer = qobject_cast<ImportArticlesInterface *>(plugin);
+        loaded.importer = qobject_cast<ImportInterface *>(plugin);
         auto reports = host->service<ReportService>();
         auto provider = qobject_cast<ReportProvider *>(plugin);
         if (reports && provider)
@@ -953,7 +982,7 @@ void MainWindow::loadPlugins()
         qCInfo(lcModules) << "Loaded module" << fileName << loaded.info.id << loaded.info.version;
 
         if (loaded.importer)
-            addImportMenuEntry(modules.last());
+            enableImports(modules.last());
         if (loaded.widgets)
             makeButton(modules.size() - 1);
     }
@@ -970,24 +999,15 @@ QIcon MainWindow::moduleIcon(const LoadedModule &module, const QColor &color) co
     return module.info.icon;
 }
 
-/// Add an "Importar desde" menu entry for a module that can import articles.
-void MainWindow::addImportMenuEntry(const LoadedModule &module)
+/// The entries of Archivo > Importar that this module makes possible.
+void MainWindow::enableImports(const LoadedModule &module)
 {
-    importAct->setEnabled(true);
-
-    // if this is the first import module, add the submenu
-    if (importMenu == nullptr) {
-        importMenu = new QMenu(tr("Importar &desde"), this);
-        importMenu->setIcon(AguaraStyle::icon(QStringLiteral("import")));
-        fileMenu->insertMenu(backupAct, importMenu);
-    }
-
-    const QString text = QString("%1 (%2)").arg(module.info.name,
-                                                module.importer->fileTypes().join(", "));
-    auto action = new QAction(moduleIcon(module, AguaraStyle::color(Color::Text)), text, this);
-    ImportArticlesInterface *importer = module.importer;
-    connect(action, &QAction::triggered, this, [this, importer]() { Import(importer); });
-    importMenu->addAction(action);
+    if (module.importer->canImport(ImportKind::Articles))
+        importAct->setEnabled(true);
+    if (module.importer->canImport(ImportKind::Customers))
+        importCustomersAct->setEnabled(true);
+    if (module.importer->canImport(ImportKind::Suppliers))
+        importSuppliersAct->setEnabled(true);
 }
 
 /// Show a notification. Sender + id identify a message (see messages.h):

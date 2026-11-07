@@ -13,6 +13,7 @@
 #include "money.h"
 #include "printservice.h"
 #include "productservice.h"
+#include "promotionservice.h"
 #include "reportservice.h"
 #include "returnservice.h"
 #include "salesservice.h"
@@ -105,14 +106,18 @@ public:
     virtual bool keepPageOpen() const { return false; }
 };
 
-/// Capability: the module can import articles from files.
-class ImportArticlesInterface {
+/// What a file can bring in.
+enum class ImportKind { Articles, Customers, Suppliers };
+
+/// Capability: the module can import data from files.
+class ImportInterface {
 public:
-    virtual ~ImportArticlesInterface() = default;
+    virtual ~ImportInterface() = default;
 
     /// File extensions this importer handles, without the dot (e.g. "csv").
     virtual QStringList fileTypes() const = 0;
-    virtual bool importFrom(const QString &fileName) = 0;
+    virtual bool canImport(ImportKind kind) const = 0;
+    virtual bool importFrom(const QString &fileName, ImportKind kind) = 0;
 };
 
 /// Capability: the module has permissions of its own. They appear in the
@@ -141,12 +146,12 @@ signals:
 
 #define AguaraModuleInterface_iid    "org.AguaraPOS.ModuleInterface/" AGUARA_API_VERSION
 #define WidgetModuleInterface_iid    "org.AguaraPOS.WidgetModuleInterface/" AGUARA_API_VERSION
-#define ImportArticlesInterface_iid  "org.AguaraPOS.ImportArticlesInterface/" AGUARA_API_VERSION
+#define ImportInterface_iid          "org.AguaraPOS.ImportInterface/" AGUARA_API_VERSION
 #define PermissionProvider_iid       "org.AguaraPOS.PermissionProvider/" AGUARA_API_VERSION
 
 Q_DECLARE_INTERFACE(AguaraModuleInterface,   AguaraModuleInterface_iid)
 Q_DECLARE_INTERFACE(WidgetModuleInterface,   WidgetModuleInterface_iid)
-Q_DECLARE_INTERFACE(ImportArticlesInterface, ImportArticlesInterface_iid)
+Q_DECLARE_INTERFACE(ImportInterface,         ImportInterface_iid)
 Q_DECLARE_INTERFACE(PermissionProvider,      PermissionProvider_iid)
 
 #endif // INTERFACES_H

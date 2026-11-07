@@ -27,8 +27,10 @@ QChar detectSeparator(const QString &text)
     for (const QChar c : text) {
         if (c == QLatin1Char('"'))
             quoted = !quoted;
-        else if (!quoted && (c == QLatin1Char('\n') || c == QLatin1Char('\r')))
-            break;
+        else if (!quoted && (c == QLatin1Char('\n') || c == QLatin1Char('\r'))) {
+            if (semicolons + commas > 0)
+                break;          // else a title above the table: the next row says
+        }
         else if (!quoted && c == QLatin1Char(';'))
             ++semicolons;
         else if (!quoted && c == QLatin1Char(','))

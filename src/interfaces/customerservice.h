@@ -48,11 +48,15 @@ public:
     /// By name or document, active ones unless `inactive`, by name.
     virtual QList<Customer> customers(const QString &filter = QString(), bool inactive = false) const = 0;
     virtual std::optional<Customer> customer(qint64 id) const = 0;
+    /// Every customer, without the limit of a search, also the ones who left.
+    virtual std::optional<QList<Customer>> allCustomers() const = 0;
 
     /// New if id == 0. Checks the document. Returns the id. Check clientes.editar first.
     virtual qint64 saveCustomer(const Customer &customer) = 0;
     /// Customers are never deleted: past sales point to them.
     virtual bool setCustomerActive(qint64 id, bool active) = 0;
+    /// Saves them all or none, as saveCustomer() would: id == 0 is a new one.
+    virtual bool importCustomers(const QList<Customer> &customers, int *saved = nullptr) = 0;
 
     virtual QString lastError() const = 0;
 };

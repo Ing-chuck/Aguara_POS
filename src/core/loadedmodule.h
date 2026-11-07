@@ -12,8 +12,8 @@ struct LoadedModule {
     ModuleInfo  info;
 
     // Capabilities the module implements (nullptr when it doesn't).
-    WidgetModuleInterface   *widgets  = nullptr;
-    ImportArticlesInterface *importer = nullptr;
+    WidgetModuleInterface *widgets  = nullptr;
+    ImportInterface       *importer = nullptr;
 
     /// The open page of a single-instance widget module, if any.
     QPointer<QWidget> openPage;

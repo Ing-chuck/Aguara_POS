@@ -78,6 +78,8 @@ void tst_CsvReader::detectSeparator_data()
     QTest::newRow("semicolon")                  << "a;b;c\n" << QChar(';');
     QTest::newRow("comma")                      << "a,b,c\n" << QChar(',');
     QTest::newRow("quoted ; ignored, row 1 only") << "\"x;y\",a,b\n1;2;3;4" << QChar(',');
+    QTest::newRow("a title above the table")    << "Lista de clientes\n\nNombre;RUC\n" << QChar(';');
+    QTest::newRow("no separator anywhere")      << "Nombre\nPedro\n" << QChar(',');
 }
 
 void tst_CsvReader::detectSeparator()

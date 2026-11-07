@@ -33,8 +33,10 @@
 #include <livesearch.h>
 #include <QPrinter>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QTableView>
 #include <QTimer>
+#include <QToolButton>
 #include <QTableWidget>
 #include <QTabWidget>
 #include <QtTest>
@@ -55,6 +57,12 @@ private slots:
     void importMergesWithExistingArticles();
     void importQuotedFields();
     void importExcelWindows1252();
+    void importCustomers();
+    void importCustomersTwiceChangesNothing();
+    void importWrongFileSavesNothing();
+    void importSuppliers();
+    void importTheUseByDate();
+    void importShowsOnTheOpenPage();
 
     // modulo_control_inventario: keyboard and barcode scanner
     void inventoryScannerSelectsCode();
@@ -70,6 +78,21 @@ private slots:
 
     // modulo_sales_module: a day at the till, through the screen
     void aDayAtTheTill();
+    void expiredArticleAsksAtTheTill();
+    void discardingAtTheTillLeavesTheSale();
+    void discardingOnlySomeLeavesTheRestInTheSale();
+    void discardingNeedsASupervisor();
+    void aPromotionIsMadeOnItsPage();
+    void aScannedCodeDoesntSaveThePromotion();
+    void pickingManyArticlesAtOnce();
+    void aPromotionComesBackAsItWas();
+    void aPromotionReachesTheTill();
+    void aPromotionFollowsTheQuantity();
+    void aPromotionDoesntUseTheCashiersLimit();
+    void aHeldSaleGetsTodaysPromotions();
+    void anOutageKeepsThePromotionsKnown();
+    void aPromotionReachesTheTicket();
+    void goodArticlesDontAsk();
     void scanningProblemsStayOnThePage();
     void quantityPrefixAndRepeatedScans();
     void scaleLabelsAtTheTill();
@@ -104,6 +127,9 @@ private slots:
     void removingARoleAsks();
     void deactivatingAUserAsks();
     void articleFormSaysWhatIsMissing();
+    void articleFormManagesUnitsAndTheUseByDate();
+    void articleFormKeepsARemovedUnit();
+    void lotsThroughTheHistory();
     void countRefusesWhatItCantRead();
     void purchaseChecksItsLines();
     void priceChangeNeedsSomethingToChange();
@@ -125,6 +151,9 @@ private:
     void openUsers();
     bool showSales();
     bool openTill(Money hundredThousands = 1);
+    void supervisorSaysYes();
+    QWidget *showPromotions();
+    qint64 percentOff(const QString &code, Money percent, Quantity minimum = 0);
     void scan(const QString &text);
     void press(Qt::Key key);
     QLabel *label(const char *name) const { return m_page->findChild<QLabel *>(QLatin1String(name)); }
@@ -188,7 +217,7 @@ QString tst_Modules::writeFile(const QString &name, const QByteArray &bytes)
 
 void tst_Modules::importMergesWithExistingArticles()
 {
-    auto importer = qobject_cast<ImportArticlesInterface *>(load(QStringLiteral("modulo_importar.dll")));
+    auto importer = qobject_cast<ImportInterface *>(load(QStringLiteral("modulo_importar.dll")));
     QVERIFY(importer);
     QVERIFY(importer->fileTypes().contains(QStringLiteral("csv")));
 
@@ -202,7 +231,7 @@ void tst_Modules::importMergesWithExistingArticles()
         "777;GASEOSA 2.25L;COCA COLA;16.500;10\n"
         "2002;YERBA 500G;KURUPI;12.000;5\n"
         "3003;SIN PRECIO;;abc;10\n").toUtf8());
-    QVERIFY(importer->importFrom(csv));
+    QVERIFY(importer->importFrom(csv, ImportKind::Articles));
     QVERIFY2(m_lastNote.contains(QString::fromUtf8("2 artículos importados")), qPrintable(m_lastNote));
     QVERIFY2(m_lastNote.contains(QString::fromUtf8("línea 4")), qPrintable(m_lastNote));     // the bad row is reported
 
@@ -220,14 +249,14 @@ void tst_Modules::importMergesWithExistingArticles()
 
 void tst_Modules::importQuotedFields()
 {
-    auto importer = qobject_cast<ImportArticlesInterface *>(load(QStringLiteral("modulo_importar.dll")));
+    auto importer = qobject_cast<ImportInterface *>(load(QStringLiteral("modulo_importar.dll")));
     QVERIFY(importer);
     const QString csv = writeFile(QStringLiteral("quoted.csv"),
         "Codigo,Descripcion,Marca,Precio\r\n"
         "101,\"GALLETITAS, SURTIDAS\",\"ARCOR\",\"12,500\"\r\n"
         "102,\"VINO \"\"TINTO\"\" 750ML\",,25000\r\n"
         "103,\"CAJA\nGRANDE\",,1000\r\n");
-    QVERIFY(importer->importFrom(csv));
+    QVERIFY(importer->importFrom(csv, ImportKind::Articles));
     QCOMPARE(m_core.products->product(QStringLiteral("101"))->description, QStringLiteral("GALLETITAS, SURTIDAS"));
     QCOMPARE(m_core.products->product(QStringLiteral("101"))->price, Money(12500));
     QCOMPARE(m_core.products->product(QStringLiteral("101"))->brandName, QStringLiteral("ARCOR"));
@@ -237,16 +266,204 @@ void tst_Modules::importQuotedFields()
 
 void tst_Modules::importExcelWindows1252()
 {
-    auto importer = qobject_cast<ImportArticlesInterface *>(load(QStringLiteral("modulo_importar.dll")));
+    auto importer = qobject_cast<ImportInterface *>(load(QStringLiteral("modulo_importar.dll")));
     QVERIFY(importer);
     // what Excel writes on Spanish Windows ("CSV (delimitado por comas)")
     const QString csv = writeFile(QStringLiteral("excel.csv"),
         "C\xF3" "digo;Descripci\xF3" "n;Precio Venta\r\n201;CA\xD1" "A DE AZ\xDA" "CAR;8.000\r\n");
-    QVERIFY(importer->importFrom(csv));
+    QVERIFY(importer->importFrom(csv, ImportKind::Articles));
     const auto p = m_core.products->product(QStringLiteral("201"));
     QVERIFY(p.has_value());
     QCOMPARE(p->description, QString::fromUtf8("CAÑA DE AZÚCAR"));
     QCOMPARE(p->price, Money(8000));
+}
+
+void tst_Modules::importCustomers()
+{
+    auto importer = qobject_cast<ImportInterface *>(load(QStringLiteral("modulo_importar.dll")));
+    QVERIFY(importer);
+    QVERIFY(importer->canImport(ImportKind::Customers));
+
+    Customer ande;
+    ande.name = QStringLiteral("ANDE");
+    ande.documentType = QString::fromLatin1(DocumentType::Ruc);
+    ande.document = QStringLiteral("80009735-1");
+    ande.address = QStringLiteral("Asuncion");
+    ande.phone = QStringLiteral("021 555 000");
+    const qint64 andeId = m_core.customers->saveCustomer(ande);
+    Customer maria;
+    maria.name = QStringLiteral("Maria Lopez");
+    maria.phone = QStringLiteral("0981 000 111");
+    const qint64 mariaId = m_core.customers->saveCustomer(maria);
+    Customer juan;
+    juan.name = QStringLiteral("Juan Perez");
+    QVERIFY(m_core.customers->saveCustomer(juan));
+    QVERIFY(m_core.customers->saveCustomer(juan));
+    Customer gone;
+    gone.name = QStringLiteral("Se Fue");
+    gone.documentType = QString::fromLatin1(DocumentType::Ci);
+    gone.document = QStringLiteral("999999");
+    const qint64 goneId = m_core.customers->saveCustomer(gone);
+    QVERIFY(m_core.customers->setCustomerActive(goneId, false));
+
+    const QString csv = writeFile(QStringLiteral("clientes.csv"), QString::fromUtf8(
+        "Lista de clientes\n"
+        "Nombre;RUC;Cédula;Dirección;Teléfono;Correo;Saldo\n"
+        "A.N.D.E.;80.009.735-1;;;0981 111 222;;500\n"
+        "maria  lopez;;;Luque;;maria@mail.com;\n"
+        "Nuevo Uno;;1.234.567;;;;\n"
+        "Juan Perez;;;;0981 222 333;;\n"
+        "Mal RUC;80009735-9;;;;;\n"
+        ";;;Sin nombre;;;\n"
+        "Mal Correo;;;;;no-es-correo;\n"
+        "Nuevo Otra Vez;;1234567;;;a@b.com;\n"
+        "Se Fue Todavia;;999999;;;;\n").toUtf8());
+    QVERIFY2(importer->importFrom(csv, ImportKind::Customers), qPrintable(m_lastNote));
+    QVERIFY2(m_lastNote.contains(QStringLiteral("4 clientes importados")), qPrintable(m_lastNote));
+    QVERIFY2(m_lastNote.contains(QStringLiteral("nuevos: 1, actualizados: 3")), qPrintable(m_lastNote));
+    QVERIFY2(m_lastNote.contains(QString::fromUtf8("4 líneas omitidas")), qPrintable(m_lastNote));
+    QVERIFY2(m_lastNote.contains(QStringLiteral("varios clientes llamados Juan Perez")), qPrintable(m_lastNote));
+    QVERIFY2(m_lastNote.contains(QStringLiteral("80009735-9")), qPrintable(m_lastNote));
+    QVERIFY2(m_lastNote.contains(QStringLiteral("siguen")), qPrintable(m_lastNote));
+
+    const auto updated = m_core.customers->customer(andeId);
+    QCOMPARE(updated->name, QStringLiteral("A.N.D.E."));
+    QCOMPARE(updated->phone, QStringLiteral("0981 111 222"));
+    QCOMPARE(updated->address, QStringLiteral("Asuncion"));         // left empty: kept
+
+    const auto byName = m_core.customers->customer(mariaId);
+    QCOMPARE(byName->name, QStringLiteral("maria lopez"));
+    QCOMPARE(byName->address, QStringLiteral("Luque"));
+    QCOMPARE(byName->phone, QStringLiteral("0981 000 111"));
+    QVERIFY(byName->document.isEmpty());
+
+    const QList<Customer> repeated = m_core.customers->customers(QStringLiteral("1234567"));
+    QCOMPARE(repeated.size(), 1);                                   // two lines, one customer
+    QCOMPARE(repeated.first().name, QStringLiteral("Nuevo Otra Vez"));
+    QCOMPARE(repeated.first().email, QStringLiteral("a@b.com"));
+    QCOMPARE(repeated.first().documentType, QString::fromLatin1(DocumentType::Ci));
+
+    const auto stillGone = m_core.customers->customer(goneId);
+    QCOMPARE(stillGone->name, QStringLiteral("Se Fue Todavia"));
+    QVERIFY(!stillGone->active);
+}
+
+void tst_Modules::importCustomersTwiceChangesNothing()
+{
+    auto importer = qobject_cast<ImportInterface *>(load(QStringLiteral("modulo_importar.dll")));
+    QVERIFY(importer);
+    const QString csv = writeFile(QStringLiteral("clientes.csv"),
+        "Cliente,Documento,Tipo,Celular\n"
+        "ANDE,80009735-1,,\n"
+        "Pedro Gomez,4567890,CI,0981 333 444\n"
+        "Sin Documento,,,0981 555 666\n"
+        "Otra Cosa,123,Pasaporte,\n");
+    QVERIFY2(importer->importFrom(csv, ImportKind::Customers), qPrintable(m_lastNote));
+    QVERIFY2(m_lastNote.contains(QStringLiteral("nuevos: 3, actualizados: 0")), qPrintable(m_lastNote));
+    QVERIFY2(m_lastNote.contains(QStringLiteral("Pasaporte")), qPrintable(m_lastNote));
+    QVERIFY2(importer->importFrom(csv, ImportKind::Customers), qPrintable(m_lastNote));
+    QVERIFY2(m_lastNote.contains(QStringLiteral("nuevos: 0, actualizados: 3")), qPrintable(m_lastNote));
+    QCOMPARE(m_core.customers->customers().size(), 3);
+    QCOMPARE(m_core.customers->customers(QStringLiteral("ANDE")).first().documentType,
+             QString::fromLatin1(DocumentType::Ruc));
+}
+
+void tst_Modules::importWrongFileSavesNothing()
+{
+    auto importer = qobject_cast<ImportInterface *>(load(QStringLiteral("modulo_importar.dll")));
+    QVERIFY(importer);
+    const QString articles = writeFile(QStringLiteral("articulos.csv"),
+        "Codigo,Descripcion,Precio\n"
+        "777,GASEOSA,15000\n");
+    QVERIFY(!importer->importFrom(articles, ImportKind::Customers));
+    QVERIFY2(m_lastNote.contains(QStringLiteral("columna Nombre")), qPrintable(m_lastNote));
+    QVERIFY(m_core.customers->customers().isEmpty());
+    QVERIFY(!importer->importFrom(articles, ImportKind::Suppliers));
+    QVERIFY(m_core.inventory->suppliers().isEmpty());
+}
+
+void tst_Modules::importSuppliers()
+{
+    auto importer = qobject_cast<ImportInterface *>(load(QStringLiteral("modulo_importar.dll")));
+    QVERIFY(importer);
+    QVERIFY(importer->canImport(ImportKind::Suppliers));
+
+    Supplier sur;
+    sur.name = QStringLiteral("Distribuidora Sur");
+    sur.phone = QStringLiteral("021 111 222");
+    sur.contact = QStringLiteral("Ana");
+    QVERIFY(m_core.inventory->saveSupplier(sur));
+
+    const QString csv = writeFile(QStringLiteral("proveedores.csv"), QString::fromUtf8(
+        "Proveedor,Teléfono,Correo,Contacto,Web,Observaciones,RUC\n"
+        "DISTRIBUIDORA  SUR,,ventas@sur.com.py,,,Paga a 30 dias,80000000-1\n"
+        "Frigorifico Norte,0981 777 888,,Luis,www.norte.com.py,,\n"
+        "frigorifico norte,,info@norte.com.py,,,,\n"
+        ",0981 777 999,,,,,\n"
+        "Mal Telefono,sin numero,,,,,\n"
+        "Mal Web,,,,no es web,,\n").toUtf8());
+    QVERIFY(importer->importFrom(csv, ImportKind::Suppliers));
+    QVERIFY2(m_lastNote.contains(QStringLiteral("2 proveedores importados")), qPrintable(m_lastNote));
+    QVERIFY2(m_lastNote.contains(QStringLiteral("nuevos: 1, actualizados: 1")), qPrintable(m_lastNote));
+    QVERIFY2(m_lastNote.contains(QString::fromUtf8("3 líneas omitidas")), qPrintable(m_lastNote));
+
+    const QList<Supplier> list = m_core.inventory->suppliers();
+    QCOMPARE(list.size(), 2);
+    const Supplier first = list.at(0);
+    QCOMPARE(first.name, QStringLiteral("DISTRIBUIDORA SUR"));
+    QCOMPARE(first.phone, QStringLiteral("021 111 222"));           // left empty: kept
+    QCOMPARE(first.contact, QStringLiteral("Ana"));
+    QCOMPARE(first.email, QStringLiteral("ventas@sur.com.py"));
+    QCOMPARE(first.notes, QStringLiteral("Paga a 30 dias"));
+    const Supplier second = list.at(1);
+    QCOMPARE(second.phone, QStringLiteral("0981 777 888"));
+    QCOMPARE(second.email, QStringLiteral("info@norte.com.py"));
+    QCOMPARE(second.web, QStringLiteral("www.norte.com.py"));
+}
+
+void tst_Modules::importTheUseByDate()
+{
+    auto importer = qobject_cast<ImportInterface *>(load(QStringLiteral("modulo_importar.dll")));
+    QVERIFY(importer);
+    QVERIFY(importer->importFrom(writeFile(QStringLiteral("a.csv"),
+        "Codigo;Descripcion;Precio;Stock;Fecha Vencimiento\n"
+        "1;LECHE;9000;10;15/03/2031\n"
+        "2;YERBA;9000;10;\n"
+        "3;QUESO;9000;10;mañana\n"), ImportKind::Articles));
+    QVERIFY2(m_lastNote.contains(QString::fromUtf8("línea 4")), qPrintable(m_lastNote));
+    QCOMPARE(m_core.products->product(QStringLiteral("1"))->expires, QDate(2031, 3, 15));
+    QVERIFY(!m_core.products->product(QStringLiteral("2"))->expires.isValid());
+
+    // a price list without the column leaves it as it was
+    QVERIFY(importer->importFrom(writeFile(QStringLiteral("b.csv"),
+        "Codigo;Precio\n1;9500\n"), ImportKind::Articles));
+    QCOMPARE(m_core.products->product(QStringLiteral("1"))->price, Money(9500));
+    QCOMPARE(m_core.products->product(QStringLiteral("1"))->expires, QDate(2031, 3, 15));
+
+    // a date for an article that exists goes to its stock with none, once
+    const QString dates = writeFile(QStringLiteral("c.csv"), "Codigo;Vencimiento\n2;01/02/2032\n");
+    QVERIFY(importer->importFrom(dates, ImportKind::Articles));
+    QCOMPARE(m_core.inventory->lots(QStringLiteral("2")).first().quantity, AguaraQuantity::whole(10));
+    QVERIFY(importer->importFrom(dates, ImportKind::Articles));
+    QCOMPARE(m_core.inventory->lots(QStringLiteral("2")).size(), 1);
+    QCOMPARE(m_core.inventory->lots(QStringLiteral("2")).first().quantity, AguaraQuantity::whole(10));
+}
+
+void tst_Modules::importShowsOnTheOpenPage()
+{
+    m_users.reset(new SqlUserService(m_core.monitor.get()));
+    m_core.host->registerService(UserService_iid, m_users.get());
+    auto factory = qobject_cast<WidgetModuleInterface *>(load(QStringLiteral("modulo_customers.dll")));
+    QVERIFY(factory);
+    m_page = factory->createWidget();
+    auto table = m_page->findChild<QTableWidget *>(QStringLiteral("customerTable"));
+    QVERIFY(table);
+    QCOMPARE(table->rowCount(), 0);
+
+    auto importer = qobject_cast<ImportInterface *>(load(QStringLiteral("modulo_importar.dll")));
+    QVERIFY(importer);
+    QVERIFY(importer->importFrom(writeFile(QStringLiteral("c.csv"), "Nombre\nPedro\nAna\n"), ImportKind::Customers));
+    QCOMPARE(table->rowCount(), 2);
 }
 
 void tst_Modules::openUsers()
@@ -377,11 +594,25 @@ void tst_Modules::purchaseThroughTheScreen()
         typeInCell(QStringLiteral("35"), Qt::Key_Tab);          // Margen: 4.000 / 0,65, up to the next 100
         QCOMPARE(lines->item(0, 5)->text(), QStringLiteral("6.200"));
         typeInCell(QStringLiteral("6.500"), Qt::Key_unknown);   // Precio, still being typed when saving
-        QCOMPARE(lines->item(0, 6)->text(), QStringLiteral("48.000"));
+        QCOMPARE(lines->item(0, 7)->text(), QStringLiteral("48.000"));
         QVERIFY(dialog->findChild<QLabel *>(QStringLiteral("purchaseTotal"))->text().contains(QStringLiteral("48.000")));
+        // the use-by date is optional, but it has to be one, and still to come
+        auto refused = dialog->findChild<QLabel *>(QStringLiteral("purchaseError"));
+        lines->item(0, 6)->setText(QStringLiteral("31/02/2031"));
+        dialog->accept();
+        QVERIFY(dialog->isVisible());
+        QVERIFY2(refused->text().contains(QStringLiteral("dd/mm/aaaa")), qPrintable(refused->text()));
+        lines->item(0, 6)->setText(QStringLiteral("01/01/2020"));
+        dialog->accept();
+        QVERIFY(dialog->isVisible());
+        lines->item(0, 6)->setText(QStringLiteral("1/6/2031"));
+        const QString code = lines->item(0, 0)->text();
+
         done = true;
         whenDialogOpens([](QDialog *labels) { labels->reject(); });
         dialog->accept();
+        QCOMPARE(m_core.inventory->lots(code).size(), 1);
+        QCOMPARE(m_core.inventory->lots(code).first().expires, QDate(2031, 6, 1));
     });
     m_page->findChild<QPushButton *>(QStringLiteral("newPurchaseButton"))->click();
     QVERIFY(done);
@@ -538,6 +769,130 @@ void tst_Modules::aDayAtTheTill()
     QCOMPARE(m_core.cash->sessionReport(sessionId)->session.difference, Money(0));
     QCOMPARE(m_core.cash->sessionReport(sessionId)->salesTotal, Money(15950));
     QCOMPARE(label("closedTitle")->text(), QStringLiteral("La caja está cerrada"));
+}
+
+void tst_Modules::expiredArticleAsksAtTheTill()
+{
+    QVERIFY(showSales());
+    Product p = *m_core.products->product(QStringLiteral("7840001"));
+    p.stock = AguaraQuantity::whole(10);
+    p.stockExpires = QDate::currentDate().addDays(-2);
+    QVERIFY(m_core.products->saveProduct(p));
+    QVERIFY(openTill(1));
+
+    bool asked = false;
+    whenDialogOpens([&](QDialog *alert) {
+        asked = alert->objectName() == QLatin1String("expiryAlert");
+        QVERIFY(asked);
+        QVERIFY2(alert->findChild<QLabel *>(QStringLiteral("expiryText"))->text().contains(QStringLiteral("verificar la fecha")),
+                 "the message");
+        // a scanner's Enter, or an Esc, answers nothing
+        QTest::keyClick(alert, Qt::Key_Return);
+        QVERIFY(alert->isVisible());
+        QTest::keyClick(alert, Qt::Key_Escape);
+        QVERIFY(alert->isVisible());
+        alert->findChild<QPushButton *>(QStringLiteral("expiryOk"))->click();
+    });
+    scan(QStringLiteral("7840001"));
+    QVERIFY(asked);
+    QCOMPARE(saleLines()->rowCount(), 1);
+    QCOMPARE(m_core.products->product(p.code)->stock, AguaraQuantity::whole(10));
+}
+
+void tst_Modules::supervisorSaysYes()
+{
+    m_users->setSupervisorPrompt([](const QString &, const QString &, const QString &, QWidget *,
+                                    QString *username, QString *password) {
+        *username = QStringLiteral("encargado");
+        *password = QStringLiteral("clave123");
+        return true;
+    });
+}
+
+void tst_Modules::discardingAtTheTillLeavesTheSale()
+{
+    QVERIFY(showSales());
+    Product p = *m_core.products->product(QStringLiteral("7840001"));
+    p.stock = AguaraQuantity::whole(10);
+    p.stockExpires = QDate::currentDate().addDays(-2);
+    QVERIFY(m_core.products->saveProduct(p));
+    QVERIFY(openTill(1));
+    supervisorSaysYes();
+
+    whenDialogOpens([](QDialog *alert) {
+        alert->findChild<QPushButton *>(QStringLiteral("expiryDiscard"))->click();
+        QCOMPARE(alert->findChild<QLineEdit *>(QStringLiteral("expiryCount"))->text(), QStringLiteral("3"));
+        alert->findChild<QPushButton *>(QStringLiteral("expiryConfirm"))->click();
+    });
+    scan(QStringLiteral("3*7840001"));
+    QCOMPARE(saleLines()->rowCount(), 0);
+    QCOMPARE(m_core.products->product(p.code)->stock, AguaraQuantity::whole(7));    // the quantity of the sale
+    QCOMPARE(m_core.inventory->lots(p.code).first().quantity, AguaraQuantity::whole(7));
+    const QList<StockMovement> moves = m_core.inventory->movements(p.code);
+    QCOMPARE(moves.first().type, QString::fromLatin1(StockMovementType::Adjustment));
+    QVERIFY(moves.first().reason.contains(QStringLiteral("Vencido")));
+    QVERIFY2(moves.first().reason.contains(QStringLiteral("encargado")), qPrintable(moves.first().reason));
+}
+
+void tst_Modules::discardingOnlySomeLeavesTheRestInTheSale()
+{
+    QVERIFY(showSales());
+    Product p = *m_core.products->product(QStringLiteral("7840001"));
+    p.stock = AguaraQuantity::whole(2);
+    p.stockExpires = QDate::currentDate().addDays(-2);
+    QVERIFY(m_core.products->saveProduct(p));
+    QVERIFY(m_core.inventory->adjustStock(p.code, AguaraQuantity::whole(10), QStringLiteral("encontrado")));
+    QVERIFY(openTill(1));
+    supervisorSaysYes();
+
+    whenDialogOpens([](QDialog *alert) {
+        auto count = alert->findChild<QLineEdit *>(QStringLiteral("expiryCount"));
+        auto confirm = alert->findChild<QPushButton *>(QStringLiteral("expiryConfirm"));
+        auto problem = alert->findChild<QLabel *>(QStringLiteral("expiryProblem"));
+
+        // Volver is still a way out of it
+        alert->findChild<QPushButton *>(QStringLiteral("expiryDiscard"))->click();
+        alert->findChild<QPushButton *>(QStringLiteral("expiryBack"))->click();
+        QVERIFY(alert->isVisible());
+        QVERIFY(alert->findChild<QPushButton *>(QStringLiteral("expiryOk"))->isVisibleTo(alert));
+
+        alert->findChild<QPushButton *>(QStringLiteral("expiryDiscard"))->click();
+        QCOMPARE(count->text(), QStringLiteral("2"));       // what the lots say is expired, not the 6
+        for (const char *wrong : { "", "0", "7", "abc", "1,5" }) {
+            count->setText(QLatin1String(wrong));
+            confirm->click();
+            QVERIFY2(alert->isVisible(), wrong);
+            QVERIFY2(!problem->isHidden(), wrong);
+        }
+        count->setText(QStringLiteral("7840001"));          // the scanner, read into the field
+        QTest::keyClick(count, Qt::Key_Return);
+        QVERIFY(alert->isVisible());
+
+        count->setText(QStringLiteral("2"));
+        QTest::keyClick(count, Qt::Key_Return);             // typed by hand, Enter does confirm
+        QVERIFY(!alert->isVisible());
+    });
+    scan(QStringLiteral("6*7840001"));
+    QCOMPARE(saleLines()->rowCount(), 1);
+    QCOMPARE(saleLines()->item(0, 0)->text().isEmpty(), false);
+    bool four = false;
+    for (int column = 0; column < saleLines()->columnCount(); ++column)
+        four = four || (saleLines()->item(0, column) && saleLines()->item(0, column)->text() == QLatin1String("4"));
+    QVERIFY(four);                                          // the other 4 are sold
+    QCOMPARE(m_core.products->product(p.code)->stock, AguaraQuantity::whole(10));
+    QVERIFY(m_core.inventory->lots(p.code).isEmpty());      // the expired lot is gone
+}
+
+void tst_Modules::goodArticlesDontAsk()
+{
+    QVERIFY(showSales());
+    Product p = *m_core.products->product(QStringLiteral("7840001"));
+    p.stock = AguaraQuantity::whole(10);
+    p.stockExpires = QDate::currentDate();      // the last day is still good
+    QVERIFY(m_core.products->saveProduct(p));
+    QVERIFY(openTill(1));
+    scan(QStringLiteral("7840001"));            // a dialog here would never be answered
+    QCOMPARE(saleLines()->rowCount(), 1);
 }
 
 void tst_Modules::scanningProblemsStayOnThePage()
@@ -1176,6 +1531,377 @@ void tst_Modules::configuringPaymentMethods()
     QVERIFY(!codes.contains(QStringLiteral("qr")));
 }
 
+void tst_Modules::discardingNeedsASupervisor()
+{
+    QVERIFY(showSales());
+    Product p = *m_core.products->product(QStringLiteral("7840001"));
+    p.stock = AguaraQuantity::whole(10);
+    p.stockExpires = QDate::currentDate().addDays(-2);
+    QVERIFY(m_core.products->saveProduct(p));
+    QVERIFY(openTill(1));
+
+    int asked = 0;
+    m_users->setSupervisorPrompt([&](const QString &, const QString &, const QString &, QWidget *, QString *, QString *) {
+        ++asked;
+        return false;
+    });
+    const auto discard = [](QDialog *alert) {
+        alert->findChild<QPushButton *>(QStringLiteral("expiryDiscard"))->click();
+        alert->findChild<QPushButton *>(QStringLiteral("expiryConfirm"))->click();
+    };
+    // refused: the alert comes back, and the cashier still has to answer it
+    whenDialogOpens([=](QDialog *alert) {
+        discard(alert);
+        whenDialogOpens([](QDialog *again) {
+            again->findChild<QPushButton *>(QStringLiteral("expiryOk"))->click();
+        });
+    });
+    scan(QStringLiteral("7840001"));
+    QCOMPARE(asked, 1);
+    QCOMPARE(m_core.products->product(p.code)->stock, AguaraQuantity::whole(10));
+    QCOMPARE(m_core.inventory->movements(p.code).first().reason.contains(QStringLiteral("Vencido")), false);
+    QCOMPARE(saleLines()->rowCount(), 1);               // OK: the unit was good
+}
+
+// --- promotions --------------------------------------------------------------
+
+QWidget *tst_Modules::showPromotions()
+{
+    openUsers();
+    auto factory = load(QStringLiteral("modulo_ventas_promociones.dll"));
+    auto provider = qobject_cast<PermissionProvider *>(factory);
+    if (!provider || !m_users->registerPermissions(provider->permissions()))
+        return nullptr;
+    if (!m_users->login(QStringLiteral("encargado"), QStringLiteral("clave123")))
+        return nullptr;
+    for (const char *code : { "1001", "1002", "1003" }) {
+        Product p;
+        p.code = QLatin1String(code);
+        p.description = QStringLiteral("ARTICULO ") + p.code;
+        p.price = 10000;
+        p.categoryName = QStringLiteral("LACTEOS");
+        p.brandName = QLatin1String(code) == QLatin1String("1003") ? QStringLiteral("OTRA") : QStringLiteral("LACTOLANDA");
+        if (!m_core.products->saveProduct(p))
+            return nullptr;
+    }
+    m_page = dynamic_cast<WidgetModuleInterface *>(factory)->createWidget();
+    m_page->resize(1100, 700);
+    m_page->show();
+    return m_page;
+}
+
+qint64 tst_Modules::percentOff(const QString &code, Money percent, Quantity minimum)
+{
+    Promotion p;
+    p.name = QStringLiteral("PROMO ") + code;
+    p.value = percent;
+    p.minimum = minimum;
+    p.from = QDate::currentDate();
+    p.to = p.from.addDays(3);
+    PromotionRule rule;
+    rule.code = code;
+    p.rules << rule;
+    return m_core.promotions->savePromotion(p);
+}
+
+void tst_Modules::aPromotionIsMadeOnItsPage()
+{
+    QVERIFY(showPromotions());
+    whenDialogOpens([](QDialog *dialog) {
+        auto reach = dialog->findChild<QLabel *>(QStringLiteral("promoReach"));
+        auto save = dialog->findChild<QPushButton *>(QStringLiteral("promoSave"));
+        auto error = dialog->findChild<QLabel *>(QStringLiteral("promoError"));
+        QVERIFY(reach->text().contains(QStringLiteral("Sin artículos")));
+
+        save->click();                                  // no name: it says so and stays
+        QVERIFY(dialog->isVisible());
+        QVERIFY(error->text().contains(QStringLiteral("nombre")));
+        dialog->findChild<QLineEdit *>(QStringLiteral("promoName"))->setText(QStringLiteral("SEMANA DEL LACTEO"));
+        dialog->findChild<QLineEdit *>(QStringLiteral("promoValue"))->setText(QStringLiteral("20"));
+
+        save->click();                                  // nothing chosen
+        QVERIFY(dialog->isVisible());
+        QVERIFY(error->text().contains(QStringLiteral("artículos")));
+
+        // the whole brand, less one article
+        dialog->findChild<QComboBox *>(QStringLiteral("promoTarget"))->setCurrentIndex(PromotionRule::Brand);
+        auto brand = dialog->findChild<QComboBox *>(QStringLiteral("promoBrand"));
+        brand->setCurrentIndex(brand->findText(QStringLiteral("LACTOLANDA")));
+        dialog->findChild<QPushButton *>(QStringLiteral("promoInclude"))->click();
+        QCOMPARE(reach->text(), QStringLiteral("Alcanza a 2 artículos"));
+
+        dialog->findChild<QComboBox *>(QStringLiteral("promoTarget"))->setCurrentIndex(PromotionRule::Article);
+        dialog->findChild<QLineEdit *>(QStringLiteral("promoArticle"))->setText(QStringLiteral("1002"));
+        dialog->findChild<QPushButton *>(QStringLiteral("promoExclude"))->click();
+        QCOMPARE(reach->text(), QStringLiteral("Alcanza a 1 artículo"));
+
+        auto invert = dialog->findChild<QCheckBox *>(QStringLiteral("promoInverted"));
+        invert->setChecked(true);                       // 1003 only: 1002 is still left out
+        QCOMPARE(reach->text(), QStringLiteral("Alcanza a 1 artículo"));
+        invert->setChecked(false);
+
+        auto rules = dialog->findChild<QTableWidget *>(QStringLiteral("promoRules"));
+        QCOMPARE(rules->rowCount(), 2);
+        QCOMPARE(rules->item(1, 2)->text(), QStringLiteral("Excluye"));
+        rules->selectRow(1);
+        dialog->findChild<QPushButton *>(QStringLiteral("promoRuleRemove"))->click();
+        QCOMPARE(rules->rowCount(), 1);
+        QCOMPARE(reach->text(), QStringLiteral("Alcanza a 2 artículos"));
+
+        dialog->findChild<QCheckBox *>(QStringLiteral("promoDay6"))->setChecked(false);
+        save->click();
+        QVERIFY(!dialog->isVisible());
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("promoAdd"))->click();
+
+    auto table = m_page->findChild<QTableWidget *>(QStringLiteral("promoTable"));
+    QCOMPARE(table->rowCount(), 1);
+    QCOMPARE(table->item(0, 1)->text(), QStringLiteral("20 %"));
+    const Promotion saved = m_core.promotions->promotions().first();
+    QCOMPARE(saved.weekdays, 63);
+    QCOMPARE(saved.rules.size(), 1);
+
+    whenDialogOpens([](QDialog *list) {
+        QCOMPARE(list->findChild<QTableWidget *>(QStringLiteral("promoArticles"))->rowCount(), 2);
+        QCOMPARE(list->findChild<QTableWidget *>(QStringLiteral("promoArticles"))->item(0, 5)->text(), QStringLiteral("8.000"));
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("promoShow"))->click();
+
+    whenDialogOpens([](QDialog *ask) { ask->accept(); });
+    m_page->findChild<QPushButton *>(QStringLiteral("promoToggle"))->click();
+    QCOMPARE(table->rowCount(), 0);
+    m_page->findChild<QCheckBox *>(QStringLiteral("promoInactive"))->setChecked(true);
+    QCOMPARE(table->rowCount(), 1);
+    QCOMPARE(table->item(0, 5)->text(), QStringLiteral("De baja"));
+}
+
+void tst_Modules::aScannedCodeDoesntSaveThePromotion()
+{
+    QVERIFY(showPromotions());
+    QVERIFY(m_core.promotions->promotions().isEmpty());
+    whenDialogOpens([](QDialog *dialog) {
+        dialog->findChild<QLineEdit *>(QStringLiteral("promoName"))->setText(QStringLiteral("X"));
+        dialog->findChild<QLineEdit *>(QStringLiteral("promoValue"))->setText(QStringLiteral("10"));
+        auto article = dialog->findChild<QLineEdit *>(QStringLiteral("promoArticle"));
+        article->setFocus();
+        QTest::keyClicks(article, QStringLiteral("1001"));
+        QTest::keyClick(article, Qt::Key_Return);
+        QTest::keyClicks(article, QStringLiteral("999"));
+        QTest::keyClick(article, Qt::Key_Return);
+        QVERIFY(dialog->isVisible());
+        QCOMPARE(dialog->findChild<QTableWidget *>(QStringLiteral("promoRules"))->rowCount(), 1);
+        QVERIFY(dialog->findChild<QLabel *>(QStringLiteral("promoError"))->text().contains(QStringLiteral("999")));
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("promoAdd"))->click();
+    QVERIFY(m_core.promotions->promotions().isEmpty());
+}
+
+void tst_Modules::pickingManyArticlesAtOnce()
+{
+    QVERIFY(showPromotions());
+    whenDialogOpens([](QDialog *dialog) {
+        whenDialogOpens([](QDialog *pick) {
+            auto list = pick->findChild<QTableView *>(QStringLiteral("pickList"));
+            QCOMPARE(list->model()->rowCount(), 3);
+            list->selectAll();
+            pick->findChild<QPushButton *>(QStringLiteral("pickExclude"))->click();
+        });
+        dialog->findChild<QPushButton *>(QStringLiteral("promoPick"))->click();
+        auto rules = dialog->findChild<QTableWidget *>(QStringLiteral("promoRules"));
+        QCOMPARE(rules->rowCount(), 3);
+        QCOMPARE(rules->item(0, 2)->text(), QStringLiteral("Excluye"));
+        QCOMPARE(dialog->findChild<QLabel *>(QStringLiteral("promoReach"))->text(), QStringLiteral("Sin artículos elegidos"));
+        dialog->findChild<QRadioButton *>(QStringLiteral("promoEverything"))->setChecked(true);
+        QCOMPARE(dialog->findChild<QLabel *>(QStringLiteral("promoReach"))->text(), QStringLiteral("Alcanza a 0 artículos"));
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("promoAdd"))->click();
+}
+
+void tst_Modules::aPromotionComesBackAsItWas()
+{
+    QVERIFY(showPromotions());
+    Promotion p;
+    p.name = QStringLiteral("TRES POR DOS");
+    p.kind = PromotionKind::BuyPay;
+    p.buy = 3;
+    p.pay = 2;
+    p.from = QDate::currentDate().addDays(5);
+    p.to = QDate::currentDate().addDays(9);
+    p.weekdays = 3;
+    p.everything = true;
+    PromotionRule out;
+    out.code = QStringLiteral("1001");
+    out.excluded = true;
+    p.rules << out;
+    QVERIFY(m_core.promotions->savePromotion(p));
+    QTest::qWait(0);
+    m_page->hide();
+    m_page->show();
+
+    auto table = m_page->findChild<QTableWidget *>(QStringLiteral("promoTable"));
+    QCOMPARE(table->item(0, 5)->text(), QStringLiteral("Programada"));
+    QCOMPARE(table->item(0, 4)->text(), QStringLiteral("Lun, Mar"));
+
+    bool opened = false;
+    whenDialogOpens([&](QDialog *dialog) {
+        opened = true;
+        QCOMPARE(dialog->findChild<QDateEdit *>(QStringLiteral("promoFrom"))->date(), p.from);
+        QCOMPARE(dialog->findChild<QDateEdit *>(QStringLiteral("promoTo"))->date(), p.to);
+        QCOMPARE(dialog->findChild<QComboBox *>(QStringLiteral("promoKind"))->currentIndex(), int(PromotionKind::BuyPay));
+        QCOMPARE(dialog->findChild<QSpinBox *>(QStringLiteral("promoBuy"))->value(), 3);
+        QCOMPARE(dialog->findChild<QSpinBox *>(QStringLiteral("promoPay"))->value(), 2);
+        QVERIFY(dialog->findChild<QRadioButton *>(QStringLiteral("promoEverything"))->isChecked());
+        QVERIFY(dialog->findChild<QCheckBox *>(QStringLiteral("promoDay1"))->isChecked());
+        QVERIFY(!dialog->findChild<QCheckBox *>(QStringLiteral("promoDay2"))->isChecked());
+        QCOMPARE(dialog->findChild<QLabel *>(QStringLiteral("promoReach"))->text(), QStringLiteral("Alcanza a 2 artículos"));
+        dialog->findChild<QPushButton *>(QStringLiteral("promoSave"))->click();
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("promoEdit"))->click();
+    QVERIFY(opened);
+    QCOMPARE(m_core.promotions->promotions().size(), 1);
+
+    whenDialogOpens([](QDialog *dialog) {
+        QCOMPARE(dialog->findChild<QLineEdit *>(QStringLiteral("promoName"))->text(), QStringLiteral("TRES POR DOS (copia)"));
+        dialog->findChild<QPushButton *>(QStringLiteral("promoSave"))->click();
+    });
+    m_page->findChild<QPushButton *>(QStringLiteral("promoCopy"))->click();
+    QCOMPARE(m_core.promotions->promotions().size(), 2);
+}
+
+void tst_Modules::aPromotionReachesTheTill()
+{
+    QVERIFY(showSales());
+    QVERIFY(percentOff(QStringLiteral("7840001"), 10));
+    QVERIFY(openTill());
+
+    scan(QStringLiteral("7840001"));                    // 11.000
+    QCOMPARE(saleLines()->item(0, 4)->text(), QStringLiteral("1.100"));
+    QCOMPARE(saleLines()->item(0, 5)->text(), QStringLiteral("9.900"));
+    QVERIFY2(label("saleMessage")->text().contains(QStringLiteral("PROMO 7840001")), qPrintable(label("saleMessage")->text()));
+    QCOMPARE(label("saleTotal")->text(), QStringLiteral("9.900"));
+
+    scan(QStringLiteral("7840001"));                    // one more on the same line
+    QCOMPARE(saleLines()->rowCount(), 1);
+    QCOMPARE(saleLines()->item(0, 4)->text(), QStringLiteral("2.200"));
+
+    scan(QStringLiteral("7840002"));                    // not in it
+    QVERIFY(saleLines()->item(1, 4)->text().isEmpty());
+
+    whenDialogOpens([](QDialog *payment) { enterUntilCharged(payment); });
+    press(Qt::Key_F12);
+    QCOMPARE(saleLines()->rowCount(), 0);
+    const SaleRecord sale = m_core.sales->sessionSales(m_core.cash->currentSession()->id).first();
+    const SaleRecord full = *m_core.sales->sale(sale.id);
+    QCOMPARE(full.totals.items.first().promotionName, QStringLiteral("PROMO 7840001"));
+    QCOMPARE(full.totals.items.first().promotionDiscount, Money(2200));
+    QCOMPARE(full.totals.items.last().promotionDiscount, Money(0));
+}
+
+void tst_Modules::aPromotionFollowsTheQuantity()
+{
+    QVERIFY(showSales());
+    QVERIFY(percentOff(QStringLiteral("7840001"), 10, AguaraQuantity::whole(3)));   // from 3
+    QVERIFY(openTill());
+
+    scan(QStringLiteral("7840001"));
+    QVERIFY(saleLines()->item(0, 4)->text().isEmpty());
+    scan(QStringLiteral("2*7840001"));
+    QCOMPARE(saleLines()->item(0, 4)->text(), QStringLiteral("3.300"));     // now it reaches
+
+    whenDialogOpens([](QDialog *dialog) {
+        dialog->findChild<QLineEdit *>()->setText(QStringLiteral("2"));
+        dialog->accept();
+    });
+    press(Qt::Key_F2);
+    QVERIFY(saleLines()->item(0, 4)->text().isEmpty());                     // and no longer
+}
+
+void tst_Modules::aPromotionDoesntUseTheCashiersLimit()
+{
+    QVERIFY(showSales());
+    QVERIFY(percentOff(QStringLiteral("7840001"), 50));
+    QVERIFY(openTill());
+    int asked = 0;
+    m_users->setSupervisorPrompt([&](const QString &, const QString &, const QString &, QWidget *, QString *, QString *) {
+        ++asked;
+        return false;
+    });
+    scan(QStringLiteral("7840001"));                    // 11.000, 5.500 with the promotion
+    QCOMPARE(asked, 0);
+
+    whenDialogOpens([](QDialog *dialog) {
+        dialog->findChild<QLineEdit *>(QStringLiteral("discountEdit"))->setText(QStringLiteral("5"));
+        dialog->accept();
+    });
+    press(Qt::Key_F4);                                  // 5 % of what is left, a cashier's limit
+    QCOMPARE(asked, 0);
+    QCOMPARE(saleLines()->item(0, 4)->text(), QStringLiteral("5.775"));     // 5.500 + 275
+    QCOMPARE(saleLines()->item(0, 5)->text(), QStringLiteral("5.225"));
+
+    whenDialogOpens([](QDialog *dialog) {
+        dialog->findChild<QLineEdit *>(QStringLiteral("discountEdit"))->setText(QStringLiteral("10"));
+        dialog->accept();
+    });
+    press(Qt::Key_F4);                                  // past the limit: a supervisor, as always
+    QCOMPARE(asked, 1);
+    QCOMPARE(saleLines()->item(0, 4)->text(), QStringLiteral("5.775"));
+}
+
+void tst_Modules::aHeldSaleGetsTodaysPromotions()
+{
+    QVERIFY(showSales());
+    QVERIFY(openTill());
+    scan(QStringLiteral("7840001"));
+    QVERIFY(saleLines()->item(0, 4)->text().isEmpty());
+    press(Qt::Key_F6);
+
+    QVERIFY(percentOff(QStringLiteral("7840001"), 10));
+    whenDialogOpens([](QDialog *held) { held->accept(); });
+    press(Qt::Key_F7);
+    QCOMPARE(saleLines()->item(0, 4)->text(), QStringLiteral("1.100"));
+
+    press(Qt::Key_F6);                                  // and the other way around
+    QVERIFY(m_core.promotions->setPromotionActive(m_core.promotions->promotions().first().id, false));
+    whenDialogOpens([](QDialog *held) { held->accept(); });
+    press(Qt::Key_F7);
+    QVERIFY(saleLines()->item(0, 4)->text().isEmpty());
+}
+
+void tst_Modules::anOutageKeepsThePromotionsKnown()
+{
+    QVERIFY(showSales());
+    QVERIFY(percentOff(QStringLiteral("7840001"), 10));
+    QVERIFY(openTill());
+    scan(QStringLiteral("7840001"));
+    QCOMPARE(saleLines()->item(0, 4)->text(), QStringLiteral("1.100"));
+
+    m_core.monitor->simulateOutage(true);
+    QVERIFY(TestSupport::waitFor([&] { return !label("saleConnection")->isHidden(); }, 2500));
+    whenDialogOpens([](QDialog *dialog) {
+        dialog->findChild<QLineEdit *>()->setText(QStringLiteral("3"));
+        dialog->accept();
+    });
+    press(Qt::Key_F2);
+    QCOMPARE(saleLines()->item(0, 4)->text(), QStringLiteral("3.300"));     // it follows, with no server
+    m_core.monitor->simulateOutage(false);
+}
+
+void tst_Modules::aPromotionReachesTheTicket()
+{
+    QVERIFY(showSales());
+    PrinterSettings printer;
+    printer.kind = PrinterKind::Thermal;
+    printer.name = QStringLiteral("TERMICA");
+    m_core.print->savePrinterSettings(printer);
+    QVERIFY(percentOff(QStringLiteral("7840001"), 10));
+    QVERIFY(openTill());
+    scan(QStringLiteral("7840001"));
+    whenDialogOpens([](QDialog *payment) { enterUntilCharged(payment); });
+    press(Qt::Key_F12);
+    QCOMPARE(m_core.printed.size(), 1);
+    QVERIFY(m_core.printed.first().contains("Promo: PROMO 7840001"));
+}
+
 void tst_Modules::customersPage()
 {
     openUsers();
@@ -1768,6 +2494,155 @@ void tst_Modules::articleFormSaysWhatIsMissing()
     form->accept();
     QVERIFY(!form->isVisible());
     QCOMPARE(m_core.products->product(QStringLiteral("555"))->price, Money(5000));
+}
+
+void tst_Modules::articleFormManagesUnitsAndTheUseByDate()
+{
+    QLineEdit *search = nullptr;
+    QTableView *table = showInventory(&search);
+    QVERIFY(table);
+    m_page->findChild<QPushButton *>(QStringLiteral("itemAddButton"))->click();
+    QDialog *form = nullptr;
+    for (QDialog *d : m_page->findChildren<QDialog *>()) {
+        if (d->isVisible())
+            form = d;
+    }
+    QVERIFY(form);
+    auto units = form->findChild<QComboBox *>(QStringLiteral("comboBox_unit"));
+    const int before = units->count();
+
+    form->findChild<QToolButton *>(QStringLiteral("button_modifyUnitTable"))->click();
+    auto list = form->findChild<QTableWidget *>(QStringLiteral("unitTable"));
+    QVERIFY(list);
+    QCOMPARE(list->rowCount(), before);
+    auto add = form->findChild<QPushButton *>(QStringLiteral("unitAdd"));
+    auto error = form->findChild<QLabel *>(QStringLiteral("unitError"));
+    form->findChild<QLineEdit *>(QStringLiteral("unitName"))->setText(QStringLiteral("Caja"));
+    add->click();
+    QVERIFY(!error->isHidden());                                // no abbreviation
+    QCOMPARE(units->count(), before);
+    form->findChild<QLineEdit *>(QStringLiteral("unitAbbreviation"))->setText(QStringLiteral("cj"));
+    form->findChild<QSpinBox *>(QStringLiteral("unitDecimals"))->setValue(2);
+    add->click();
+    QCOMPARE(list->rowCount(), before + 1);
+    QCOMPARE(units->count(), before + 1);                       // already in the article's list
+
+    // the basic unit stays, and says why
+    auto remove = form->findChild<QPushButton *>(QStringLiteral("unitRemove"));
+    list->setCurrentCell(0, 0);
+    whenDialogOpens([](QDialog *confirm) { confirm->accept(); });
+    remove->click();
+    QVERIFY(!error->isHidden());
+    QCOMPARE(list->rowCount(), before + 1);
+
+    list->setCurrentCell(before - 1, 0);                        // Metro
+    whenDialogOpens([](QDialog *confirm) { confirm->accept(); });
+    remove->click();
+    QCOMPARE(list->rowCount(), before);
+    QCOMPARE(units->count(), before);
+    list->window()->close();
+
+    form->findChild<QLineEdit *>(QStringLiteral("lineEdit_code"))->setText(QStringLiteral("555"));
+    form->findChild<QLineEdit *>(QStringLiteral("lineEdit_description"))->setText(QStringLiteral("HUEVOS"));
+    form->findChild<QLineEdit *>(QStringLiteral("lineEdit_price"))->setText(QStringLiteral("5.000"));
+    form->findChild<QLineEdit *>(QStringLiteral("lineEdit_stock"))->setText(QStringLiteral("12"));
+    units->setCurrentIndex(units->findText(QStringLiteral("Caja")));
+    auto expires = form->findChild<QCheckBox *>(QStringLiteral("checkBox_expires"));
+    auto date = form->findChild<QDateEdit *>(QStringLiteral("dateEdit_expires"));
+    QVERIFY(!expires->isChecked());
+    QVERIFY(!date->isEnabled());
+    expires->setChecked(true);
+    QVERIFY(date->isEnabled());
+    date->setDate(QDate(2031, 3, 9));
+    form->accept();
+    QVERIFY(!form->isVisible());
+    const auto saved = m_core.products->product(QStringLiteral("555"));
+    QCOMPARE(saved->unit.name, QStringLiteral("Caja"));
+    QCOMPARE(saved->unit.decimals, 2);
+    QCOMPARE(saved->expires, QDate(2031, 3, 9));
+    QCOMPARE(m_core.inventory->lots(QStringLiteral("555")).first().quantity, AguaraQuantity::whole(12));
+
+    // in an article that exists the date belongs to its lots
+    table->selectRow(0);
+    QCOMPARE(table->model()->index(0, 0).data().toString(), QStringLiteral("555"));
+    m_page->findChild<QPushButton *>(QStringLiteral("itemEditButton"))->click();
+    form = nullptr;
+    for (QDialog *d : m_page->findChildren<QDialog *>()) {
+        if (d->isVisible())
+            form = d;
+    }
+    QVERIFY(form);
+    QVERIFY(!form->findChild<QCheckBox *>(QStringLiteral("checkBox_expires"))->isVisible());
+    form->accept();
+    QCOMPARE(m_core.products->product(QStringLiteral("555"))->expires, QDate(2031, 3, 9));
+}
+
+void tst_Modules::lotsThroughTheHistory()
+{
+    QLineEdit *search = nullptr;
+    QTableView *table = showInventory(&search);
+    QVERIFY(table);
+    Product p = *m_core.products->product(QStringLiteral("7840001"));
+    p.stock = AguaraQuantity::whole(10);
+    QVERIFY(m_core.products->saveProduct(p));
+    table->selectRow(0);
+    QCOMPARE(table->model()->index(0, 0).data().toString(), p.code);
+
+    bool done = false;
+    whenDialogOpens([&](QDialog *dialog) {
+        auto lots = dialog->findChild<QTableWidget *>(QStringLiteral("lotTable"));
+        auto undated = dialog->findChild<QLabel *>(QStringLiteral("lotUndated"));
+        QVERIFY(lots);
+        QCOMPARE(lots->rowCount(), 0);
+        QVERIFY2(undated->text().contains(QStringLiteral("10")), qPrintable(undated->text()));
+
+        dialog->findChild<QLineEdit *>(QStringLiteral("lotQuantity"))->setText(QStringLiteral("4"));
+        dialog->findChild<QDateEdit *>(QStringLiteral("lotDate"))->setDate(QDate(2020, 1, 1));
+        dialog->findChild<QPushButton *>(QStringLiteral("lotAdd"))->click();
+        QCOMPARE(lots->rowCount(), 1);
+        QCOMPARE(lots->item(0, 1)->text(), QStringLiteral("4"));
+        QCOMPARE(lots->item(0, 2)->text(), QStringLiteral("Vencido"));
+        QVERIFY2(undated->text().contains(QStringLiteral(": 6")), qPrintable(undated->text()));
+
+        lots->setCurrentCell(0, 0);
+        whenDialogOpens([](QDialog *confirm) { confirm->accept(); });
+        dialog->findChild<QPushButton *>(QStringLiteral("lotRemove"))->click();
+        QCOMPARE(lots->rowCount(), 0);
+        done = true;
+        dialog->reject();
+    });
+    QVERIFY(QMetaObject::invokeMethod(m_page, "onHistory"));
+    QVERIFY(done);
+    QVERIFY(m_core.inventory->lots(p.code).isEmpty());
+}
+
+void tst_Modules::articleFormKeepsARemovedUnit()
+{
+    QLineEdit *search = nullptr;
+    QTableView *table = showInventory(&search);
+    QVERIFY(table);
+    Product p;
+    p.code = QStringLiteral("555");
+    p.description = QStringLiteral("QUESO");
+    p.price = 10000;
+    p.unit.id = 2;      // Kilogramo
+    QVERIFY(m_core.products->saveProduct(p));
+    QVERIFY(m_core.products->deactivateProduct(p.code));
+    QVERIFY(m_core.products->removeUnit(2));
+    p = *m_core.products->product(p.code);
+    QVERIFY(m_core.products->saveProduct(p));   // back in use, with the unit it had
+
+    table->selectRow(0);
+    m_page->findChild<QPushButton *>(QStringLiteral("itemEditButton"))->click();
+    QDialog *form = nullptr;
+    for (QDialog *d : m_page->findChildren<QDialog *>()) {
+        if (d->isVisible())
+            form = d;
+    }
+    QVERIFY(form);
+    QCOMPARE(form->findChild<QComboBox *>(QStringLiteral("comboBox_unit"))->currentText(), QStringLiteral("Kilogramo"));
+    form->accept();
+    QCOMPARE(m_core.products->product(p.code)->unit.id, qint64(2));
 }
 
 void tst_Modules::countRefusesWhatItCantRead()

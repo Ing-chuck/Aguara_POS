@@ -143,6 +143,33 @@ private:
 };
 
 /// Find an article by description or code.
+/// An article with an expired lot reached the till. Its barcode can't say which
+/// lot this unit is from, so the cashier looks at the unit. Scanners end every code
+/// with Enter, so neither Enter nor Esc answer: it takes a click, or Tab and Space.
+class ExpiryAlertDialog : public QDialog
+{
+    Q_OBJECT
+public:
+    /// `expired`: what the lots past their date hold. `inSale`: what this scan
+    /// brings. They needn't match, so the cashier says how many go.
+    ExpiryAlertDialog(const QString &article, const QDate &date, Quantity expired, Quantity inSale,
+                      int decimals, QWidget *parent);
+    /// How many to write off; 0 for none.
+    Quantity toDiscard() const { return discarded; }
+
+protected:
+    void keyPressEvent(QKeyEvent *event) override;
+
+private:
+    void confirmDiscard();
+
+    Quantity inSale;
+    int decimals;
+    Quantity discarded = 0;
+    QLineEdit *count;
+    QLabel *problem;
+};
+
 class ArticleSearchDialog : public QDialog
 {
     Q_OBJECT

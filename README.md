@@ -13,13 +13,14 @@ El sistema se basa en la arquitectura plug-in que permite la creacion de modulos
 |---|---|---|
 | Inventario | `modulo_control_inventario.dll` | articulos, compras, proveedores y recuentos |
 | Clientes | `modulo_customers.dll` | clientes, con RUC o cedula |
-| Importar | `modulo_importar.dll` | importar articulos desde CSV (sin pagina propia) |
+| Importar | `modulo_importar.dll` | importar articulos, clientes y proveedores desde CSV (sin pagina propia) |
 | Ventas | `modulo_sales_module.dll` | la caja: vender, cobrar, cerrar |
 | Reportes | `modulo_stats.dll` | reportes para ver, imprimir y exportar |
 | Usuarios | `modulo_usuarios.dll` | usuarios, roles, permisos y auditoria |
+| Promociones | `modulo_ventas_promociones.dll` | descuentos con fecha sobre los articulos elegidos |
 
 Se cargan en orden alfabetico de archivo, y ese orden da los atajos Ctrl+1, Ctrl+2...: por eso
-Reportes se llama `modulo_stats`, para que Ventas siga en Ctrl+3.
+Reportes se llama `modulo_stats`, para que Ventas siga en Ctrl+3, y Promociones va ultimo.
 
 # Compilar
 Requisitos: **Qt 5.15.2 con MinGW 8.1.0 32-bit** (ultima combinacion compatible con Windows 7).
@@ -205,6 +206,51 @@ comun, pero cada balanza se configura distinto: **confirmarlo con la balanza rea
 **En un modulo**, `host->service<InventoryService>()` da compras, ajustes, proveedores y
 `resolveScan()`, que convierte lo que manda el lector (codigo, codigo alternativo o balanza) en
 articulo, cantidad y precio.
+
+### Unidades de venta
+`unidades_basicas` se administra desde la ficha del articulo. `removeUnit()` solo oculta la unidad (`activo = 0`) y no quita `Unidad` (id 1) ni una unidad que use un articulo activo. Las ventas guardan la unidad como texto, asi que no dependen de esta tabla. Sus ids se escriben a mano: la tabla no tiene secuencia.
+
+### Lotes y vencimiento
+Un lote es un articulo y una fecha (`lotes`, una fila por par). Guarda solo el stock con fecha: el resto de `productos.stock` no tiene fecha, asi que no hay un saldo que pueda desincronizarse. Todo pasa por `StockLedger::move()`:
+
+| Movimiento | Lotes |
+|---|---|
+| Venta | deja la fecha vigente mas proxima, y despues el stock sin fecha. Un lote vencido queda retenido: solo cede si no hay otra cosa |
+| Otra salida (ajuste, recuento) | deja la fecha mas proxima, vencida o no, y lo baja de `inicial`: una devolucion no lo rellena |
+| Entra con fecha (alta, saldo inicial) | suma al lote de esa fecha |
+| Devolucion o anulacion | rellena el lote mas proximo con lugar: `inicial` es lo que entro, y asi se deshace lo que tomo la venta |
+| Otra entrada (ajuste, recuento) | queda sin fecha |
+
+Si el stock estaba bajo cero, lo que entra cubre primero eso: los lotes nunca suman mas que el stock. La cantidad de cada lote es una estimacion, porque el escaner no distingue lotes. `Product::expires` es la fecha mas proxima, solo de lectura; `Product::stockExpires` fecha, al guardar, el stock que no tiene fecha.
+
+`ExpiryWatcher` mantiene dos avisos y mira los lotes cuando cambia un articulo y una vez por hora, porque una caja puede quedar abierta de noche:
+
+| Aviso | Nivel | Cuando |
+|---|---|---|
+| `vencidos` | `PriorityVeryHigh` (rojo) | la fecha ya paso |
+| `por-vencer` | `PriorityHigh` (advertencia) | vence dentro de `inventario.dias_aviso_vencimiento` dias (30 por defecto, en `configuracion`) |
+
+Solo cuentan los lotes con stock de articulos activos, y solo los ve quien puede abrir Inventario. El ultimo dia todavia es vigente. En la caja, `addScan()` muestra `ExpiryAlertDialog` si el articulo tiene un lote vencido, porque el codigo de barras no dice de que lote es la unidad. **OK** sigue la venta, y **Dar de baja** pregunta cuantos descartar: propone el menor entre lo vencido y lo escaneado, admite hasta lo escaneado, pide `ventas.baja_vencido` (un supervisor, para el Cajero), hace un ajuste por ese numero y deja el resto en la venta. Si no se autoriza, vuelve la alerta. El dialogo no responde a Enter ni a Esc, porque el escaner termina cada codigo con Enter. Sin conexion no pregunta: la venta sigue.
+
+# Promociones
+Un descuento con fechas (`promociones` y `promocion_reglas`, migracion 11). `PromotionService` es del core y la caja lo usa directamente; `modulo_ventas_promociones` es solo la pagina para administrarlas, con el permiso `promociones.editar`. Lo que decide es codigo puro en `AguaraPromotion` (`src/interfaces/promotionservice.h`), sin base de datos.
+
+| Tipo | `tipo` | Lo que descuenta |
+|---|---|---|
+| Porcentaje | `porcentaje` | sobre el bruto de la linea, tambien el de una etiqueta de balanza |
+| Importe menos | `monto` | `valor` por unidad |
+| Precio | `precio` | hasta dejar cada unidad en `valor`. Si ya cuesta menos, nada |
+| Lleva y paga | `lleva_paga` | las unidades de regalo de cada juego completo |
+
+**Cuando:** `runsOn()`: activa, entre `desde` y `hasta` inclusive, en un dia de `dias` (bit 0 lunes). `minimo` es por linea.
+
+**A que articulos**, en este orden (`covers()`):
+
+1. Lo elegido: `todos`, o las reglas que incluyen. Las de articulo siempre suman. Las de rubro y de marca suman entre si, salvo `rubro_y_marca`, que pide las dos. Un rubro lleva sus subrubros.
+2. `invertir` da vuelta lo elegido.
+3. Las reglas `excluir` sacan lo que sea: tienen la ultima palabra.
+
+**En la caja:** `SalesModule::applyPromotion()` corre al escanear, al cambiar la cantidad y al recuperar una venta en espera, y elige con `best()` la que mas descuenta. No se suman; entre iguales gana la mas vieja. El descuento va en `SaleLine::promotionDiscount`, aparte de `discount`: no usa el limite del rol, y los descuentos manuales se calculan sobre `linePromoted()`. Sin conexion, la linea se recalcula con las ofertas ya leidas. `ventas_items` guarda el id, el nombre y el descuento, asi que la venta no cambia si la promocion cambia despues; `descuento` sigue siendo el total de la linea. La caja no revalida la promocion al cobrar: vale lo que se mostro en pantalla.
 
 # Caja y ventas
 
@@ -419,6 +465,21 @@ Apagada hasta que un administrador la activa en **Preferencias > Telemetría**, 
 - `scripts/upload-symbols.py` los carga en el servidor, que muestra funciones en vez de direcciones. Guarde ese archivo con cada build que llegue a una caja: un build sin simbolos queda en direcciones para siempre.
 - Cada build se reconoce por la marca de tiempo PE de cada modulo, no por la version. `strip` la borra y `scripts/export-symbols.py` la repone.
 
+# Importar
+Archivo > Importar carga un CSV de Excel, separado por `,` o `;`, en UTF-8 o Windows-1252. Las columnas se reconocen por su nombre, sin importar acentos, mayusculas ni espacios, y las desconocidas se ignoran. Una celda vacia conserva lo guardado. Las lineas invalidas se saltan y el aviso final las nombra; un error de la base de datos no guarda nada.
+
+| Archivo | Columnas | Permiso | Se reconoce por |
+|---|---|---|---|
+| Articulos | Codigo*, Descripcion*, Marca, Rubro, PrecioVenta o Precio, Costo, Stock, StockMin, IVA, F_Compra, Vencimiento | `articulos.importar` | codigo |
+| Clientes | Nombre*, Cliente o Razon Social; RUC; Cedula o CI; Documento y Tipo Documento; Direccion; Telefono o Celular; Correo o Email | `clientes.importar` | documento; sin documento, nombre |
+| Proveedores | Nombre*, Proveedor o Razon Social; Direccion; Telefono o Celular; Correo o Email; Contacto; Web; Notas u Observaciones | `inventario.proveedores` | nombre |
+
+- `clientes.importar` es aparte de `clientes.editar`, que tiene el Cajero: un archivo puede cambiar toda la lista.
+- Un cliente sin documento solo se actualiza si un unico cliente activo tiene ese nombre; si hay varios, la linea se salta.
+- Un documento nunca se asigna por el nombre: una linea con un documento desconocido crea un cliente nuevo.
+- Un cliente dado de baja se actualiza por su documento y sigue de baja.
+- Los proveedores no tienen RUC en la base: una columna RUC se ignora.
+
 # Teclado
 Todo se puede hacer sin mouse. El lector de codigos de barras funciona como un teclado: escribe
 el codigo y presiona Enter.
@@ -429,7 +490,7 @@ el codigo y presiona Enter.
 | Ctrl+Tab / Ctrl+Shift+Tab | pagina siguiente / anterior |
 | Ctrl+W | cerrar la pagina actual, salvo la que debe quedar abierta (Ventas con la caja abierta) |
 | F1 | abrir Avisos, tambien si su pestaña estaba cerrada |
-| Ctrl+I | importar articulos |
+| Ctrl+I | importar articulos (clientes y proveedores, en Archivo > Importar) |
 | Ctrl+L / Ctrl+Shift+L | bloquear la sesion / cambiar de usuario |
 | Ctrl+Q | salir |
 | Inventario: Ctrl+F o F3 | buscar por codigo o descripcion; Enter selecciona el articulo |
@@ -439,7 +500,7 @@ el codigo y presiona Enter.
 
 # Como empezar un nuevo modulo en Qt Creator
 Un modulo es un plugin cuyo objeto raiz implementa `AguaraModuleInterface` (descripcion del modulo)
-y una o mas interfaces de capacidad: `WidgetModuleInterface` (una pagina), `ImportArticlesInterface`,
+y una o mas interfaces de capacidad: `WidgetModuleInterface` (una pagina), `ImportInterface` (importar archivos),
 `PermissionProvider` (sus permisos) y `ReportProvider` (sus reportes).
 Ver `src/interfaces/interfaces.h` y los modulos existentes. El `.pro` de un modulo solo necesita
 `TARGET`, sus fuentes, e `include(../module.pri)`; ademas hay que agregarlo a `src/modules/modules.pro`.

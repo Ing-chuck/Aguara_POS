@@ -20,7 +20,8 @@ struct Record {
 /// Windows-1252, which is what Excel writes on Spanish Windows.
 QString decode(const QByteArray &bytes);
 
-/// ';' if the first row has more semicolons than commas (outside quotes), else ','.
+/// ';' if the first row with either has more semicolons than commas (outside
+/// quotes), else ','.
 QChar detectSeparator(const QString &text);
 
 /// Split text into records. Accepts CRLF, LF or CR line ends. Lenient with

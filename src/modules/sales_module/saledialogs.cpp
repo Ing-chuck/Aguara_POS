@@ -8,6 +8,7 @@
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QKeyEvent>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -605,6 +606,128 @@ void VoucherDialog::accept()
 }
 
 // --- ArticleSearchDialog -----------------------------------------------------
+
+ExpiryAlertDialog::ExpiryAlertDialog(const QString &article, const QDate &date, Quantity expired, Quantity inSale,
+                                     int decimals, QWidget *parent)
+    : QDialog(parent), inSale(inSale), decimals(decimals)
+{
+    setObjectName(QStringLiteral("expiryAlert"));
+    setWindowTitle(tr("Alerta de vencimiento"));
+    setWindowFlag(Qt::WindowCloseButtonHint, false);
+    setMinimumWidth(420);
+    auto layout = new QVBoxLayout(this);
+    layout->setContentsMargins(24, 20, 24, 18);
+    layout->setSpacing(12);
+    auto heading = new QLabel(tr("Alerta de vencimiento"));
+    AguaraStyle::setRole(heading, AguaraStyle::Title);
+    layout->addWidget(heading);
+    auto body = new QLabel(tr("Favor verificar la fecha en el producto.\n\n"
+                              "%1 tiene un lote vencido el %2.").arg(article, date.toString(QStringLiteral("dd/MM/yyyy"))));
+    body->setObjectName(QStringLiteral("expiryText"));
+    body->setWordWrap(true);
+    AguaraStyle::setRole(body, AguaraStyle::Subtitle);
+    layout->addWidget(body);
+
+    auto discardButton = new QPushButton(AguaraStyle::icon(QStringLiteral("trash"), AguaraStyle::color(AguaraStyle::Color::Danger)),
+                                         tr("Dar de baja"));
+    discardButton->setObjectName(QStringLiteral("expiryDiscard"));
+    discardButton->setToolTip(tr("Este producto está vencido: sale del stock y no se vende"));
+    discardButton->setAutoDefault(false);
+    AguaraStyle::setRole(discardButton, AguaraStyle::Danger);
+    auto okButton = new QPushButton(tr("OK"));
+    okButton->setObjectName(QStringLiteral("expiryOk"));
+    okButton->setToolTip(tr("Este producto no está vencido: sigue la venta"));
+    okButton->setAutoDefault(false);
+    AguaraStyle::setRole(okButton, AguaraStyle::Primary);
+    auto choose = new QWidget;
+    auto chooseRow = new QHBoxLayout(choose);
+    chooseRow->setContentsMargins(0, 0, 0, 0);
+    chooseRow->addWidget(discardButton);
+    chooseRow->addStretch();
+    chooseRow->addWidget(okButton);
+    layout->addWidget(choose);
+
+    // Dar de baja asks how many: the scan and the lots needn't say the same
+    auto howMany = new QWidget;
+    howMany->setObjectName(QStringLiteral("expiryHowMany"));
+    auto howManyLayout = new QVBoxLayout(howMany);
+    howManyLayout->setContentsMargins(0, 0, 0, 0);
+    howManyLayout->setSpacing(8);
+    auto question = new QLabel(tr("¿Cuántos dar de baja? Vencidos en stock: %1. En esta venta: %2. El resto sigue en la venta.")
+                                   .arg(AguaraQuantity::format(expired, decimals), AguaraQuantity::format(inSale, decimals)));
+    question->setWordWrap(true);
+    howManyLayout->addWidget(question);
+    count = new QLineEdit(AguaraQuantity::format(qMin(expired, inSale), decimals));
+    count->setObjectName(QStringLiteral("expiryCount"));
+    count->setFixedWidth(120);
+    howManyLayout->addWidget(count);
+    problem = AguaraForm::errorLabel(QStringLiteral("expiryProblem"));
+    howManyLayout->addWidget(problem);
+    auto back = new QPushButton(tr("Volver"));
+    back->setObjectName(QStringLiteral("expiryBack"));
+    back->setAutoDefault(false);
+    auto confirm = new QPushButton(tr("Confirmar baja"));
+    confirm->setObjectName(QStringLiteral("expiryConfirm"));
+    confirm->setAutoDefault(false);
+    AguaraStyle::setRole(confirm, AguaraStyle::Danger);
+    auto confirmRow = new QHBoxLayout;
+    confirmRow->addWidget(back);
+    confirmRow->addStretch();
+    confirmRow->addWidget(confirm);
+    howManyLayout->addLayout(confirmRow);
+    howMany->hide();
+    layout->addWidget(howMany);
+
+    connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
+    connect(discardButton, &QPushButton::clicked, this, [this, choose, howMany]() {
+        choose->hide();
+        howMany->show();
+        count->selectAll();
+        count->setFocus();
+    });
+    connect(back, &QPushButton::clicked, this, [this, choose, howMany]() {
+        problem->hide();
+        howMany->hide();
+        choose->show();
+        setFocus();
+    });
+    connect(confirm, &QPushButton::clicked, this, &ExpiryAlertDialog::confirmDiscard);
+    // Enter here is safe: a code read by mistake can't pass for a small number
+    connect(count, &QLineEdit::returnPressed, this, &ExpiryAlertDialog::confirmDiscard);
+    setFocusPolicy(Qt::StrongFocus);
+    setFocus();
+}
+
+void ExpiryAlertDialog::confirmDiscard()
+{
+    Quantity quantity = 0;
+    if (!AguaraQuantity::parse(count->text(), &quantity) || quantity <= 0 || !AguaraForm::fitsUnit(quantity, decimals)) {
+        AguaraForm::showError(problem, tr("Escriba una cantidad válida."), count);
+        count->selectAll();
+        return;
+    }
+    if (quantity > inSale) {
+        AguaraForm::showError(problem, tr("No puede dar de baja más de lo que hay en esta venta: %1.")
+                                           .arg(AguaraQuantity::format(inSale, decimals)), count);
+        count->selectAll();
+        return;
+    }
+    discarded = quantity;
+    accept();
+}
+
+void ExpiryAlertDialog::keyPressEvent(QKeyEvent *event)
+{
+    switch (event->key()) {
+    case Qt::Key_Return:
+    case Qt::Key_Enter:
+    case Qt::Key_Escape:
+        event->accept();
+        return;
+    default:
+        QDialog::keyPressEvent(event);
+    }
+}
 
 ArticleSearchDialog::ArticleSearchDialog(ProductService *products, const QString &text, QWidget *parent)
     : QDialog(parent)

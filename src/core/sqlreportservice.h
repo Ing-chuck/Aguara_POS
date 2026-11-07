@@ -70,6 +70,7 @@ private:
     bool salesByBrand(const ReportFilter &f, ReportResult *r);
     bool salesByCashier(const ReportFilter &f, ReportResult *r);
     bool salesByMethod(const ReportFilter &f, ReportResult *r);
+    bool salesByPromotion(const ReportFilter &f, ReportResult *r);
     bool marginByArticle(const ReportFilter &f, ReportResult *r);
     bool marginByCategory(const ReportFilter &f, ReportResult *r);
     bool cashSessions(const ReportFilter &f, ReportResult *r);

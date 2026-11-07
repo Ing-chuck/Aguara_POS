@@ -50,8 +50,13 @@ struct SaleLine {
     /// A scale label with the price printed on it: that price is the line's
     /// amount, whatever quantity * unitPrice rounds to. 0: none.
     Money    fixedAmount = 0;
-    Money    discount = 0;          ///< on this line
+    Money    discount = 0;          ///< the cashier's, on this line
     int      vatRate = 10;
+    /// The promotion the till gave the line. Apart from `discount`: it counts
+    /// against no one's limit, and it is worked out again if the quantity changes.
+    qint64   promotionId = 0;       ///< 0: none
+    QString  promotionName;         ///< as it was on the day of the sale
+    Money    promotionDiscount = 0;
 };
 
 /// The sale being rung up: it lives in the screen until it is paid or held.
@@ -76,6 +81,9 @@ struct SaleItem {
     Money    net = 0;               ///< gross - discount
     int      vatRate = 10;
     Money    vat = 0;               ///< contained in `net`
+    qint64   promotionId = 0;       ///< see SaleLine
+    QString  promotionName;
+    Money    promotionDiscount = 0; ///< the part of `discount` that it gave
 };
 
 /// What a sale adds up to. Exact: the items' `net` sum `net`. Before payment
@@ -175,6 +183,8 @@ AGUARA_EXPORT QString normalizeReference(const QString &reference);
 
 /// quantity * unitPrice, or the scale's price
 AGUARA_EXPORT Money lineGross(const SaleLine &line);
+/// What the line costs with its promotion: what the cashier's discounts are on.
+AGUARA_EXPORT Money linePromoted(const SaleLine &line);
 
 /// Works a sale out: each line's share of the sale's discount (so the shares
 /// add up exactly), IVA line by line with vatIncluded(), and totals by rate.

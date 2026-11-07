@@ -9,6 +9,11 @@ Money lineGross(const SaleLine &line)
     return line.fixedAmount > 0 ? line.fixedAmount : AguaraQuantity::lineTotal(line.unitPrice, line.quantity);
 }
 
+Money linePromoted(const SaleLine &line)
+{
+    return lineGross(line) - line.promotionDiscount;
+}
+
 SaleTotals totals(const SaleDraft &draft)
 {
     SaleTotals t;
@@ -23,8 +28,11 @@ SaleTotals totals(const SaleDraft &draft)
         item.unitPrice = line.unitPrice;
         item.vatRate = line.vatRate;
         item.gross = lineGross(line);
-        item.discount = line.discount;
+        item.discount = line.discount + line.promotionDiscount;
         item.net = item.gross - item.discount;
+        item.promotionId = line.promotionId;
+        item.promotionName = line.promotionName;
+        item.promotionDiscount = line.promotionDiscount;
         afterLineDiscounts += item.net;
         t.items << item;
     }

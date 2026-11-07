@@ -268,6 +268,12 @@ void tst_MainWindow::fileMenuActionsHaveWorkingShortcuts()
     QCOMPARE(import->shortcut(), QKeySequence(Qt::CTRL + Qt::Key_I));
     QVERIFY(!import->associatedWidgets().isEmpty());          // in a menu: the shortcut is live
     QVERIFY(!import->isEnabled());                            // no import module loaded here
+    for (const char *name : { "importCustomersAction", "importSuppliersAction" }) {
+        auto other = m_window->findChild<QAction *>(QLatin1String(name));
+        QVERIFY(other);
+        QVERIFY(!other->associatedWidgets().isEmpty());
+        QVERIFY(!other->isEnabled());
+    }
 
     auto backup = m_window->findChild<QAction *>(QStringLiteral("backupAction"));
     QVERIFY(backup);
@@ -521,6 +527,13 @@ void tst_MainWindow::installedModulesAreOnlyInTheHelpMenu()
     for (QAction *action : s.window->findChildren<QAction *>())
         inTheMenu = inTheMenu || action->text().remove('&').startsWith(QStringLiteral("Módulos instalados"));
     QVERIFY(inTheMenu);
+
+    // the real import module opens all of Archivo > Importar, and a cashier,
+    // who may edit a customer, doesn't get to rewrite the list
+    for (const char *name : { "importAction", "importCustomersAction", "importSuppliersAction" })
+        QVERIFY(s.window->findChild<QAction *>(QLatin1String(name))->isEnabled());
+    QVERIFY(s.users->can(QStringLiteral("clientes.editar")));
+    QVERIFY(!s.users->can(QStringLiteral("clientes.importar")));
 }
 
 void tst_MainWindow::notificationsCloseWhileTheTillIsOpen()

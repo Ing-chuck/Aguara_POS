@@ -133,9 +133,10 @@ def general():
     s.rect(70, 445, 840, 165, WHITE)
     s.text(90, 470, 'modules\\  (un plugin modulo_*.dll por módulo)', 13, True)
     names = [('Inventario', 'control_inventario'), ('Clientes', 'customers'), ('Importar', 'importar'),
-             ('Ventas', 'sales_module'), ('Reportes', 'stats'), ('Usuarios', 'usuarios')]
+             ('Ventas', 'sales_module'), ('Reportes', 'stats'), ('Usuarios', 'usuarios'),
+             ('Promociones', 'ventas_ promociones')]
     for i, (name, file) in enumerate(names):
-        s.box(90 + i * 135, 485, 125, 70, name, [file], fill=SURFACE)
+        s.box(84 + i * 117, 485, 110, 70, name, file.split(), fill=SURFACE)
     s.text(90, 588, 'Un módulo no usa SQL: pide servicios al core en initialize().', 12, False, MUTED)
     s.line([(490, 445), (490, 390)])
     s.label(490, 421, 'usan')
@@ -211,7 +212,8 @@ def core():
         ('SqlPrintService', 'tickets, cajón, PDF'),
         ('SqlCustomerService', 'clientes'),
         ('SqlReturnService', 'devoluciones, notas de crédito'),
-        ('SqlReportService', 'reportes, CSV y PDF')], per_row=5, foot=26)
+        ('SqlReportService', 'reportes, CSV y PDF'),
+        ('SqlPromotionService', 'promociones')], per_row=5, foot=26)
     s.text(60, 584, 'Sales usa Product y Cash. Return y Print usan Sales y Cash. Inventory y Report usan Product.',
            12, False, MUTED)
     band(615, 105, 'Piezas de los servicios', [
@@ -247,8 +249,8 @@ def card(s, x, y, w, name, kind, rows, accent=False):
 
 def module_capabilities():
     """Which interfaces each module's root class declares."""
-    names = {'customers': 'Clientes', 'import': 'Importar', 'inventory': 'Inventario', 'reports': 'Reportes',
-             'sales': 'Ventas', 'users': 'Usuarios'}
+    names = {'customers': 'Clientes', 'import': 'Importar', 'inventory': 'Inventario', 'promotions': 'Promociones',
+             'reports': 'Reportes', 'sales': 'Ventas', 'users': 'Usuarios'}
     found = {}
     for header in sorted((ROOT / 'src/modules').glob('*/*.h')):
         text = header.read_text(encoding='utf-8', errors='replace')
@@ -282,7 +284,7 @@ def interfaces():
     y = 315
     w = 243
     caps = [('WidgetModuleInterface', ['createWidget(parent)', 'allowsMultipleInstances()', 'keepPageOpen()']),
-            ('ImportArticlesInterface', ['fileTypes()', 'importFrom(fileName)']),
+            ('ImportInterface', ['fileTypes()', 'canImport(kind)', 'importFrom(fileName, kind)']),
             ('PermissionProvider', ['permissions()']),
             ('ReportProvider', ['reports()', 'runReport(id, filter, ...)'])]
     for i, (name, rows) in enumerate(caps):
@@ -303,7 +305,7 @@ def interfaces():
     s.text(60, 617, 'carga cada DLL, llama a initialize() y pide las capacidades con qobject_cast.', 13)
 
     s.text(40, 675, 'Quién implementa qué', 16, True)
-    columns = [('Widget', 'WidgetModuleInterface'), ('Importar', 'ImportArticlesInterface'),
+    columns = [('Widget', 'WidgetModuleInterface'), ('Importar', 'ImportInterface'),
                ('Permisos', 'PermissionProvider'), ('Reportes', 'ReportProvider')]
     capabilities = module_capabilities()
     top = 693
@@ -331,7 +333,8 @@ GROUPS = [
                               ['usuario_tiene_roles', 'rol_tiene_permisos']]),
     ('Artículos e inventario', [['marcas', 'rubros', 'iva_cat', 'unidades_basicas', 'proveedores'],
                                 ['productos', 'compras'],
-                                ['codigos_barras', 'precios_historial', 'stock_movimientos', 'compra_items']]),
+                                ['codigos_barras', 'precios_historial', 'stock_movimientos', 'compra_items'],
+                                ['lotes', 'promociones', 'promocion_reglas']]),
     ('Caja, ventas y devoluciones', [['cajas', 'clientes', 'modos_de_pago'],
                                      ['sesiones_caja', 'ventas_espera'],
                                      ['sesion_conteos', 'caja_movimientos', 'ventas'],
@@ -463,7 +466,7 @@ def screen():
     s.text(left + 20, top + 62, 'AguaraPOS', 16, True, WHITE)
     s.text(left + 20, top + 80, 'Punto de venta', 11, False, BORDER)
     s.text(left + 20, top + 116, 'MÓDULOS', 11, True, BORDER)
-    for i, name in enumerate(('Inventario', 'Clientes', 'Ventas', 'Reportes', 'Usuarios')):
+    for i, name in enumerate(('Inventario', 'Clientes', 'Ventas', 'Reportes', 'Usuarios', 'Promociones')):
         y = top + 130 + i * 34
         if name == 'Ventas':
             s.rect(left, y, side, 32, '#3E4C59', '#3E4C59', r=0)

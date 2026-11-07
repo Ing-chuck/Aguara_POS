@@ -21,7 +21,9 @@ un subproyecto de `Aguara_POS.pro`). Los ejecutables quedan en `<compilación>/t
 | `tst_reports` | Los reportes, sus totales y la exportación a CSV *(SQLite y PostgreSQL)* |
 | `tst_lowstock` | El aviso de stock bajo sigue al stock: ventas, compras, ajustes, recuentos, devoluciones, sin conexión *(SQLite y PostgreSQL)* |
 | `tst_sales` | Caja y ventas: totales exactos, sesión, numeración, anulación, arqueo y cierre *(SQLite y PostgreSQL)* |
-| `tst_modules` | Los plugins reales: importación de CSV, inventario, compra y recuento por pantalla, etiquetas, autorización, usuarios y un día de caja por pantalla |
+| `tst_promotions` | Promociones: que articulos y dias alcanzan, cuanto descuentan, y que la venta guarda lo que se le dio, en SQLite y PostgreSQL |
+| `tst_expiry` | Lotes en cada movimiento de stock, los dos avisos de vencimiento y unidades de venta, en SQLite y PostgreSQL |
+| `tst_modules` | Los plugins reales: importación de artículos, clientes y proveedores desde CSV, inventario, compra y recuento por pantalla, etiquetas, autorización, usuarios y un día de caja por pantalla |
 | `tst_reconnect` | Varias cajas en un servidor: avisos entre cajas, reinicio y caída del servidor *(solo PostgreSQL)* |
 | `tst_mainwindow` | Ventana principal: avisos, reloj, menús, atajos, y lo que ve cada usuario, con los módulos reales. Con los módulos de `fixtures/`, que un módulo de otra API no llega a ejecutarse y que uno que no abre se avisa |
 | `test_autoversion.py` | `autoVersion.py` sobre un repositorio temporal. Lo ejecuta `run-tests.sh`, junto con `autoVersion.py check` |

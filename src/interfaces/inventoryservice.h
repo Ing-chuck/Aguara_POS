@@ -56,6 +56,7 @@ struct PurchaseLine {
     Quantity quantity = 0;
     Money    unitCost = 0;
     Money    newPrice = 0;      ///< 0 keeps the sale price
+    QDate    expires = QDate(); ///< use-by date of what arrived; invalid: it has none
 };
 
 /// Merchandise received from a supplier.
@@ -110,6 +111,14 @@ struct PricePreview {
     Money   newPrice = 0;
 };
 
+/// Stock of an article with one use-by date. What goes out leaves the soonest
+/// date first; the stock outside the lots has no date.
+struct StockLot {
+    qint64   id = 0;
+    QDate    expires;
+    Quantity quantity = 0;
+};
+
 /// What a code typed or scanned refers to.
 struct ScanResult {
     bool     found = false;
@@ -133,6 +142,15 @@ public:
     virtual bool adjustStock(const QString &code, Quantity delta, const QString &reason) = 0;
     /// Active articles at or below their minimum.
     virtual QList<Product> lowStock() const = 0;
+    /// How many days before its use-by date an article starts to be notified.
+    virtual int expiryWarningDays() const = 0;
+    virtual bool setExpiryWarningDays(int days) = 0;    ///< 1 to 365
+    /// The ones with stock, soonest first.
+    virtual QList<StockLot> lots(const QString &code) const = 0;
+    /// Gives a date to stock that has none: refuses more than there is.
+    virtual bool addLot(const QString &code, Quantity quantity, const QDate &expires) = 0;
+    /// Takes its date away: the stock stays, with no date. For a wrong date.
+    virtual bool removeLot(qint64 id) = 0;
 
     // --- codes ----------------------------------------------------------
     /// By main code, by alternate barcode, or as a scale's code.
@@ -146,6 +164,8 @@ public:
     /// Create (id == 0) or update; returns the id, 0 on error.
     virtual qint64 saveSupplier(const Supplier &supplier) = 0;
     virtual bool deactivateSupplier(qint64 id) = 0;
+    /// Saves them all or none, as saveSupplier() would: id == 0 is a new one.
+    virtual bool importSuppliers(const QList<Supplier> &suppliers, int *saved = nullptr) = 0;
 
     // --- purchases ------------------------------------------------------
     /// All or nothing: the purchase, its stock movements and the new costs

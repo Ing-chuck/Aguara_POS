@@ -201,6 +201,9 @@ QByteArray SaleJson::fromDraft(const SaleDraft &draft)
         o[QStringLiteral("fixedAmount")] = QString::number(l.fixedAmount);
         o[QStringLiteral("discount")] = QString::number(l.discount);
         o[QStringLiteral("vatRate")] = l.vatRate;
+        o[QStringLiteral("promotionId")] = QString::number(l.promotionId);
+        o[QStringLiteral("promotionName")] = l.promotionName;
+        o[QStringLiteral("promotionDiscount")] = QString::number(l.promotionDiscount);
         lines.append(o);
     }
     QJsonObject root;
@@ -232,6 +235,9 @@ SaleDraft SaleJson::toDraft(const QByteArray &json)
         l.fixedAmount = o.value(QStringLiteral("fixedAmount")).toString().toLongLong();
         l.discount = o.value(QStringLiteral("discount")).toString().toLongLong();
         l.vatRate = o.value(QStringLiteral("vatRate")).toInt();
+        l.promotionId = o.value(QStringLiteral("promotionId")).toString().toLongLong();
+        l.promotionName = o.value(QStringLiteral("promotionName")).toString();
+        l.promotionDiscount = o.value(QStringLiteral("promotionDiscount")).toString().toLongLong();
         draft.lines << l;
     }
     return draft;

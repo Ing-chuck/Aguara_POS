@@ -13,6 +13,16 @@ class SqlProductService;
 class UserService;
 
 /// InventoryService on the core's database.
+/// A lot with stock, for the notifications.
+struct ExpiringLot {
+    qint64   id = 0;
+    QString  description;
+    QDate    expires;
+    Quantity quantity = 0;
+    int      decimals = 0;
+    QString  unit;
+};
+
 class SqlInventoryService : public QObject, public InventoryService
 {
     Q_OBJECT
@@ -31,6 +41,14 @@ public:
     /// The same, code to description, in one query: it runs after every sale.
     /// Nothing on a failure, which an empty list can't tell from "none low".
     std::optional<QMap<QString, QString>> lowStockNames() const;
+    /// Lots of active articles that expire up to `until`, soonest first.
+    /// Without a value when the database can't say, as in an outage.
+    std::optional<QList<ExpiringLot>> expiringBy(const QDate &until) const;
+    int expiryWarningDays() const override;
+    bool setExpiryWarningDays(int days) override;
+    QList<StockLot> lots(const QString &code) const override;
+    bool addLot(const QString &code, Quantity quantity, const QDate &expires) override;
+    bool removeLot(qint64 id) override;
 
     ScanResult resolveScan(const QString &text) const override;
     QStringList barcodes(const QString &code) const override;
@@ -40,6 +58,7 @@ public:
     QList<Supplier> suppliers(bool includeInactive = false) const override;
     qint64 saveSupplier(const Supplier &supplier) override;
     bool deactivateSupplier(qint64 id) override;
+    bool importSuppliers(const QList<Supplier> &suppliers, int *saved = nullptr) override;
 
     qint64 savePurchase(const Purchase &purchase) override;
     QList<Purchase> purchases(const QDate &from, const QDate &to) const override;
@@ -53,6 +72,10 @@ public:
     bool applyPriceChange(const PriceFilter &filter, int percent, Money roundTo, int *changed = nullptr) override;
 
     QString lastError() const override { return m_lastError; }
+
+signals:
+    /// Many suppliers changed at once, so an open list has to show them.
+    void suppliersChanged();
 
 private:
     QSqlDatabase db() const;

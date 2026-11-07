@@ -28,7 +28,8 @@ bool SalesModuleFactory::initialize(AguaraHost *host)
     print = host->service<PrintService>();
     customers = host->service<CustomerService>();
     returns = host->service<ReturnService>();
-    return products && inventory && users && cash && sales && print && customers && returns;
+    promotions = host->service<PromotionService>();
+    return products && inventory && users && cash && sales && print && customers && returns && promotions;
 }
 
 QList<PermissionInfo> SalesModuleFactory::permissions() const
@@ -43,6 +44,7 @@ QList<PermissionInfo> SalesModuleFactory::permissions() const
         { QStringLiteral("ventas.comprobante_repetido"), QStringLiteral("Aceptar un comprobante ya usado en otra venta"), sale },
         { QStringLiteral("ventas.reimprimir"), QStringLiteral("Reimprimir tickets (salen con la marca COPIA)"), sale },
         { QStringLiteral("ventas.devolver"), QStringLiteral("Hacer devoluciones"), sale },
+        { QStringLiteral("ventas.baja_vencido"), QStringLiteral("Dar de baja en caja un artículo vencido"), sale },
         { QStringLiteral("caja.abrir"), QStringLiteral("Abrir la caja"), till, true, true },
         { QStringLiteral("caja.cerrar"), QStringLiteral("Cerrar la caja con arqueo"), till, true, true },
         { QStringLiteral("caja.movimientos"), QStringLiteral("Registrar ingresos, egresos y retiros"), till },
@@ -63,5 +65,5 @@ bool SalesModuleFactory::keepPageOpen() const
 
 QWidget *SalesModuleFactory::createWidget(QWidget *parent)
 {
-    return new SalesModule(products, inventory, users, cash, sales, print, customers, returns, parent);
+    return new SalesModule(products, inventory, users, cash, sales, print, customers, returns, promotions, parent);
 }

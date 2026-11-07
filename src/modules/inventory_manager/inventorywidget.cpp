@@ -10,7 +10,9 @@
 #include <QApplication>
 #include <QHeaderView>
 #include <QKeySequence>
+#include <QInputDialog>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QTabWidget>
@@ -88,6 +90,8 @@ void inventoryWidget::buildSections()
     sections->addTab(ui->body, tabIcon("box"), tr("Artículos"));
     auto purchases = new PurchasesPage(products, inventory, users);
     auto suppliers = new SuppliersPage(inventory, users);
+    if (auto service = dynamic_cast<QObject *>(inventory))
+        connect(service, SIGNAL(suppliersChanged()), suppliers, SLOT(reload()));    // an import, with this tab open
     sections->addTab(purchases, tabIcon("cart"), tr("Compras"));
     sections->addTab(suppliers, tabIcon("users"), tr("Proveedores"));
     sections->addTab(new CountsPage(products, inventory, users), tabIcon("list"), tr("Recuentos"));
@@ -101,6 +105,7 @@ void inventoryWidget::buildSections()
     moreMenu->addSeparator();
     moreMenu->addAction(AguaraStyle::icon(QStringLiteral("settings")), tr("Cambio de precios..."), this, &inventoryWidget::onPriceChange);
     moreMenu->addAction(AguaraStyle::icon(QStringLiteral("list")), tr("Etiquetas de góndola..."), this, &inventoryWidget::onLabels);
+    moreMenu->addAction(AguaraStyle::icon(QStringLiteral("settings")), tr("Aviso de vencimiento..."), this, &inventoryWidget::onExpiryWarning);
     moreButton->setMenu(moreMenu);
     ui->headerLayout->insertWidget(ui->headerLayout->indexOf(ui->itemRemoveButton), moreButton);
 
@@ -155,6 +160,18 @@ void inventoryWidget::onPriceChange()
 void inventoryWidget::onLabels()
 {
     LabelsDialog(products, inventory, selectedCode(), this).exec();
+}
+
+void inventoryWidget::onExpiryWarning()
+{
+    if (!authorized(QStringLiteral("inventario.editar"), tr("Cambiar el aviso de vencimiento")))
+        return;
+    bool ok = false;
+    const int days = QInputDialog::getInt(this, tr("Aviso de vencimiento"),
+                                          tr("Días antes del vencimiento para avisar:"),
+                                          inventory->expiryWarningDays(), 1, 365, 1, &ok);
+    if (ok && !inventory->setExpiryWarningDays(days))
+        QMessageBox::warning(this, tr("Aviso de vencimiento"), inventory->lastError());
 }
 
 void inventoryWidget::updateSummary()
@@ -308,8 +325,9 @@ void inventoryWidget::loadTable()
 void inventoryWidget::fitColumns()
 {
     const int width = ui->tableView->viewport()->width();
-    ui->tableView->setColumnHidden(int(ProductColumn::Purchased), width < 980);
-    ui->tableView->setColumnHidden(int(ProductColumn::Brand), width < 860);
+    ui->tableView->setColumnHidden(int(ProductColumn::Purchased), width < 1080);
+    ui->tableView->setColumnHidden(int(ProductColumn::Brand), width < 980);
+    ui->tableView->setColumnHidden(int(ProductColumn::Expires), width < 860);
 }
 
 bool inventoryWidget::eventFilter(QObject *watched, QEvent *event)

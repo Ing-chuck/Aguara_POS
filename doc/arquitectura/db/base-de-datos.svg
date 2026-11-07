@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1679" height="1938" viewBox="0 0 1679 1938">
-<rect width="1679" height="1938" fill="#FFFFFF"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1679" height="2109" viewBox="0 0 1679 2109">
+<rect width="1679" height="2109" fill="#FFFFFF"/>
 <text x="40" y="42" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="bold" fill="#B84A0A" text-anchor="start">Base de datos</text>
-<text x="40" y="64" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#52606D" text-anchor="start">Las 32 tablas de la migración 9. Las tablas previstas para la fase 7 siguen en test_database.graphml.</text>
+<text x="40" y="64" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#52606D" text-anchor="start">Las 35 tablas de la migración 11. Las tablas previstas para la fase 7 siguen en test_database.graphml.</text>
 <rect x="40" y="90" width="922.2879962921143" height="450" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
 <text x="60" y="118" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="bold" fill="#B84A0A" text-anchor="start">Usuarios y auditoría</text>
 <polyline points="116.89866654078165,440 116.89866654078165,387 128.35599970817566,387 128.35599970817566,316" fill="none" stroke="#7B8794" stroke-width="1.1"/>
@@ -74,7 +74,7 @@
 <text x="260.69599962234497" y="503" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
 <text x="278.69599962234497" y="503" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="start">permiso</text>
 <text x="331.3759994506836" y="503" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#B84A0A" text-anchor="start">→ permisos</text>
-<rect x="40" y="560" width="922.2879962921143" height="965" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<rect x="40" y="560" width="922.2879962921143" height="1291" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
 <text x="60" y="588" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="bold" fill="#B84A0A" text-anchor="start">Artículos e inventario</text>
 <polyline points="96.45733316739401,892 96.45733316739401,821 98.3439998626709,821 98.3439998626709,696" fill="none" stroke="#7B8794" stroke-width="1.1"/>
 <polygon points="93.8439998626709,705.0 98.3439998626709,696 102.8439998626709,705.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
@@ -84,8 +84,8 @@
 <polygon points="392.5659991502762,687.0 397.0659991502762,678 401.5659991502762,687.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
 <polyline points="199.82933266957602,892 199.82933266957602,848 693.0889981389046,848 693.0889981389046,804" fill="none" stroke="#7B8794" stroke-width="1.1"/>
 <polygon points="688.5889981389046,813.0 693.0889981389046,804 697.5889981389046,813.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
-<polyline points="234.28666583697,892 234.28666583697,857 510.74149867892265,857 510.74149867892265,714" fill="none" stroke="#7B8794" stroke-width="1.1"/>
-<polygon points="506.24149867892265,723.0 510.74149867892265,714 515.2414986789227,723.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
+<polyline points="234.28666583697,892 234.28666583697,857 510.74149867892265,857 510.74149867892265,732" fill="none" stroke="#7B8794" stroke-width="1.1"/>
+<polygon points="506.24149867892265,741.0 510.74149867892265,732 515.2414986789227,741.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
 <polyline points="392.439998626709,892 392.439998626709,866 669.0889981389046,866 669.0889981389046,804" fill="none" stroke="#7B8794" stroke-width="1.1"/>
 <polygon points="664.5889981389046,813.0 669.0889981389046,804 673.5889981389046,813.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
 <polyline points="162.03599953651428,1263 162.03599953651428,1201 157.371999502182,1201 157.371999502182,1184" fill="none" stroke="#7B8794" stroke-width="1.1"/>
@@ -120,7 +120,7 @@
 <text x="353.38799929618835" y="647" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
 <text x="371.38799929618835" y="647" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="start">tasa</text>
 <text x="371.38799929618835" y="665" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">categoria</text>
-<rect x="458.743999004364" y="602" width="135.99499934911728" height="112" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<rect x="458.743999004364" y="602" width="135.99499934911728" height="130" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
 <path d="M458.743999004364 628 V606 a4 4 0 0 1 4 -4 H590.7389983534813 a4 4 0 0 1 4 4 V628 Z" fill="#1F2933"/>
 <text x="468.743999004364" y="620" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">unidades_basicas</text>
 <text x="466.743999004364" y="647" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
@@ -128,6 +128,7 @@
 <text x="484.743999004364" y="665" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">unidad</text>
 <text x="484.743999004364" y="683" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">abreviatura</text>
 <text x="484.743999004364" y="701" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">decimales</text>
+<text x="484.743999004364" y="719" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">activo</text>
 <rect x="620.7389983534813" y="602" width="112.69999957084656" height="202" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
 <path d="M620.7389983534813 628 V606 a4 4 0 0 1 4 -4 H729.4389979243279 a4 4 0 0 1 4 4 V628 Z" fill="#1F2933"/>
 <text x="630.7389983534813" y="620" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">proveedores</text>
@@ -224,24 +225,66 @@
 <text x="766.2159972190857" y="1362" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">cantidad</text>
 <text x="766.2159972190857" y="1380" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">costo_unitario</text>
 <text x="766.2159972190857" y="1398" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">precio_nuevo</text>
-<rect x="40" y="1545" width="922.2879962921143" height="333" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
-<text x="60" y="1573" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="bold" fill="#B84A0A" text-anchor="start">Sistema</text>
-<rect x="62" y="1587" width="109.9559998512268" height="76" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
-<path d="M62 1613 V1591 a4 4 0 0 1 4 -4 H167.9559998512268 a4 4 0 0 1 4 4 V1613 Z" fill="#1F2933"/>
-<text x="72" y="1605" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">configuracion</text>
-<text x="70" y="1632" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
-<text x="88" y="1632" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="start">clave</text>
-<text x="88" y="1650" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">valor</text>
-<rect x="197.9559998512268" y="1587" width="146.09599947929382" height="112" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
-<path d="M197.9559998512268 1613 V1591 a4 4 0 0 1 4 -4 H340.05199933052063 a4 4 0 0 1 4 4 V1613 Z" fill="#1F2933"/>
-<text x="207.9559998512268" y="1605" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">schema_migrations</text>
-<text x="205.9559998512268" y="1632" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
-<text x="223.9559998512268" y="1632" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="start">owner</text>
-<text x="205.9559998512268" y="1650" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
-<text x="223.9559998512268" y="1650" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="start">version</text>
-<text x="223.9559998512268" y="1668" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">description</text>
-<text x="223.9559998512268" y="1686" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">applied_at</text>
-<rect x="982.2879962921143" y="90" width="656.8199980258942" height="1788" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<rect x="62" y="1535" width="200.07199907302856" height="130" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<path d="M62 1561 V1539 a4 4 0 0 1 4 -4 H258.07199907302856 a4 4 0 0 1 4 4 V1561 Z" fill="#1F2933"/>
+<text x="72" y="1553" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">lotes</text>
+<text x="70" y="1580" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
+<text x="88" y="1580" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="start">id</text>
+<text x="88" y="1598" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">producto_codigo</text>
+<text x="182.7159993648529" y="1598" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#B84A0A" text-anchor="start">→ productos</text>
+<text x="88" y="1616" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">vencimiento</text>
+<text x="88" y="1634" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">cantidad</text>
+<text x="88" y="1652" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">inicial</text>
+<rect x="288.07199907302856" y="1535" width="118.6879997253418" height="292" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<path d="M288.07199907302856 1561 V1539 a4 4 0 0 1 4 -4 H402.75999879837036 a4 4 0 0 1 4 4 V1561 Z" fill="#1F2933"/>
+<text x="298.07199907302856" y="1553" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">promociones</text>
+<text x="296.07199907302856" y="1580" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
+<text x="314.07199907302856" y="1580" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="start">id</text>
+<text x="314.07199907302856" y="1598" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">nombre</text>
+<text x="314.07199907302856" y="1616" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">tipo</text>
+<text x="314.07199907302856" y="1634" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">valor</text>
+<text x="314.07199907302856" y="1652" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">lleva</text>
+<text x="314.07199907302856" y="1670" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">paga</text>
+<text x="314.07199907302856" y="1688" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">minimo</text>
+<text x="314.07199907302856" y="1706" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">desde</text>
+<text x="314.07199907302856" y="1724" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">hasta</text>
+<text x="314.07199907302856" y="1742" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">dias</text>
+<text x="314.07199907302856" y="1760" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">todos</text>
+<text x="314.07199907302856" y="1778" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">rubro_y_marca</text>
+<text x="314.07199907302856" y="1796" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">invertir</text>
+<text x="314.07199907302856" y="1814" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">activo</text>
+<rect x="432.75999879837036" y="1535" width="200.07199907302856" height="148" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<path d="M432.75999879837036 1561 V1539 a4 4 0 0 1 4 -4 H628.8319978713989 a4 4 0 0 1 4 4 V1561 Z" fill="#1F2933"/>
+<text x="442.75999879837036" y="1553" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">promocion_reglas</text>
+<text x="440.75999879837036" y="1580" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
+<text x="458.75999879837036" y="1580" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="start">id</text>
+<text x="458.75999879837036" y="1598" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">promocion_id</text>
+<text x="536.7839984893799" y="1598" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#B84A0A" text-anchor="start">→ promociones</text>
+<text x="458.75999879837036" y="1616" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">producto_codigo</text>
+<text x="553.4759981632233" y="1616" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#B84A0A" text-anchor="start">→ productos</text>
+<text x="458.75999879837036" y="1634" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">rubro_id</text>
+<text x="508.7759985923767" y="1634" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#B84A0A" text-anchor="start">→ rubros</text>
+<text x="458.75999879837036" y="1652" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">marca_id</text>
+<text x="514.1039986610413" y="1652" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#B84A0A" text-anchor="start">→ marcas</text>
+<text x="458.75999879837036" y="1670" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">excluir</text>
+<rect x="40" y="1871" width="922.2879962921143" height="178" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="60" y="1899" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="bold" fill="#B84A0A" text-anchor="start">Sistema</text>
+<rect x="62" y="1913" width="109.9559998512268" height="76" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<path d="M62 1939 V1917 a4 4 0 0 1 4 -4 H167.9559998512268 a4 4 0 0 1 4 4 V1939 Z" fill="#1F2933"/>
+<text x="72" y="1931" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">configuracion</text>
+<text x="70" y="1958" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
+<text x="88" y="1958" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="start">clave</text>
+<text x="88" y="1976" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">valor</text>
+<rect x="197.9559998512268" y="1913" width="146.09599947929382" height="112" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<path d="M197.9559998512268 1939 V1917 a4 4 0 0 1 4 -4 H340.05199933052063 a4 4 0 0 1 4 4 V1939 Z" fill="#1F2933"/>
+<text x="207.9559998512268" y="1931" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">schema_migrations</text>
+<text x="205.9559998512268" y="1958" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
+<text x="223.9559998512268" y="1958" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="start">owner</text>
+<text x="205.9559998512268" y="1976" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
+<text x="223.9559998512268" y="1976" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="start">version</text>
+<text x="223.9559998512268" y="1994" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">description</text>
+<text x="223.9559998512268" y="2012" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">applied_at</text>
+<rect x="982.2879962921143" y="90" width="656.8199980258942" height="1959" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
 <text x="1002.2879962921143" y="118" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="bold" fill="#B84A0A" text-anchor="start">Caja, ventas y devoluciones</text>
 <polyline points="1068.6419960260391,386 1068.6419960260391,351 1054.965996146202,351 1054.965996146202,244" fill="none" stroke="#7B8794" stroke-width="1.1"/>
 <polygon points="1050.465996146202,253.0 1054.965996146202,244 1059.465996146202,253.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
@@ -259,9 +302,9 @@
 <polygon points="1519.915994644165,1220.0 1524.415994644165,1211 1528.915994644165,1220.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
 <polyline points="1488.4279944896698,1272 1488.4279944896698,1246 1532.415994644165,1246 1532.415994644165,1211" fill="none" stroke="#7B8794" stroke-width="1.1"/>
 <polygon points="1527.915994644165,1220.0 1532.415994644165,1211 1536.915994644165,1220.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
-<polyline points="1105.319995880127,1634 1105.319995880127,1599 1480.4279944896698,1599 1480.4279944896698,1528" fill="none" stroke="#7B8794" stroke-width="1.1"/>
+<polyline points="1105.319995880127,1688 1105.319995880127,1653 1480.4279944896698,1653 1480.4279944896698,1528" fill="none" stroke="#7B8794" stroke-width="1.1"/>
 <polygon points="1475.9279944896698,1537.0 1480.4279944896698,1528 1484.9279944896698,1537.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
-<polyline points="1333.3839950561523,1634 1333.3839950561523,1608 1488.4279944896698,1608 1488.4279944896698,1528" fill="none" stroke="#7B8794" stroke-width="1.1"/>
+<polyline points="1333.3839950561523,1688 1333.3839950561523,1662 1488.4279944896698,1662 1488.4279944896698,1528" fill="none" stroke="#7B8794" stroke-width="1.1"/>
 <polygon points="1483.9279944896698,1537.0 1488.4279944896698,1528 1492.9279944896698,1537.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
 <rect x="1004.2879962921143" y="132" width="117.35599970817566" height="112" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
 <path d="M1004.2879962921143 158 V136 a4 4 0 0 1 4 -4 H1117.64399600029 a4 4 0 0 1 4 4 V158 Z" fill="#1F2933"/>
@@ -375,7 +418,7 @@
 <text x="1514.4119946956635" y="1162" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#B84A0A" text-anchor="start">→ clientes</text>
 <text x="1457.7239949703217" y="1180" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">cliente_nombre</text>
 <text x="1457.7239949703217" y="1198" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">cliente_documento</text>
-<rect x="1004.2879962921143" y="1272" width="200.07199907302856" height="310" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<rect x="1004.2879962921143" y="1272" width="200.07199907302856" height="364" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
 <path d="M1004.2879962921143 1298 V1276 a4 4 0 0 1 4 -4 H1200.3599953651428 a4 4 0 0 1 4 4 V1298 Z" fill="#1F2933"/>
 <text x="1014.2879962921143" y="1290" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">ventas_items</text>
 <text x="1012.2879962921143" y="1317" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
@@ -396,6 +439,10 @@
 <text x="1030.2879962921143" y="1533" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">iva_tasa</text>
 <text x="1030.2879962921143" y="1551" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">iva</text>
 <text x="1030.2879962921143" y="1569" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">costo_unitario</text>
+<text x="1030.2879962921143" y="1587" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">promocion_id</text>
+<text x="1108.3119959831238" y="1587" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#B84A0A" text-anchor="start">→ promociones</text>
+<text x="1030.2879962921143" y="1605" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">promocion</text>
+<text x="1030.2879962921143" y="1623" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">descuento_promocion</text>
 <rect x="1230.3599953651428" y="1272" width="139.3759994506836" height="148" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
 <path d="M1230.3599953651428 1298 V1276 a4 4 0 0 1 4 -4 H1365.7359948158264 a4 4 0 0 1 4 4 V1298 Z" fill="#1F2933"/>
 <text x="1240.3599953651428" y="1290" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">ventas_pagos</text>
@@ -426,34 +473,34 @@
 <text x="1421.7359948158264" y="1479" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">pagado</text>
 <text x="1421.7359948158264" y="1497" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">medio</text>
 <text x="1421.7359948158264" y="1515" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">referencia</text>
-<rect x="1004.2879962921143" y="1634" width="202.0639991760254" height="220" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
-<path d="M1004.2879962921143 1660 V1638 a4 4 0 0 1 4 -4 H1202.3519954681396 a4 4 0 0 1 4 4 V1660 Z" fill="#1F2933"/>
-<text x="1014.2879962921143" y="1652" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">devoluciones_items</text>
-<text x="1012.2879962921143" y="1679" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
-<text x="1030.2879962921143" y="1679" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="start">id</text>
-<text x="1030.2879962921143" y="1697" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">devolucion_id</text>
-<text x="1109.6559958457947" y="1697" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#B84A0A" text-anchor="start">→ devoluciones</text>
-<text x="1030.2879962921143" y="1715" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">linea</text>
-<text x="1030.2879962921143" y="1733" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">producto_codigo</text>
-<text x="1125.0039956569672" y="1733" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#B84A0A" text-anchor="start">→ productos</text>
-<text x="1030.2879962921143" y="1751" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">descripcion</text>
-<text x="1030.2879962921143" y="1769" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">unidad</text>
-<text x="1030.2879962921143" y="1787" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">decimales</text>
-<text x="1030.2879962921143" y="1805" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">cantidad</text>
-<text x="1030.2879962921143" y="1823" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">importe</text>
-<text x="1030.2879962921143" y="1841" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">iva</text>
-<rect x="1232.3519954681396" y="1634" width="202.0639991760254" height="166" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
-<path d="M1232.3519954681396 1660 V1638 a4 4 0 0 1 4 -4 H1430.415994644165 a4 4 0 0 1 4 4 V1660 Z" fill="#1F2933"/>
-<text x="1242.3519954681396" y="1652" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">notas_credito</text>
-<text x="1240.3519954681396" y="1679" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
-<text x="1258.3519954681396" y="1679" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="start">id</text>
-<text x="1258.3519954681396" y="1697" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">devolucion_id</text>
-<text x="1337.71999502182" y="1697" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#B84A0A" text-anchor="start">→ devoluciones</text>
-<text x="1258.3519954681396" y="1715" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">cliente_id</text>
-<text x="1315.0399951934814" y="1715" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#B84A0A" text-anchor="start">→ clientes</text>
-<text x="1258.3519954681396" y="1733" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">cliente_nombre</text>
-<text x="1258.3519954681396" y="1751" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">fecha</text>
-<text x="1258.3519954681396" y="1769" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">monto</text>
-<text x="1258.3519954681396" y="1787" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">saldo</text>
-<text x="40" y="1914" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">Las flechas unen tablas de filas contiguas. Las demás relaciones figuran en la columna (→ tabla). Solo se muestran las claves foráneas declaradas.</text>
+<rect x="1004.2879962921143" y="1688" width="202.0639991760254" height="220" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<path d="M1004.2879962921143 1714 V1692 a4 4 0 0 1 4 -4 H1202.3519954681396 a4 4 0 0 1 4 4 V1714 Z" fill="#1F2933"/>
+<text x="1014.2879962921143" y="1706" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">devoluciones_items</text>
+<text x="1012.2879962921143" y="1733" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
+<text x="1030.2879962921143" y="1733" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="start">id</text>
+<text x="1030.2879962921143" y="1751" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">devolucion_id</text>
+<text x="1109.6559958457947" y="1751" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#B84A0A" text-anchor="start">→ devoluciones</text>
+<text x="1030.2879962921143" y="1769" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">linea</text>
+<text x="1030.2879962921143" y="1787" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">producto_codigo</text>
+<text x="1125.0039956569672" y="1787" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#B84A0A" text-anchor="start">→ productos</text>
+<text x="1030.2879962921143" y="1805" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">descripcion</text>
+<text x="1030.2879962921143" y="1823" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">unidad</text>
+<text x="1030.2879962921143" y="1841" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">decimales</text>
+<text x="1030.2879962921143" y="1859" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">cantidad</text>
+<text x="1030.2879962921143" y="1877" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">importe</text>
+<text x="1030.2879962921143" y="1895" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">iva</text>
+<rect x="1232.3519954681396" y="1688" width="202.0639991760254" height="166" rx="4" ry="4" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<path d="M1232.3519954681396 1714 V1692 a4 4 0 0 1 4 -4 H1430.415994644165 a4 4 0 0 1 4 4 V1714 Z" fill="#1F2933"/>
+<text x="1242.3519954681396" y="1706" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">notas_credito</text>
+<text x="1240.3519954681396" y="1733" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="bold" fill="#B84A0A" text-anchor="start">PK</text>
+<text x="1258.3519954681396" y="1733" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#1F2933" text-anchor="start">id</text>
+<text x="1258.3519954681396" y="1751" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">devolucion_id</text>
+<text x="1337.71999502182" y="1751" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#B84A0A" text-anchor="start">→ devoluciones</text>
+<text x="1258.3519954681396" y="1769" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">cliente_id</text>
+<text x="1315.0399951934814" y="1769" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#B84A0A" text-anchor="start">→ clientes</text>
+<text x="1258.3519954681396" y="1787" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">cliente_nombre</text>
+<text x="1258.3519954681396" y="1805" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">fecha</text>
+<text x="1258.3519954681396" y="1823" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">monto</text>
+<text x="1258.3519954681396" y="1841" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">saldo</text>
+<text x="40" y="2085" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">Las flechas unen tablas de filas contiguas. Las demás relaciones figuran en la columna (→ tabla). Solo se muestran las claves foráneas declaradas.</text>
 </svg>

@@ -38,9 +38,11 @@ SOURCES      +=     \
     sessiondialogs.cpp \
     sqlcashservice.cpp \
     sqlproductservice.cpp \
+    sqlpromotionservice.cpp \
     sqlsalesservice.cpp \
     sqlinventoryservice.cpp \
     sqluserservice.cpp \
+    expirywatcher.cpp \
     lowstockwatcher.cpp \
     stockledger.cpp
 
@@ -74,9 +76,11 @@ HEADERS      +=     \
     sessiondialogs.h \
     sqlcashservice.h \
     sqlproductservice.h \
+    sqlpromotionservice.h \
     sqlsalesservice.h \
     sqlinventoryservice.h \
     sqluserservice.h \
+    expirywatcher.h \
     lowstockwatcher.h \
     stockledger.h
 

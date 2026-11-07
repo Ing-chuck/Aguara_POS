@@ -87,6 +87,8 @@ CustomersPage::CustomersPage(CustomerService *customers, UserService *users, QWi
     connect(edit, &QPushButton::clicked, this, &CustomersPage::editSelected);
     connect(toggle, &QPushButton::clicked, this, &CustomersPage::toggleSelected);
     connect(table, &QTableWidget::cellDoubleClicked, this, &CustomersPage::editSelected);
+    if (auto service = dynamic_cast<QObject *>(customers))
+        connect(service, SIGNAL(changed()), this, SLOT(reload()));      // an import, with this page open
     reload();
 }
 

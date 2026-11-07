@@ -1,10 +1,13 @@
 #include "sqlcustomerservice.h"
 #include "connectionmonitor.h"
 
+#include "errors.h"
+
 #include <formcheck.h>
 #include <livesearch.h>
 #include <userservice.h>
 
+#include <QSqlError>
 #include <QSqlQuery>
 #include <QVariant>
 
@@ -40,7 +43,7 @@ QSqlDatabase SqlCustomerService::db() const
 
 bool SqlCustomerService::exec(QSqlQuery &q) const
 {
-    if (m_monitor->exec(q))
+    if (m_monitor->exec(q, m_inTransaction))
         return true;
     m_lastError = m_monitor->lastError();
     return false;
@@ -85,6 +88,19 @@ std::optional<Customer> SqlCustomerService::customer(qint64 id) const
         return std::nullopt;
     }
     return read(q);
+}
+
+std::optional<QList<Customer>> SqlCustomerService::allCustomers() const
+{
+    QSqlQuery q(db());
+    q.setForwardOnly(true);
+    q.prepare(QStringLiteral("SELECT %1 FROM clientes ORDER BY id").arg(QLatin1String(kColumns)));
+    if (!exec(q))
+        return std::nullopt;
+    QList<Customer> result;
+    while (q.next())
+        result << read(q);
+    return result;
 }
 
 qint64 SqlCustomerService::saveCustomer(const Customer &customer)
@@ -162,5 +178,38 @@ bool SqlCustomerService::setCustomerActive(qint64 id, bool active)
     if (!exec(q))
         return false;
     audit(active ? QStringLiteral("cliente.reactivar") : QStringLiteral("cliente.baja"), id, QString());
+    return true;
+}
+
+bool SqlCustomerService::importCustomers(const QList<Customer> &customers, int *saved)
+{
+    if (saved)
+        *saved = 0;
+    if (m_monitor->connectionBroken())
+        m_monitor->reconnect();
+    if (!db().transaction()) {
+        m_lastError = AguaraErrors::logAndExplain(db().lastError(), QStringLiteral("BEGIN"));
+        return false;
+    }
+    m_inTransaction = true;
+    for (const Customer &c : customers) {
+        if (saveCustomer(c) == 0) {
+            m_lastError = tr("Cliente %1: %2").arg(c.name, m_lastError);
+            m_inTransaction = false;
+            db().rollback();
+            return false;
+        }
+    }
+    m_inTransaction = false;
+    QSqlDatabase database = db();
+    if (!database.commit()) {
+        m_lastError = AguaraErrors::logAndExplain(database.lastError(), QStringLiteral("COMMIT"));
+        database.rollback();
+        return false;
+    }
+    if (saved)
+        *saved = customers.size();
+    audit(QStringLiteral("cliente.importar"), 0, tr("%1 clientes").arg(customers.size()));
+    emit changed();
     return true;
 }

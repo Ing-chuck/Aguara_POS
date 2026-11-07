@@ -4,7 +4,7 @@
 // The API level modules are checked against: every interface ID ends in it.
 // Don't edit this file: "python autoVersion.py api" raises the level and
 // records what the public headers looked like.
-// fingerprint: fc0183c819e859fa
-#define AGUARA_API_VERSION "4"
+// fingerprint: 1c4e29bf6ba2b753
+#define AGUARA_API_VERSION "9"
 
 #endif // APIVERSION_H

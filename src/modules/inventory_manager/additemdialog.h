@@ -41,6 +41,7 @@ private:
     QString previousCode;       // code of the product being edited
 
     void reloadLists();
+    void addUnitChoice(const StockUnit &unit);
     static void fillNamedCombo(QComboBox *combo, const QList<NamedItem> &items);
     static void selectNamed(QComboBox *combo, qint64 id, const QString &name);
     void showModal();
@@ -56,6 +57,7 @@ private:
 private slots:
     void onModifyBrandClicked();
     void onModifyTypeClicked();
+    void onModifyUnitClicked();
 };
 
 #endif // ADDITEMDIALOG_H

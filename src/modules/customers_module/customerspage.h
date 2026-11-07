@@ -18,8 +18,10 @@ public:
 protected:
     void showEvent(QShowEvent *event) override;
 
-private:
+private slots:
     void reload();
+
+private:
     void add();
     void editSelected();
     void toggleSelected();

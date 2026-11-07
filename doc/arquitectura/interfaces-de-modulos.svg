@@ -39,12 +39,13 @@
 <text x="80" y="377" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">createWidget(parent)</text>
 <text x="80" y="397" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">allowsMultipleInstances()</text>
 <text x="80" y="417" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">keepPageOpen()</text>
-<rect x="324" y="315" width="243" height="94" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
+<rect x="324" y="315" width="243" height="114" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
 <text x="445.5" y="332" font-family="Arial, Helvetica, sans-serif" font-size="10" font-style="italic" fill="#52606D" text-anchor="middle">capacidad</text>
-<text x="445.5" y="350" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">ImportArticlesInterface</text>
+<text x="445.5" y="350" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">ImportInterface</text>
 <line x1="324" y1="359" x2="567" y2="359" stroke="#CBD2D9"/>
 <text x="334" y="377" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">fileTypes()</text>
-<text x="334" y="397" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">importFrom(fileName)</text>
+<text x="334" y="397" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">canImport(kind)</text>
+<text x="334" y="417" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">importFrom(fileName, kind)</text>
 <rect x="578" y="315" width="243" height="74" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
 <text x="699.5" y="332" font-family="Arial, Helvetica, sans-serif" font-size="10" font-style="italic" fill="#52606D" text-anchor="middle">capacidad</text>
 <text x="699.5" y="350" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">PermissionProvider</text>
@@ -62,7 +63,7 @@
 <line x1="1090" y1="359" x2="1330" y2="359" stroke="#CBD2D9"/>
 <text x="1100" y="377" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">notify(msg)</text>
 <text x="1100" y="397" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#1F2933" text-anchor="start">keepOpenChanged()</text>
-<text x="70" y="465" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">Cada interfaz tiene un ID que termina en el nivel de API: org.AguaraPOS.ModuleInterface/1.</text>
+<text x="70" y="465" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">Cada interfaz tiene un ID que termina en el nivel de API: org.AguaraPOS.ModuleInterface/9.</text>
 <text x="70" y="485" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">El core lee ese ID de los metadatos del plugin: con otro nivel lo salta, sin cargar su código.</text>
 <text x="70" y="505" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">Servicios por service&lt;T&gt;(): Product, Inventory, User, Cash, Sales, Print, Customer, Return y Report.</text>
 <rect x="40" y="545" width="1320" height="95" rx="6" ry="6" fill="#FFFFFF" stroke="#B84A0A" stroke-width="1.2"/>
@@ -92,19 +93,24 @@
 <circle cx="640" cy="810" r="6" fill="#B84A0A"/>
 <circle cx="1000" cy="810" r="6" fill="#B84A0A"/>
 <rect x="40" y="827" width="1320" height="34" rx="0" ry="0" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="0.6"/>
-<text x="60" y="849" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">Reportes</text>
-<text x="240" y="849" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2933" text-anchor="start">ReportsFactory</text>
+<text x="60" y="849" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">Promociones</text>
+<text x="240" y="849" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2933" text-anchor="start">PromotionsFactory</text>
 <circle cx="640" cy="844" r="6" fill="#B84A0A"/>
 <circle cx="1000" cy="844" r="6" fill="#B84A0A"/>
 <rect x="40" y="861" width="1320" height="34" rx="0" ry="0" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="0.6"/>
-<text x="60" y="883" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">Usuarios</text>
-<text x="240" y="883" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2933" text-anchor="start">UsersFactory</text>
+<text x="60" y="883" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">Reportes</text>
+<text x="240" y="883" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2933" text-anchor="start">ReportsFactory</text>
 <circle cx="640" cy="878" r="6" fill="#B84A0A"/>
 <circle cx="1000" cy="878" r="6" fill="#B84A0A"/>
 <rect x="40" y="895" width="1320" height="34" rx="0" ry="0" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="0.6"/>
-<text x="60" y="917" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">Ventas</text>
-<text x="240" y="917" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2933" text-anchor="start">SalesModuleFactory</text>
+<text x="60" y="917" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">Usuarios</text>
+<text x="240" y="917" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2933" text-anchor="start">UsersFactory</text>
 <circle cx="640" cy="912" r="6" fill="#B84A0A"/>
 <circle cx="1000" cy="912" r="6" fill="#B84A0A"/>
-<text x="40" y="955" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">ReportProvider queda para módulos futuros: los reportes de hoy los da el core y el módulo Reportes solo los muestra.</text>
+<rect x="40" y="929" width="1320" height="34" rx="0" ry="0" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="0.6"/>
+<text x="60" y="951" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">Ventas</text>
+<text x="240" y="951" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2933" text-anchor="start">SalesModuleFactory</text>
+<circle cx="640" cy="946" r="6" fill="#B84A0A"/>
+<circle cx="1000" cy="946" r="6" fill="#B84A0A"/>
+<text x="40" y="989" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">ReportProvider queda para módulos futuros: los reportes de hoy los da el core y el módulo Reportes solo los muestra.</text>
 </svg>

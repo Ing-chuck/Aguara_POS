@@ -32,6 +32,8 @@ private slots:
     void manyWithoutADocument();
     void leavingKeepsTheCustomer();
     void nameIsRequired();
+    void importIsAllOrNothing();
+    void everyCustomerIsListedForAnImport();
 
     void saleKeepsItsCustomer();
     void saleWithoutCustomerIsTheFinalConsumer();
@@ -256,6 +258,43 @@ void tst_Customers::nameIsRequired()
     Customer c;
     c.name = QStringLiteral("   ");
     QCOMPARE(m_core.customers->saveCustomer(c), qint64(0));
+}
+
+void tst_Customers::importIsAllOrNothing()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    Customer good;
+    good.name = QStringLiteral("Bien");
+    Customer bad;
+    bad.name = QStringLiteral("Mal");
+    bad.documentType = QString::fromLatin1(DocumentType::Ruc);
+    bad.document = QStringLiteral("80009735-9");
+    int saved = -1;
+    QVERIFY(!m_core.customers->importCustomers({ good, bad }, &saved));
+    QCOMPARE(saved, 0);
+    QVERIFY2(m_core.customers->lastError().contains(QStringLiteral("Mal")), qPrintable(m_core.customers->lastError()));
+    QVERIFY(m_core.customers->customers().isEmpty());
+
+    QVERIFY(m_core.customers->importCustomers({ good, ande() }, &saved));
+    QCOMPARE(saved, 2);
+    QCOMPARE(m_core.customers->customers().size(), 2);
+}
+
+/// An import has to find each one: a search stops at 500.
+void tst_Customers::everyCustomerIsListedForAnImport()
+{
+    AGUARA_OPEN_FIXTURE(m_core, m_tmp.path());
+    QList<Customer> many;
+    for (int i = 0; i < 600; ++i) {
+        Customer c;
+        c.name = QStringLiteral("Cliente %1").arg(i);
+        many << c;
+    }
+    QVERIFY2(m_core.customers->importCustomers(many), qPrintable(m_core.customers->lastError()));
+    QCOMPARE(m_core.customers->customers().size(), 500);
+    const auto all = m_core.customers->allCustomers();
+    QVERIFY(all.has_value());
+    QCOMPARE(all->size(), 600);
 }
 
 void tst_Customers::saleKeepsItsCustomer()

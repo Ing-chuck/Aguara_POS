@@ -35,6 +35,13 @@ QString placeholders(int count)
 
 } // namespace
 
+namespace {
+
+const char *const kExpiryWarningKey = "inventario.dias_aviso_vencimiento";
+constexpr int kExpiryWarningDefault = 30;
+
+} // namespace
+
 SqlInventoryService::SqlInventoryService(ConnectionMonitor *monitor, SqlProductService *products, QObject *parent)
     : QObject(parent), m_monitor(monitor), m_products(products), m_connectionName(monitor->connectionName())
 {
@@ -159,6 +166,120 @@ std::optional<QMap<QString, QString>> SqlInventoryService::lowStockNames() const
     while (q.next())
         names.insert(q.value(0).toString(), q.value(1).toString());
     return names;
+}
+
+std::optional<QList<ExpiringLot>> SqlInventoryService::expiringBy(const QDate &until) const
+{
+    QSqlQuery q(db());
+    q.prepare(QStringLiteral(
+        "SELECT l.id, p.descripcion, l.vencimiento, l.cantidad, COALESCE(u.decimales, 0), COALESCE(u.abreviatura, 'un')"
+        "  FROM lotes l"
+        "  JOIN productos p ON p.codigo = l.producto_codigo"
+        "  LEFT JOIN unidades_basicas u ON u.id = p.unidad_id"
+        " WHERE p.es_activo = 1 AND l.cantidad > 0 AND l.vencimiento <= ?"
+        " ORDER BY l.vencimiento, p.descripcion"));
+    q.addBindValue(until.toString(Qt::ISODate));
+    if (!exec(q))
+        return std::nullopt;
+    QList<ExpiringLot> lots;
+    while (q.next())
+        lots.append({ q.value(0).toLongLong(), q.value(1).toString(), QDate::fromString(q.value(2).toString(), Qt::ISODate),
+                      q.value(3).toLongLong(), q.value(4).toInt(), q.value(5).toString() });
+    return lots;
+}
+
+QList<StockLot> SqlInventoryService::lots(const QString &code) const
+{
+    QList<StockLot> result;
+    QSqlQuery q(db());
+    q.prepare(QStringLiteral("SELECT id, vencimiento, cantidad FROM lotes WHERE producto_codigo = ? AND cantidad > 0"
+                             " ORDER BY vencimiento, id"));
+    q.addBindValue(code);
+    if (!exec(q))
+        return result;
+    while (q.next())
+        result.append({ q.value(0).toLongLong(), QDate::fromString(q.value(1).toString(), Qt::ISODate), q.value(2).toLongLong() });
+    return result;
+}
+
+bool SqlInventoryService::addLot(const QString &code, Quantity quantity, const QDate &expires)
+{
+    if (quantity <= 0 || !expires.isValid()) {
+        m_lastError = tr("El lote necesita una cantidad y una fecha.");
+        return false;
+    }
+    const std::optional<Product> article = m_products->product(code);
+    if (!article) {
+        m_lastError = tr("El artículo %1 no existe.").arg(code);
+        return false;
+    }
+    if (!begin())
+        return false;
+    StockLedger ledger(m_monitor, m_connectionName, &m_lastError, m_audit);
+    const std::optional<Quantity> free = ledger.undated(code);
+    if (!free) {
+        rollback();
+        return false;
+    }
+    if (quantity > *free) {
+        rollback();
+        m_lastError = tr("Solo hay %1 sin fecha.").arg(AguaraQuantity::format(*free, article->unit.decimals));
+        return false;
+    }
+    if (!ledger.addToLot(code, expires, quantity)) {
+        rollback();
+        return false;
+    }
+    if (!commit())
+        return false;
+    audit(QStringLiteral("lote.crear"), code, QString(),
+          QStringLiteral("%1 (%2)").arg(AguaraQuantity::format(quantity, article->unit.decimals), expires.toString(Qt::ISODate)));
+    m_products->refreshAfterChange();
+    return true;
+}
+
+bool SqlInventoryService::removeLot(qint64 id)
+{
+    QSqlQuery q(db());
+    q.prepare(QStringLiteral("UPDATE lotes SET cantidad = 0, inicial = 0 WHERE id = ?"));
+    q.addBindValue(id);
+    if (!exec(q))
+        return false;
+    if (q.numRowsAffected() == 0) {
+        m_lastError = tr("El lote no existe.");
+        return false;
+    }
+    audit(QStringLiteral("lote.quitar"), QString::number(id), QString(), QString());
+    m_products->refreshAfterChange();
+    return true;
+}
+
+int SqlInventoryService::expiryWarningDays() const
+{
+    QSqlQuery q(db());
+    q.prepare(QStringLiteral("SELECT valor FROM configuracion WHERE clave = ?"));
+    q.addBindValue(QLatin1String(kExpiryWarningKey));
+    bool ok = false;
+    const int days = exec(q) && q.next() ? q.value(0).toString().toInt(&ok) : 0;
+    return ok ? days : kExpiryWarningDefault;
+}
+
+bool SqlInventoryService::setExpiryWarningDays(int days)
+{
+    if (days < 1 || days > 365) {
+        m_lastError = tr("El aviso va de 1 a 365 días antes.");
+        return false;
+    }
+    QSqlQuery q(db());
+    q.prepare(QStringLiteral("INSERT INTO configuracion (clave, valor) VALUES (?, ?)"
+                             " ON CONFLICT (clave) DO UPDATE SET valor = excluded.valor"));
+    q.addBindValue(QLatin1String(kExpiryWarningKey));
+    q.addBindValue(QString::number(days));
+    if (!exec(q))
+        return false;
+    audit(QStringLiteral("inventario.aviso_vencimiento"), QString(), QString(), QString::number(days));
+    m_products->refreshAfterChange();
+    return true;
 }
 
 QList<Product> SqlInventoryService::lowStock() const
@@ -378,6 +499,28 @@ bool SqlInventoryService::deactivateSupplier(qint64 id)
     return true;
 }
 
+bool SqlInventoryService::importSuppliers(const QList<Supplier> &suppliers, int *saved)
+{
+    if (saved)
+        *saved = 0;
+    if (!begin())
+        return false;
+    for (const Supplier &s : suppliers) {
+        if (saveSupplier(s) == 0) {
+            m_lastError = tr("Proveedor %1: %2").arg(s.name, m_lastError);
+            rollback();
+            return false;
+        }
+    }
+    if (!commit())
+        return false;
+    if (saved)
+        *saved = suppliers.size();
+    audit(QStringLiteral("proveedor.importar"), QString(), QString(), tr("%1 proveedores").arg(suppliers.size()));
+    emit suppliersChanged();
+    return true;
+}
+
 // --- purchases -----------------------------------------------------------------
 
 qint64 SqlInventoryService::savePurchase(const Purchase &purchase)
@@ -451,7 +594,7 @@ qint64 SqlInventoryService::savePurchase(const Purchase &purchase)
         item.addBindValue(line.unitCost);
         item.addBindValue(line.newPrice);
         bool ok = exec(item) && ledger.move(line.code, StockMovementType::Purchase, line.quantity, line.unitCost,
-                                            QString(), document);
+                                            QString(), document, line.expires);
 
         // the same article can come twice on an invoice: read what's current
         Product &article = articles[line.code];

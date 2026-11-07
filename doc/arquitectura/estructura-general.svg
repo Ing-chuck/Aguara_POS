@@ -10,31 +10,35 @@
 <text x="490.0" y="212.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">Ventana principal, servicios, acceso a datos y carga de módulos</text>
 <rect x="70" y="300" width="840" height="90" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
 <text x="490.0" y="341.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">aguara_interfaces.dll</text>
-<text x="490.0" y="359.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">src/interfaces: interfaces, tipos de datos y estilo, compartidos. Nivel de API 1</text>
+<text x="490.0" y="359.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">src/interfaces: interfaces, tipos de datos y estilo, compartidos. Nivel de API 9</text>
 <polyline points="490,245 490,300" fill="none" stroke="#7B8794" stroke-width="1.4"/>
 <polygon points="494.5,291.0 490,300 485.5,291.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>
 <rect x="477.1340000629425" y="265" width="25.73199987411499" height="16" fill="#FFFFFF"/>
 <text x="490" y="276" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">usa</text>
 <rect x="70" y="445" width="840" height="165" rx="6" ry="6" fill="#FFFFFF" stroke="#CBD2D9" stroke-width="1.2"/>
 <text x="90" y="470" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="start">modules\  (un plugin modulo_*.dll por módulo)</text>
-<rect x="90" y="485" width="125" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
-<text x="152.5" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Inventario</text>
-<text x="152.5" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">control_inventario</text>
-<rect x="225" y="485" width="125" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
-<text x="287.5" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Clientes</text>
-<text x="287.5" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">customers</text>
-<rect x="360" y="485" width="125" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
-<text x="422.5" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Importar</text>
-<text x="422.5" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">importar</text>
-<rect x="495" y="485" width="125" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
-<text x="557.5" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Ventas</text>
-<text x="557.5" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">sales_module</text>
-<rect x="630" y="485" width="125" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
-<text x="692.5" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Reportes</text>
-<text x="692.5" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">stats</text>
-<rect x="765" y="485" width="125" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
-<text x="827.5" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Usuarios</text>
-<text x="827.5" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">usuarios</text>
+<rect x="84" y="485" width="110" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="139.0" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Inventario</text>
+<text x="139.0" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">control_inventario</text>
+<rect x="201" y="485" width="110" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="256.0" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Clientes</text>
+<text x="256.0" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">customers</text>
+<rect x="318" y="485" width="110" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="373.0" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Importar</text>
+<text x="373.0" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">importar</text>
+<rect x="435" y="485" width="110" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="490.0" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Ventas</text>
+<text x="490.0" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">sales_module</text>
+<rect x="552" y="485" width="110" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="607.0" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Reportes</text>
+<text x="607.0" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">stats</text>
+<rect x="669" y="485" width="110" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="724.0" y="516.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Usuarios</text>
+<text x="724.0" y="534.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">usuarios</text>
+<rect x="786" y="485" width="110" height="70" rx="6" ry="6" fill="#F5F7FA" stroke="#CBD2D9" stroke-width="1.2"/>
+<text x="841.0" y="508.5" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#1F2933" text-anchor="middle">Promociones</text>
+<text x="841.0" y="526.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">ventas_</text>
+<text x="841.0" y="542.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#52606D" text-anchor="middle">promociones</text>
 <text x="90" y="588" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#52606D" text-anchor="start">Un módulo no usa SQL: pide servicios al core en initialize().</text>
 <polyline points="490,445 490,390" fill="none" stroke="#7B8794" stroke-width="1.4"/>
 <polygon points="485.5,399.0 490,390 494.5,399.0" fill="#7B8794" stroke="#7B8794" stroke-width="1.2"/>

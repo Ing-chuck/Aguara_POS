@@ -36,6 +36,30 @@ QVBoxLayout *dialogHeader(QDialog *dialog, const QString &title, const QString &
 /// The signed-in user may, or a supervisor authorizes it on the spot.
 bool isAuthorized(UserService *users, const QString &permission, const QString &reason, QWidget *parent);
 
+/// Add or remove units of sale.
+class UnitsDialog : public QDialog
+{
+    Q_OBJECT
+public:
+    UnitsDialog(ProductService *products, QWidget *parent);
+
+signals:
+    /// A unit was added or removed.
+    void listChanged();
+
+private:
+    void reload();
+    void add();
+    void remove();
+
+    ProductService *products;
+    QTableWidget *table;
+    QLineEdit *name;
+    QLineEdit *abbreviation;
+    QSpinBox *decimals;
+    QLabel *problem;
+};
+
 /// Correct the stock of one article, with a reason.
 class AdjustStockDialog : public QDialog
 {
@@ -56,7 +80,7 @@ private:
     QLabel *problem;
 };
 
-/// An article's kardex, its price history and its alternate barcodes.
+/// An article's kardex, its lots, its price history and its alternate barcodes.
 class ArticleHistoryDialog : public QDialog
 {
     Q_OBJECT
@@ -65,11 +89,15 @@ public:
 
 private:
     void reloadBarcodes();
+    void reloadLots();
+    QWidget *buildLots();
 
     InventoryService *inventory;
     UserService *users;
     Product product;
     QListWidget *barcodes;
+    QTableWidget *lots;
+    QLabel *undated;
 };
 
 /// Raise or lower many prices at once, with a preview.

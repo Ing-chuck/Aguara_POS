@@ -6,6 +6,7 @@
 #include "database.h"
 #include "databasesettingsdialog.h"
 #include "logging.h"
+#include "expirywatcher.h"
 #include "lowstockwatcher.h"
 #include "mainwindow.h"
 #include "sessiondialogs.h"
@@ -14,6 +15,7 @@
 #include "sqlinventoryservice.h"
 #include "sqlprintservice.h"
 #include "sqlproductservice.h"
+#include "sqlpromotionservice.h"
 #include "sqlreportservice.h"
 #include "sqlreturnservice.h"
 #include "sqlsalesservice.h"
@@ -167,6 +169,8 @@ int main(int argc, char *argv[])
     returns.setUsers(&users);
     SqlReportService reports(&connection, &products);
     reports.setUsers(&users);
+    SqlPromotionService promotions(&connection);
+    promotions.setUsers(&users);
     CoreHost host;
     host.registerService(ProductService_iid, &products);
     host.registerService(InventoryService_iid, &inventory);
@@ -177,6 +181,7 @@ int main(int argc, char *argv[])
     host.registerService(CustomerService_iid, &customers);
     host.registerService(ReturnService_iid, &returns);
     host.registerService(ReportService_iid, &reports);
+    host.registerService(PromotionService_iid, &promotions);
 
     // Nothing opens without a user. First run: create the administrator.
     if (users.hasUsers()) {
@@ -237,6 +242,9 @@ int main(int argc, char *argv[])
     LowStockWatcher lowStock(&products, &inventory, &users, &host);
     QObject::connect(&w, &MainWindow::sessionChanged, &lowStock, &LowStockWatcher::check);
     lowStock.check();
+    ExpiryWatcher expiry(&products, &inventory, &users, &host);
+    QObject::connect(&w, &MainWindow::sessionChanged, &expiry, &ExpiryWatcher::check);
+    expiry.check();
 
     if (!backedUp) {    // after the window exists: it shows the notification
         host.notify(ModuleMsg(QStringLiteral("Aguara"), QStringLiteral("backup"),

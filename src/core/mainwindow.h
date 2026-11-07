@@ -81,7 +81,7 @@ public slots:
     void setConnected(bool connected);
 
 private slots:
-    void Import(ImportArticlesInterface *only = nullptr);
+    void Import(ImportKind kind);
     void backupNow();
     void configureConnection();
     void configurePrinter();
@@ -122,7 +122,7 @@ private:
     void createMenus();
     void createShortcuts();
     void loadPlugins();
-    void addImportMenuEntry(const LoadedModule &module);
+    void enableImports(const LoadedModule &module);
     void makeButton(int moduleIndex);
     QPushButton *makeNavButton(const QIcon &icon, const QString &text);
     QIcon moduleIcon(const LoadedModule &module, const QColor &color) const;
@@ -171,6 +171,8 @@ private:
     QMenu* preferencesMenu = nullptr;
     QMenu* helpMenu = nullptr;
     QAction* importAct = nullptr;
+    QAction* importCustomersAct = nullptr;
+    QAction* importSuppliersAct = nullptr;
     QAction* backupAct = nullptr;
     QAction* connectionAct = nullptr;
     QAction* telemetryAct = nullptr;

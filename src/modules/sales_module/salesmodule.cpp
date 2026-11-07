@@ -42,9 +42,9 @@ QLabel *figure(QGridLayout *grid, int row, const QString &name)
 
 SalesModule::SalesModule(ProductService *products, InventoryService *inventory, UserService *users,
                          CashService *cash, SalesService *sales, PrintService *print, CustomerService *customers,
-                         ReturnService *returns, QWidget *parent)
+                         ReturnService *returns, PromotionService *promotions, QWidget *parent)
     : AguaraWidget(parent), products(products), inventory(inventory), users(users), cash(cash), sales(sales)
-    , print(print), customers(customers), returns(returns)
+    , print(print), customers(customers), returns(returns), promotions(promotions)
 {
     auto layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -356,7 +356,7 @@ void SalesModule::renderSale()
     // a smaller sale can't keep a larger discount
     Money afterLineDiscounts = 0;
     for (const SaleLine &line : draft.lines)
-        afterLineDiscounts += AguaraSale::lineGross(line) - line.discount;
+        afterLineDiscounts += AguaraSale::linePromoted(line) - line.discount;
     draft.totalDiscount = qMin(draft.totalDiscount, afterLineDiscounts);
 
     const int keep = currentLine();
@@ -369,8 +369,11 @@ void SalesModule::renderSale()
         table->setItem(row, ColumnQuantity, rightItem(AguaraQuantity::format(line.quantity, line.decimals)
                                                       + (line.unit == QLatin1String("un") ? QString() : QLatin1Char(' ') + line.unit)));
         table->setItem(row, ColumnPrice, rightItem(AguaraMoney::format(line.unitPrice)));
-        table->setItem(row, ColumnDiscount, rightItem(line.discount ? AguaraMoney::format(line.discount) : QString()));
-        table->setItem(row, ColumnAmount, rightItem(AguaraMoney::format(AguaraSale::lineGross(line) - line.discount)));
+        const Money off = line.discount + line.promotionDiscount;
+        auto discounted = rightItem(off ? AguaraMoney::format(off) : QString());
+        discounted->setToolTip(line.promotionName);
+        table->setItem(row, ColumnDiscount, discounted);
+        table->setItem(row, ColumnAmount, rightItem(AguaraMoney::format(AguaraSale::linePromoted(line) - line.discount)));
     }
     if (table->rowCount() > 0)
         table->selectRow(qBound(0, keep, table->rowCount() - 1));
@@ -499,7 +502,17 @@ void SalesModule::addScan(const ScanResult &scan, bool explicitQuantity, Quantit
                 row = i;
         }
     }
-    const Quantity added = fromScale ? scan.quantity : quantity;
+    const Quantity wanted = fromScale ? scan.quantity : quantity;
+    Quantity discarded = 0;
+    if (!expiryCheck(p, wanted, &discarded))
+        return;
+    const QString discardNote = tr("%1 x %2 dado de baja por vencimiento: no se vende.")
+                                    .arg(AguaraQuantity::format(discarded, p.unit.decimals), p.description);
+    if (discarded >= wanted) {
+        say(AguaraStyle::Warning, discardNote);
+        return;
+    }
+    const Quantity added = wanted - discarded;
     if (row >= 0) {
         draft.lines[row].quantity += added;
     } else {
@@ -510,11 +523,13 @@ void SalesModule::addScan(const ScanResult &scan, bool explicitQuantity, Quantit
         line.decimals = p.unit.decimals;
         line.quantity = added;
         line.unitPrice = p.price;
-        line.fixedAmount = scan.price != p.price ? scan.price : 0;
+        line.fixedAmount = scan.price != p.price && discarded == 0 ? scan.price : 0;     // for the scale's whole weight
         line.vatRate = p.vatRate;
         draft.lines << line;
         row = draft.lines.size() - 1;
     }
+    applyPromotion(draft.lines[row]);
+    const SaleLine rung = draft.lines.at(row);
     table->setRowCount(draft.lines.size());
     table->setCurrentCell(row, 0);
     renderSale();
@@ -525,11 +540,71 @@ void SalesModule::addScan(const ScanResult &scan, bool explicitQuantity, Quantit
         if (line.code == p.code)
             inSale += line.quantity;
     }
-    if (inSale > p.stock)
+    const Quantity stock = p.stock - discarded;
+    if (inSale > stock)
         say(AguaraStyle::Warning, tr("%1: el stock queda en %2. La venta sigue; revise el inventario.")
-                .arg(p.description, AguaraQuantity::format(p.stock - inSale, p.unit.decimals)));
+                .arg(p.description, AguaraQuantity::format(stock - inSale, p.unit.decimals)));
+    else if (discarded > 0)
+        say(AguaraStyle::Warning, discardNote);
+    else if (rung.promotionId != 0)
+        say(AguaraStyle::Info, tr("Promoción %1: Gs. %2 menos.").arg(rung.promotionName,
+                                                                     AguaraMoney::format(rung.promotionDiscount)));
     else
         say(AguaraStyle::Info, QString());
+}
+
+void SalesModule::applyPromotion(SaleLine &line)
+{
+    if (sales->online()) {
+        const std::optional<QList<Promotion>> known = promotions->offersFor(line.code, QDate::currentDate());
+        if (known)
+            offers[line.code] = *known;
+    }
+    const QList<Promotion> running = offers.value(line.code);
+    const int chosen = AguaraPromotion::best(running, line);
+    line.promotionId = chosen >= 0 ? running.at(chosen).id : 0;
+    line.promotionName = chosen >= 0 ? running.at(chosen).name : QString();
+    line.promotionDiscount = chosen >= 0 ? AguaraPromotion::discount(running.at(chosen), line) : 0;
+    line.discount = qMin(line.discount, AguaraSale::linePromoted(line));
+}
+
+bool SalesModule::expiryCheck(const Product &article, Quantity quantity, Quantity *discarded)
+{
+    QDate date;
+    Quantity expired = 0;
+    const QDate today = QDate::currentDate();
+    for (const StockLot &lot : inventory->lots(article.code)) {     // soonest first; empty in an outage: the sale goes on
+        if (lot.expires < today) {
+            date = lot.expires;
+            expired += lot.quantity;
+        }
+    }
+    if (expired == 0)
+        return true;
+
+    QApplication::beep();
+    Quantity count = 0;
+    for (;;) {
+        ExpiryAlertDialog alert(article.description, date, expired, quantity, article.unit.decimals, this);
+        alert.exec();
+        entry->setFocus();
+        count = alert.toDiscard();
+        if (count == 0)
+            return true;
+        const QString what = tr("Dar de baja %1 x %2, vencido")
+                                 .arg(AguaraQuantity::format(count, article.unit.decimals), article.description);
+        if (users->authorize(QStringLiteral("ventas.baja_vencido"), what, this))
+            break;
+        complain(tr("La baja por vencimiento no se autorizó."));    // the unit is still in the cashier's hand
+    }
+    entry->setFocus();
+    if (!inventory->adjustStock(article.code, -count,
+                                tr("Vencido, dado de baja en caja, autorizó %1").arg(users->lastAuthorizer()))) {
+        complain(inventory->lastError());
+        return false;
+    }
+    *discarded = count;
+    return true;
 }
 
 void SalesModule::searchArticle()
@@ -556,7 +631,7 @@ void SalesModule::changeQuantity()
     if (dialog.exec() == QDialog::Accepted) {
         line.quantity = dialog.quantity();
         line.fixedAmount = 0;           // the scale's price was for its own weight
-        line.discount = qMin(line.discount, AguaraSale::lineGross(line));
+        applyPromotion(line);
         renderSale();
     }
     entry->setFocus();
@@ -595,14 +670,14 @@ void SalesModule::discountLine()
     if (row < 0)
         return;
     SaleLine &line = draft.lines[row];
-    const Money gross = AguaraSale::lineGross(line);
+    const Money gross = AguaraSale::linePromoted(line);     // a promotion counts against no one's limit
     DiscountDialog dialog(tr("Descuento de línea"), line.description, gross, this);
     if (dialog.exec() == QDialog::Accepted) {
         const QString what = tr("Descuento de Gs. %1 en %2").arg(AguaraMoney::format(dialog.discount()), line.description);
         // the line's own limit, and the limit on the sale as a whole
         Money saleGross = 0, others = draft.totalDiscount;
         for (int i = 0; i < draft.lines.size(); ++i) {
-            saleGross += AguaraSale::lineGross(draft.lines.at(i));
+            saleGross += AguaraSale::linePromoted(draft.lines.at(i));
             if (i != row)
                 others += draft.lines.at(i).discount;
         }
@@ -625,7 +700,7 @@ void SalesModule::discountSale()
         return;
     Money gross = 0, lineDiscounts = 0;
     for (const SaleLine &line : draft.lines) {
-        gross += AguaraSale::lineGross(line);
+        gross += AguaraSale::linePromoted(line);
         lineDiscounts += line.discount;
     }
     const Money base = gross - lineDiscounts;
@@ -675,6 +750,8 @@ void SalesModule::recallSale()
         const std::optional<SaleDraft> taken = sales->takeHeldSale(dialog.heldId());
         if (taken) {
             draft = *taken;
+            for (SaleLine &line : draft.lines)      // it may be another day
+                applyPromotion(line);
             renderSale();
             say(AguaraStyle::Info, QString());
         } else {

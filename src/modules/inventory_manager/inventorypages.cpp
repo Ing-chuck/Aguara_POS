@@ -196,7 +196,7 @@ qint64 SuppliersPage::showForm(InventoryService *inventory, const Supplier &supp
 
 // --- PurchaseDialog ------------------------------------------------------------
 
-enum LineColumn { LineCode, LineDescription, LineQuantity, LineCost, LineMargin, LinePrice, LineSubtotal, LineColumns };
+enum LineColumn { LineCode, LineDescription, LineQuantity, LineCost, LineMargin, LinePrice, LineExpires, LineSubtotal, LineColumns };
 
 PurchaseDialog::PurchaseDialog(ProductService *products, InventoryService *inventory, UserService *users, QWidget *parent)
     : QDialog(parent), products(products), inventory(inventory), users(users), newArticle(new addItemDialog(products, this))
@@ -249,7 +249,7 @@ PurchaseDialog::PurchaseDialog(ProductService *products, InventoryService *inven
     entryRow->addWidget(newSupplier);
     layout->addLayout(entryRow);
 
-    lines = makeInventoryTable({ tr("Código"), tr("Descripción"), tr("Cantidad"), tr("Costo"), tr("Margen %"), tr("Precio de venta"), tr("Subtotal") });
+    lines = makeInventoryTable({ tr("Código"), tr("Descripción"), tr("Cantidad"), tr("Costo"), tr("Margen %"), tr("Precio de venta"), tr("Vencimiento"), tr("Subtotal") });
     lines->setObjectName(QStringLiteral("purchaseLines"));
     lines->setEditTriggers(QAbstractItemView::AllEditTriggers);
     lines->setSelectionBehavior(QAbstractItemView::SelectItems);
@@ -259,6 +259,7 @@ PurchaseDialog::PurchaseDialog(ProductService *products, InventoryService *inven
     lines->setColumnWidth(LineCost, 92);
     lines->setColumnWidth(LineMargin, 100);
     lines->setColumnWidth(LinePrice, 136);
+    lines->setColumnWidth(LineExpires, 104);
     lines->setColumnWidth(LineSubtotal, 100);
     returnFocusOnEnter(lines, entry);
     layout->addWidget(lines, 1);
@@ -402,6 +403,8 @@ void PurchaseDialog::addLine(const Product &p, Quantity quantity)
     lines->setItem(row, LineCost, rightAligned(AguaraMoney::format(p.cost)));
     lines->setItem(row, LineMargin, rightAligned(QString()));
     lines->setItem(row, LinePrice, rightAligned(AguaraMoney::format(p.price)));
+    lines->setItem(row, LineExpires, new QTableWidgetItem(QString()));
+    lines->item(row, LineExpires)->setToolTip(tr("dd/mm/aaaa, para esta cantidad. Vacío: queda sin fecha."));
     lines->setItem(row, LineSubtotal, readOnly(rightAligned(QString())));
     filling = false;
     updateSuggested(row);
@@ -525,6 +528,14 @@ Purchase PurchaseDialog::build(QString *refused) const
             return refuse(LineCost, tr("Revise el costo de %1.").arg(name));
         if (!price.isEmpty() && (!AguaraMoney::parse(price, &line.newPrice) || line.newPrice <= 0))
             return refuse(LinePrice, tr("Revise el precio nuevo de %1.").arg(name));
+        const QString expires = lines->item(row, LineExpires)->text().trimmed();
+        if (!expires.isEmpty()) {
+            line.expires = QDate::fromString(expires, QStringLiteral("d/M/yyyy"));
+            if (!line.expires.isValid())
+                return refuse(LineExpires, tr("Escriba el vencimiento de %1 como dd/mm/aaaa.").arg(name));
+            if (line.expires < QDate::currentDate())
+                return refuse(LineExpires, tr("El vencimiento de %1 ya pasó.").arg(name));
+        }
         purchase.lines << line;
     }
     return purchase;

@@ -53,6 +53,7 @@ private slots:
     void onHistory();
     void onPriceChange();
     void onLabels();
+    void onExpiryWarning();
     void onSearchEntered();
     void updateSummary();
     void updateActions();

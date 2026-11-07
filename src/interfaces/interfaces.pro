@@ -13,6 +13,7 @@ SOURCES += aguarastyle.cpp \
            barcode.cpp \
            interfaces.cpp \
            money.cpp \
+           promotionservice.cpp \
            quantity.cpp \
            salesservice.cpp \
            customerservice.cpp \
@@ -39,6 +40,7 @@ HEADERS += aguara_global.h \
            messages.h \
            money.h \
            productservice.h \
+           promotionservice.h \
            salesservice.h \
            userservice.h \
            apiversion.h \

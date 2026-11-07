@@ -5,6 +5,7 @@
 
 #include <QAbstractItemDelegate>
 #include <QComboBox>
+#include <QDateEdit>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
@@ -27,6 +28,122 @@
 #include <QVBoxLayout>
 
 using AguaraStyle::Color;
+
+// --- UnitsDialog ---------------------------------------------------------------
+
+UnitsDialog::UnitsDialog(ProductService *products, QWidget *parent)
+    : QDialog(parent), products(products)
+{
+    setAttribute(Qt::WA_DeleteOnClose);
+    setWindowModality(Qt::WindowModal);     // over the article dialog
+    auto layout = dialogHeader(this, tr("Unidades de venta"),
+        tr("Lo que se vende por peso o medida lleva decimales. Una unidad en uso no se puede quitar."));
+    resize(520, 440);
+
+    table = makeInventoryTable({ tr("Unidad"), tr("Abreviatura"), tr("Decimales") });
+    table->setObjectName(QStringLiteral("unitTable"));
+    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    layout->addWidget(table, 1);
+
+    name = new QLineEdit;
+    name->setObjectName(QStringLiteral("unitName"));
+    name->setPlaceholderText(tr("Unidad nueva, por ejemplo Caja"));
+    abbreviation = new QLineEdit;
+    abbreviation->setObjectName(QStringLiteral("unitAbbreviation"));
+    abbreviation->setPlaceholderText(tr("cj"));
+    abbreviation->setMaxLength(8);
+    abbreviation->setFixedWidth(70);
+    decimals = new QSpinBox;
+    decimals->setObjectName(QStringLiteral("unitDecimals"));
+    decimals->setRange(0, 3);
+    decimals->setToolTip(tr("0 para lo que se cuenta, 3 para lo que se pesa o se mide"));
+    auto addButton = new QPushButton(AguaraStyle::icon(QStringLiteral("plus")), tr("Agregar"));
+    addButton->setObjectName(QStringLiteral("unitAdd"));
+    addButton->setAutoDefault(false);
+    auto addRow = new QHBoxLayout;
+    addRow->setSpacing(8);
+    addRow->addWidget(name, 1);
+    addRow->addWidget(abbreviation);
+    addRow->addWidget(new QLabel(tr("Decimales")));
+    addRow->addWidget(decimals);
+    addRow->addWidget(addButton);
+    layout->addLayout(addRow);
+
+    problem = AguaraForm::errorLabel(QStringLiteral("unitError"));
+    layout->addWidget(problem);
+
+    auto removeButton = new QPushButton(AguaraStyle::icon(QStringLiteral("trash"), AguaraStyle::color(Color::Danger)), tr("Quitar"));
+    removeButton->setObjectName(QStringLiteral("unitRemove"));
+    removeButton->setAutoDefault(false);
+    AguaraStyle::setRole(removeButton, AguaraStyle::Danger);
+    auto buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+    buttons->button(QDialogButtonBox::Close)->setText(tr("Cerrar"));
+    buttons->button(QDialogButtonBox::Close)->setAutoDefault(false);
+    auto bottom = new QHBoxLayout;
+    bottom->addWidget(removeButton);
+    bottom->addStretch();
+    bottom->addWidget(buttons);
+    layout->addLayout(bottom);
+
+    keepEnterInDialog(this);
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    connect(addButton, &QPushButton::clicked, this, &UnitsDialog::add);
+    connect(name, &QLineEdit::returnPressed, this, &UnitsDialog::add);
+    connect(abbreviation, &QLineEdit::returnPressed, this, &UnitsDialog::add);
+    connect(removeButton, &QPushButton::clicked, this, &UnitsDialog::remove);
+    reload();
+    name->setFocus();
+}
+
+void UnitsDialog::reload()
+{
+    const QList<StockUnit> units = products->units();
+    table->setRowCount(units.size());
+    for (int row = 0; row < units.size(); ++row) {
+        auto unit = new QTableWidgetItem(units.at(row).name);
+        unit->setData(Qt::UserRole, units.at(row).id);
+        table->setItem(row, 0, unit);
+        table->setItem(row, 1, new QTableWidgetItem(units.at(row).abbreviation));
+        table->setItem(row, 2, new QTableWidgetItem(QString::number(units.at(row).decimals)));
+    }
+}
+
+void UnitsDialog::add()
+{
+    problem->hide();
+    StockUnit unit;
+    unit.name = name->text();
+    unit.abbreviation = abbreviation->text();
+    unit.decimals = decimals->value();
+    if (products->addUnit(unit) == 0) {
+        AguaraForm::showError(problem, products->lastError(), unit.name.trimmed().isEmpty() ? name : abbreviation);
+        return;
+    }
+    name->clear();
+    abbreviation->clear();
+    decimals->setValue(0);
+    reload();
+    name->setFocus();
+    emit listChanged();
+}
+
+void UnitsDialog::remove()
+{
+    problem->hide();
+    const int row = table->currentRow();
+    if (row < 0)
+        return;
+    const QString unit = table->item(row, 0)->text();
+    if (!AguaraForm::confirmRemoval(this, tr("Quitar unidad"),
+            tr("%1 deja de ofrecerse para los artículos. Las ventas pasadas no cambian.").arg(unit), tr("Quitar")))
+        return;
+    if (!products->removeUnit(table->item(row, 0)->data(Qt::UserRole).toLongLong())) {
+        AguaraForm::showError(problem, products->lastError());
+        return;
+    }
+    reload();
+    emit listChanged();
+}
 
 QTableWidget *makeInventoryTable(const QStringList &headers)
 {
@@ -250,6 +367,7 @@ ArticleHistoryDialog::ArticleHistoryDialog(InventoryService *inventory, UserServ
     kardex->resizeColumnsToContents();
     kardex->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
     tabs->addTab(kardex, tr("Movimientos"));
+    tabs->addTab(buildLots(), tr("Lotes"));
 
     const QList<PriceChange> changes = inventory->priceHistory(product.code);
     auto prices = makeInventoryTable({ tr("Fecha"), tr("Precio antes"), tr("Precio"), tr("Costo antes"), tr("Costo"),
@@ -331,6 +449,105 @@ ArticleHistoryDialog::ArticleHistoryDialog(InventoryService *inventory, UserServ
     buttons->button(QDialogButtonBox::Close)->setText(tr("Cerrar"));
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     layout->addWidget(buttons);
+}
+
+QWidget *ArticleHistoryDialog::buildLots()
+{
+    auto page = new QWidget;
+    auto layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 12, 0, 0);
+    auto note = new QLabel(tr("Lo que sale deja primero la fecha más próxima, y al final el stock sin fecha. "
+                              "Para sacar un lote vencido, use Más > Ajustar stock."));
+    note->setWordWrap(true);
+    AguaraStyle::setRole(note, AguaraStyle::Muted);
+    layout->addWidget(note);
+
+    lots = makeInventoryTable({ tr("Vence"), tr("Cantidad"), tr("Estado") });
+    lots->setObjectName(QStringLiteral("lotTable"));
+    lots->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    layout->addWidget(lots, 1);
+    undated = new QLabel;
+    undated->setObjectName(QStringLiteral("lotUndated"));
+    layout->addWidget(undated);
+
+    auto quantity = new QLineEdit;
+    quantity->setObjectName(QStringLiteral("lotQuantity"));
+    quantity->setPlaceholderText(tr("Cantidad"));
+    quantity->setFixedWidth(110);
+    auto date = new QDateEdit(QDate::currentDate());
+    date->setObjectName(QStringLiteral("lotDate"));
+    date->setCalendarPopup(true);
+    date->setDisplayFormat(QStringLiteral("dd/MM/yyyy"));
+    auto add = new QPushButton(AguaraStyle::icon(QStringLiteral("plus")), tr("Poner fecha"));
+    add->setObjectName(QStringLiteral("lotAdd"));
+    add->setAutoDefault(false);
+    add->setToolTip(tr("Da esta fecha a stock que no tiene"));
+    auto remove = new QPushButton(AguaraStyle::icon(QStringLiteral("trash"), AguaraStyle::color(Color::Danger)), tr("Quitar fecha"));
+    remove->setObjectName(QStringLiteral("lotRemove"));
+    remove->setAutoDefault(false);
+    remove->setToolTip(tr("Para una fecha equivocada: el stock queda, sin fecha"));
+    AguaraStyle::setRole(remove, AguaraStyle::Danger);
+    auto row = new QHBoxLayout;
+    row->setSpacing(8);
+    row->addWidget(quantity);
+    row->addWidget(new QLabel(tr("vence")));
+    row->addWidget(date);
+    row->addWidget(add);
+    row->addStretch();
+    row->addWidget(remove);
+    layout->addLayout(row);
+
+    connect(add, &QPushButton::clicked, this, [this, quantity, date]() {
+        Quantity amount = 0;
+        if (!AguaraQuantity::parse(quantity->text(), &amount) || amount <= 0
+            || !AguaraForm::fitsUnit(amount, product.unit.decimals)) {
+            QMessageBox::warning(this, tr("Poner fecha"), tr("Escriba la cantidad, por ejemplo 24 o 2,750."));
+            return;
+        }
+        if (!isAuthorized(users, QStringLiteral("inventario.editar"), tr("Poner fecha a un lote"), this))
+            return;
+        if (!inventory->addLot(product.code, amount, date->date())) {
+            QMessageBox::warning(this, tr("Poner fecha"), inventory->lastError());
+            return;
+        }
+        quantity->clear();
+        reloadLots();
+    });
+    connect(remove, &QPushButton::clicked, this, [this]() {
+        const int row = lots->currentRow();
+        if (row < 0 || !AguaraForm::confirmRemoval(this, tr("Quitar fecha"),
+                tr("El stock de este lote queda, sin fecha, y deja de avisar."), tr("Quitar fecha")))
+            return;
+        if (!isAuthorized(users, QStringLiteral("inventario.editar"), tr("Quitar la fecha de un lote"), this))
+            return;
+        if (!inventory->removeLot(lots->item(row, 0)->data(Qt::UserRole).toLongLong()))
+            QMessageBox::warning(this, tr("Quitar fecha"), inventory->lastError());
+        reloadLots();
+    });
+    reloadLots();
+    return page;
+}
+
+void ArticleHistoryDialog::reloadLots()
+{
+    const QList<StockLot> list = inventory->lots(product.code);
+    const QDate today = QDate::currentDate();
+    Quantity dated = 0;
+    lots->setRowCount(list.size());
+    for (int row = 0; row < list.size(); ++row) {
+        const StockLot &lot = list.at(row);
+        dated += lot.quantity;
+        auto date = new QTableWidgetItem(lot.expires.toString(QStringLiteral("dd/MM/yyyy")));
+        date->setData(Qt::UserRole, lot.id);
+        lots->setItem(row, 0, date);
+        lots->setItem(row, 1, rightAligned(AguaraQuantity::format(lot.quantity, product.unit.decimals)));
+        const bool past = lot.expires < today;
+        lots->setItem(row, 2, new QTableWidgetItem(past ? tr("Vencido") : tr("Vigente")));
+        if (past)
+            lots->item(row, 2)->setForeground(AguaraStyle::color(Color::Danger));
+    }
+    undated->setText(tr("Sin fecha: %1 %2").arg(AguaraQuantity::format(qMax(product.stock - dated, Quantity(0)),
+                                                                       product.unit.decimals), product.unit.abbreviation));
 }
 
 void ArticleHistoryDialog::reloadBarcodes()

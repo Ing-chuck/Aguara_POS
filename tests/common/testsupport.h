@@ -15,6 +15,7 @@
 #include "sqlinventoryservice.h"
 #include "sqlprintservice.h"
 #include "sqlproductservice.h"
+#include "sqlpromotionservice.h"
 #include "sqlreportservice.h"
 #include "sqlreturnservice.h"
 #include "sqlsalesservice.h"
@@ -159,6 +160,7 @@ public:
         customers.reset(new SqlCustomerService(monitor.get()));
         returns.reset(new SqlReturnService(monitor.get(), sales.get(), cash.get()));
         reports.reset(new SqlReportService(monitor.get(), products.get()));
+        promotions.reset(new SqlPromotionService(monitor.get()));
         host.reset(new CoreHost);
         host->registerService(ProductService_iid, products.get());
         host->registerService(InventoryService_iid, inventory.get());
@@ -168,12 +170,14 @@ public:
         host->registerService(CustomerService_iid, customers.get());
         host->registerService(ReturnService_iid, returns.get());
         host->registerService(ReportService_iid, reports.get());
+        host->registerService(PromotionService_iid, promotions.get());
         return true;
     }
 
     void close()
     {
         host.reset();
+        promotions.reset();
         reports.reset();
         returns.reset();
         customers.reset();
@@ -199,6 +203,7 @@ public:
     std::unique_ptr<SqlCustomerService> customers;
     std::unique_ptr<SqlReturnService> returns;
     std::unique_ptr<SqlReportService> reports;
+    std::unique_ptr<SqlPromotionService> promotions;
     std::unique_ptr<CoreHost> host;
     QList<QByteArray> printed;      // what a thermal printer would have received
     bool printerFails = false;

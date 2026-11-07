@@ -37,6 +37,7 @@ const char *const kChangesChannel = "aguara_products";
 const char *const kProductListSql =
     "SELECT p.codigo, p.descripcion, m.nombre, r.rubro, p.precio, p.costo,"
     "       p.iva, p.stock, p.stock_min, p.f_compra, p.f_mod,"
+    "       (SELECT MIN(l.vencimiento) FROM lotes l WHERE l.producto_codigo = p.codigo AND l.cantidad > 0),"
     "       COALESCE(u.decimales, 0), COALESCE(u.abreviatura, 'un')"    // after ProductColumn::Count
     "  FROM productos p"
     "  LEFT JOIN marcas m ON m.id = p.marca_id"
@@ -105,6 +106,14 @@ QVariant ProductTableModel::data(const QModelIndex &item, int role) const
         return bold;
     }
 
+    // past its use-by date: the date shows in red
+    if (role == Qt::ForegroundRole && column == ProductColumn::Expires) {
+        const QDate expires = QDate::fromString(QSqlQueryModel::data(item).toString(), Qt::ISODate);
+        if (expires.isValid() && expires < QDate::currentDate())
+            return AguaraStyle::color(AguaraStyle::Color::Danger);
+        return QVariant();
+    }
+
     if (role != Qt::DisplayRole)
         return QSqlQueryModel::data(item, role);
 
@@ -123,7 +132,8 @@ QVariant ProductTableModel::data(const QModelIndex &item, int role) const
         return decimals == 0 ? text : text + QLatin1Char(' ') + row.value(int(ProductColumn::Count) + 1).toString();
     }
     case ProductColumn::Purchased:
-    case ProductColumn::Modified: {
+    case ProductColumn::Modified:
+    case ProductColumn::Expires: {
         const QDate d = QDate::fromString(raw.toString(), Qt::ISODate);
         return d.isValid() ? d.toString(QStringLiteral("dd/MM/yyyy")) : QString();
     }
@@ -158,6 +168,7 @@ QVariant ProductTableModel::headerData(int section, Qt::Orientation orientation,
     case ProductColumn::StockMin:    return tr("Mínimo");
     case ProductColumn::Purchased:   return tr("Compra");
     case ProductColumn::Modified:    return tr("Modificado");
+    case ProductColumn::Expires:     return tr("Vence");
     default:                         return QVariant();
     }
 }
@@ -298,7 +309,8 @@ std::optional<Product> SqlProductService::product(const QString &code) const
     q.prepare(QStringLiteral(
         "SELECT p.codigo, p.descripcion, p.marca_id, m.nombre, p.rubro_id, r.rubro,"
         "       p.precio, p.costo, p.iva, p.stock, p.stock_min, p.f_compra, p.f_mod, p.es_activo,"
-        "       COALESCE(u.id, 1), COALESCE(u.unidad, 'Unidad'), COALESCE(u.abreviatura, 'un'), COALESCE(u.decimales, 0)"
+        "       COALESCE(u.id, 1), COALESCE(u.unidad, 'Unidad'), COALESCE(u.abreviatura, 'un'), COALESCE(u.decimales, 0),"
+        "       (SELECT MIN(l.vencimiento) FROM lotes l WHERE l.producto_codigo = p.codigo AND l.cantidad > 0)"
         "  FROM productos p"
         "  LEFT JOIN marcas m ON m.id = p.marca_id"
         "  LEFT JOIN rubros r ON r.id = p.rubro_id"
@@ -324,6 +336,7 @@ std::optional<Product> SqlProductService::product(const QString &code) const
     p.modified     = QDate::fromString(q.value(12).toString(), Qt::ISODate);
     p.active       = q.value(13).toBool();
     p.unit         = { q.value(14).toLongLong(), q.value(15).toString(), q.value(16).toString(), q.value(17).toInt() };
+    p.expires      = QDate::fromString(q.value(18).toString(), Qt::ISODate);
     return p;
 }
 
@@ -490,6 +503,11 @@ bool SqlProductService::saveOne(const Product &in, const QString &previousCode, 
         && !ledger.move(p.code, exists ? StockMovementType::Adjustment : StockMovementType::Initial,
                         p.stock - oldStock, p.cost, exists ? stockReason : tr("Saldo inicial")))
         return false;
+    if (p.stockExpires.isValid()) {
+        const std::optional<Quantity> undated = ledger.undated(p.code);
+        if (!undated || (*undated > 0 && !ledger.addToLot(p.code, p.stockExpires, *undated)))
+            return false;
+    }
     return !exists || ledger.recordPrice(p.code, oldPrice, p.price, oldCost, p.cost, tr("Ficha del artículo"));
 }
 
@@ -642,12 +660,100 @@ QList<StockUnit> SqlProductService::units() const
 {
     QList<StockUnit> list;
     QSqlQuery q(db());
-    q.prepare(QStringLiteral("SELECT id, unidad, abreviatura, decimales FROM unidades_basicas ORDER BY id"));
+    q.prepare(QStringLiteral("SELECT id, unidad, abreviatura, decimales FROM unidades_basicas WHERE activo = 1 ORDER BY id"));
     if (!exec(q))
         return list;
     while (q.next())
         list.append({ q.value(0).toLongLong(), q.value(1).toString(), q.value(2).toString(), q.value(3).toInt() });
     return list;
+}
+
+qint64 SqlProductService::addUnit(const StockUnit &unit)
+{
+    const QString name = unit.name.simplified();
+    const QString abbreviation = unit.abbreviation.simplified();
+    if (name.isEmpty()) {
+        m_lastError = tr("Escriba el nombre de la unidad.");
+        return 0;
+    }
+    if (abbreviation.isEmpty() || abbreviation.size() > 8) {
+        m_lastError = tr("La abreviatura lleva de 1 a 8 letras, por ejemplo kg.");
+        return 0;
+    }
+    if (unit.decimals < 0 || unit.decimals > 3) {
+        m_lastError = tr("Una unidad admite hasta 3 decimales.");
+        return 0;
+    }
+
+    // compared here: SQLite's lower() only knows plain ASCII
+    QSqlQuery all(db());
+    all.prepare(QStringLiteral("SELECT id, unidad, activo FROM unidades_basicas"));
+    if (!exec(all))
+        return 0;
+    qint64 removed = 0;
+    qint64 last = 0;
+    while (all.next()) {
+        last = qMax(last, all.value(0).toLongLong());
+        if (all.value(1).toString().compare(name, Qt::CaseInsensitive) != 0)
+            continue;
+        if (all.value(2).toInt() != 0) {
+            m_lastError = tr("Ya existe la unidad %1.").arg(all.value(1).toString());
+            return 0;
+        }
+        removed = all.value(0).toLongLong();
+    }
+    all.finish();
+
+    const qint64 id = removed ? removed : last + 1;     // the ids of this table are written by hand
+    QSqlQuery q(db());
+    q.prepare(removed ? QStringLiteral("UPDATE unidades_basicas SET unidad = ?, abreviatura = ?, decimales = ?, activo = 1"
+                                       " WHERE id = ?")
+                      : QStringLiteral("INSERT INTO unidades_basicas (unidad, abreviatura, decimales, id)"
+                                       " VALUES (?, ?, ?, ?)"));
+    q.addBindValue(name);
+    q.addBindValue(abbreviation);
+    q.addBindValue(unit.decimals);
+    q.addBindValue(id);
+    if (!exec(q))
+        return 0;
+    if (m_audit)
+        m_audit->audit(QStringLiteral("unidad.crear"), QStringLiteral("unidad"), QString::number(id), QString(), name);
+    changed();
+    return id;
+}
+
+bool SqlProductService::removeUnit(qint64 id)
+{
+    if (id == 1) {
+        m_lastError = tr("La unidad básica no se puede quitar: es la que usa un artículo sin otra.");
+        return false;
+    }
+    QSqlQuery used(db());
+    used.prepare(QStringLiteral("SELECT COUNT(*) FROM productos WHERE es_activo = 1 AND unidad_id = ?"));
+    used.addBindValue(id);
+    if (!exec(used) || !used.next())
+        return false;
+    const int articles = used.value(0).toInt();
+    used.finish();
+    if (articles > 0) {
+        m_lastError = articles == 1 ? tr("La usa 1 artículo: cámbielo de unidad primero.")
+                                    : tr("La usan %1 artículos: cámbielos de unidad primero.").arg(articles);
+        return false;
+    }
+
+    QSqlQuery q(db());
+    q.prepare(QStringLiteral("UPDATE unidades_basicas SET activo = 0 WHERE id = ?"));
+    q.addBindValue(id);
+    if (!exec(q))
+        return false;
+    if (q.numRowsAffected() == 0) {
+        m_lastError = tr("La unidad no existe.");
+        return false;
+    }
+    if (m_audit)
+        m_audit->audit(QStringLiteral("unidad.baja"), QStringLiteral("unidad"), QString::number(id), QString(), QString());
+    changed();
+    return true;
 }
 
 qint64 SqlProductService::addCategory(const QString &name, qint64 parentId)

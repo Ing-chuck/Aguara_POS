@@ -1008,5 +1008,84 @@ QList<Migration> coreMigrations()
         QStringLiteral("CREATE INDEX stock_movimientos_fecha ON stock_movimientos (fecha)"),
     };
 
-    return { v1, v2, v3, v4, v5, v6, v7, v8, v9 };
+    Migration v10;
+    v10.version = 10;
+    v10.description = QStringLiteral("units can be removed, lots with a use-by date");
+    v10.sqlite = QStringList {
+        QStringLiteral("ALTER TABLE unidades_basicas ADD COLUMN activo INTEGER NOT NULL DEFAULT 1"),
+        QStringLiteral(
+            "CREATE TABLE lotes ("
+            " id              INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " producto_codigo TEXT    NOT NULL REFERENCES productos(codigo) ON UPDATE CASCADE,"
+            " vencimiento     TEXT    NOT NULL,"                // ISO date
+            " cantidad        INTEGER NOT NULL CHECK (cantidad >= 0),"
+            " inicial         INTEGER NOT NULL,"
+            " UNIQUE (producto_codigo, vencimiento))"),
+        QStringLiteral("CREATE INDEX lotes_vencimiento ON lotes (vencimiento)"),
+    };
+    v10.postgresql = QStringList {
+        QStringLiteral("ALTER TABLE unidades_basicas ADD COLUMN activo INTEGER NOT NULL DEFAULT 1"),
+        QStringLiteral(
+            "CREATE TABLE lotes ("
+            " id              BIGSERIAL PRIMARY KEY,"
+            " producto_codigo TEXT   NOT NULL REFERENCES productos(codigo) ON UPDATE CASCADE,"
+            " vencimiento     DATE   NOT NULL,"
+            " cantidad        BIGINT NOT NULL CHECK (cantidad >= 0),"
+            " inicial         BIGINT NOT NULL,"
+            " UNIQUE (producto_codigo, vencimiento))"),
+        QStringLiteral("CREATE INDEX lotes_vencimiento ON lotes (vencimiento)"),
+    };
+
+    // A sale's line keeps the name and the discount: a promotion can change later.
+    const auto promotionsSchema = [](bool postgres) {
+        const QString id = postgres ? QStringLiteral("BIGSERIAL PRIMARY KEY") : QStringLiteral("INTEGER PRIMARY KEY AUTOINCREMENT");
+        const QString big = postgres ? QStringLiteral("BIGINT") : QStringLiteral("INTEGER");
+        const QString date = postgres ? QStringLiteral("DATE") : QStringLiteral("TEXT");
+        const QStringList statements = {
+            QStringLiteral(
+                "CREATE TABLE promociones ("
+                " id            $ID,"
+                " nombre        TEXT    NOT NULL,"
+                " tipo          TEXT    NOT NULL,"
+                " valor         $BIG    NOT NULL DEFAULT 0,"
+                " lleva         INTEGER NOT NULL DEFAULT 0,"
+                " paga          INTEGER NOT NULL DEFAULT 0,"
+                " minimo        $BIG    NOT NULL DEFAULT 0,"
+                " desde         $DATE   NOT NULL,"
+                " hasta         $DATE   NOT NULL,"
+                " dias          INTEGER NOT NULL DEFAULT 127,"       // bit 0 monday
+                " todos         INTEGER NOT NULL DEFAULT 0,"
+                " rubro_y_marca INTEGER NOT NULL DEFAULT 0,"
+                " invertir      INTEGER NOT NULL DEFAULT 0,"
+                " activo        INTEGER NOT NULL DEFAULT 1)"),
+            QStringLiteral(
+                "CREATE TABLE promocion_reglas ("
+                " id              $ID,"
+                " promocion_id    $BIG NOT NULL REFERENCES promociones(id),"
+                " producto_codigo TEXT REFERENCES productos(codigo) ON UPDATE CASCADE,"
+                " rubro_id        $BIG REFERENCES rubros(id),"
+                " marca_id        $BIG REFERENCES marcas(id),"
+                " excluir         INTEGER NOT NULL DEFAULT 0,"
+                " CHECK (CASE WHEN producto_codigo IS NULL THEN 0 ELSE 1 END"
+                "      + CASE WHEN rubro_id IS NULL THEN 0 ELSE 1 END"
+                "      + CASE WHEN marca_id IS NULL THEN 0 ELSE 1 END = 1))"),
+            QStringLiteral("CREATE INDEX promocion_reglas_promocion ON promocion_reglas (promocion_id)"),
+            QStringLiteral("ALTER TABLE ventas_items ADD COLUMN promocion_id $BIG REFERENCES promociones(id)"),
+            QStringLiteral("ALTER TABLE ventas_items ADD COLUMN promocion TEXT"),
+            QStringLiteral("ALTER TABLE ventas_items ADD COLUMN descuento_promocion $BIG NOT NULL DEFAULT 0"),
+        };
+        QStringList result;
+        for (QString sql : statements)
+            result << sql.replace(QLatin1String("$ID"), id).replace(QLatin1String("$BIG"), big)
+                         .replace(QLatin1String("$DATE"), date);
+        return result;
+    };
+
+    Migration v11;
+    v11.version = 11;
+    v11.description = QStringLiteral("promotions");
+    v11.sqlite = promotionsSchema(false);
+    v11.postgresql = promotionsSchema(true);
+
+    return { v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11 };
 }

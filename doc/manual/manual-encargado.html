@@ -34,10 +34,15 @@
 <li><b>Buscar:</b> la tabla se reduce mientras escribe, por código, descripción, marca o rubro, sin importar acentos ni el orden de las palabras. <b>Esc</b> borra la búsqueda.</li>
 <li><b>Precio:</b> un artículo se guarda con precio mayor que cero. Si no, pasaría gratis por la caja.</li>
 <li><b>Código propio:</b> para lo que llega sin código de barras, pulse <b>Generar</b> junto al código. El programa elige uno que ningún artículo usa, que empieza con 299, y sus barras salen en las etiquetas.</li>
-<li><b>Importar:</b> <b>Archivo &gt; Importar artículos</b> carga un archivo CSV. Las líneas con montos negativos o una tasa de IVA que no existe se saltan, y el aviso final dice cuáles.</li>
+<li><b>Importar:</b> <b>Archivo &gt; Importar &gt; Artículos</b> carga un archivo CSV. Las líneas con montos negativos o una tasa de IVA que no existe se saltan, y el aviso final dice cuáles.</li>
 <li><b>Dar de baja:</b> el artículo deja de ofrecerse, pero su historial queda.</li>
 <li><b>Cambio de precios:</b> sube o baja por porcentaje, por rubro o marca, con redondeo hacia arriba. Muestra el resultado antes de aplicarlo.</li>
 <li><b>Stock mínimo:</b> al llegar a su mínimo, también por una venta en la otra caja, aparece un aviso.</li>
+<li><b>Unidades de venta:</b> el botón junto a <b>Unidad de venta</b>, en la ficha del artículo, agrega o quita unidades. Lo que se pesa o se mide lleva decimales, hasta 3. Una unidad que usa algún artículo activo no se puede quitar, y tampoco la unidad básica. Las ventas pasadas no cambian.</li>
+<li><b>Vencimiento:</b> cada alta guarda su propio lote, con su fecha. Una venta toma primero la fecha vigente más próxima y después el stock sin fecha. Los lotes vencidos no se venden: quedan retenidos hasta que alguien los dé de baja, y siguen avisando. Como el escáner no distingue lotes, la cantidad de cada lote es una estimación: si un cajero vende primero lo más nuevo, se corrige con un recuento o un ajuste. La columna <b>Vence</b> muestra la fecha más próxima, en rojo si ya pasó.</li>
+<li><b>Lotes:</b> en <b>Más &gt; Historial del artículo &gt; Lotes</b> se ven los lotes y el stock sin fecha. <b>Poner fecha</b> fecha stock que no tiene, y <b>Quitar fecha</b> corrige una fecha equivocada: el stock queda. Para sacar un lote vencido, use <b>Más &gt; Ajustar stock</b>: sale primero la fecha más próxima. El CSV de artículos, con la columna Vencimiento, da esa fecha a todo el stock sin fecha. Un artículo nuevo puede empezar con su fecha en la ficha.</li>
+<li><b>Avisos de vencimiento:</b> los lotes vencidos aparecen como aviso rojo, y los que vencen pronto como advertencia, 30 días antes, con su cantidad. Ese plazo se cambia en <b>Más &gt; Aviso de vencimiento</b>. Un lote agotado no avisa, y el último día todavía cuenta como vigente.</li>
+<li><b>En la caja:</b> al escanear un artículo con un lote vencido aparece una alerta. Con <b>OK</b> el cajero confirma que esa unidad no está vencida, y sigue la venta. Con <b>Dar de baja</b> el cajero confirma cuántos descarta, y lo demás sigue en la venta. La baja necesita un supervisor, con el permiso <b>Dar de baja en caja un artículo vencido</b>. Queda en los movimientos del artículo, con el cajero y quien la autorizó. Si no se autoriza, vuelve la alerta.</li>
 </ul>
 <img src="img/04-add-item.png" width="210"/>
 
@@ -57,8 +62,19 @@
 <li><b>Artículo nuevo:</b> si escanea un código desconocido, se abre el formulario con ese código. Sin código, use <b>Nuevo artículo</b> y <b>Generar</b>. Al guardar, el artículo pasa a la lista. Su stock es la cantidad de esta alta.</li>
 <li><b>Margen sugerido:</b> con un valor, cada costo calcula su precio. Déjelo en 0 para fijar el precio línea por línea.</li>
 <li><b>Actualizar el costo:</b> desmárquelo si esta compra no debe cambiar el costo de los artículos.</li>
+<li><b>Vencimiento:</b> escriba la fecha como dd/mm/aaaa: esa cantidad forma un lote, o se suma al del mismo día. Vacío, entra sin fecha.</li>
 </ul>
 <p>La pestaña <b>Proveedores</b> tiene su propia búsqueda. Solo el nombre es obligatorio, y no puede haber dos proveedores activos con el mismo nombre.</p>
+
+<h3>Importar clientes y proveedores</h3>
+<p><b>Archivo &gt; Importar</b> carga una lista desde un CSV guardado en Excel. La primera fila con una columna <b>Nombre</b> es el encabezado: las columnas van en cualquier orden, y las que el programa no conoce se ignoran.</p>
+<ul>
+<li><b>Clientes:</b> Nombre (o Cliente, Razón social), RUC, Cédula (o CI), Dirección, Teléfono (o Celular), Correo (o Email). En lugar de RUC y Cédula puede usar Documento y, si quiere, Tipo documento. Sin tipo, un número con guion es un RUC y sin guion, una cédula. Los puntos del número no importan. Importar clientes requiere un permiso propio, que el Cajero no tiene.</li>
+<li><b>Proveedores:</b> Nombre (o Proveedor, Razón social), Dirección, Teléfono (o Celular), Correo (o Email), Contacto, Web, Notas (u Observaciones).</li>
+<li><b>Quién es quién:</b> un cliente se reconoce por su documento y, sin documento, por su nombre. Si varios tienen ese nombre, la línea se salta. Un proveedor se reconoce por su nombre. Si no se reconoce, se crea uno nuevo.</li>
+<li><b>Lo que ya estaba:</b> una celda vacía conserva el dato guardado, así que puede importar el mismo archivo dos veces o uno que solo traiga teléfonos.</li>
+<li><b>Errores:</b> las líneas con un RUC, teléfono o correo inválido se saltan, y el aviso final dice cuáles. Si falla la base de datos, no se guarda nada.</li>
+</ul>
 
 <h2>5. Recuentos</h2>
 <ol>
@@ -68,7 +84,38 @@
 </ol>
 <img src="img/24-count.png" width="420"/>
 
-<h2>6. Control de la caja</h2>
+<h2 class="page">6. Promociones</h2>
+<p>Una promoción es un descuento con fechas. En <b>Promociones</b> pulse <b>Nueva promoción</b>. La caja la aplica sola: el cajero no hace nada, y el ticket la muestra con su nombre.</p>
+<h3>Qué descuenta</h3>
+<ul>
+<li><b>Porcentaje:</b> por ejemplo 20 %.</li>
+<li><b>Importe menos por unidad:</b> Gs. 2.000 menos en cada unidad.</li>
+<li><b>Precio de promoción:</b> cada unidad a ese precio. Si el artículo ya cuesta menos, no cambia nada.</li>
+<li><b>Lleva y paga:</b> por ejemplo lleva 3, paga 2. Se repite: quien lleva 6 paga 4.</li>
+<li><b>Cantidad mínima:</b> opcional. El descuento empieza cuando la línea llega a esa cantidad.</li>
+</ul>
+<h3>Cuándo</h3>
+<p>Vale desde el primer día hasta el último, los dos incluidos. Quite los días de la semana que no correspondan: con solo martes y jueves, se aplica únicamente esos días.</p>
+<h3>A qué artículos</h3>
+<ul>
+<li><b>Todos los artículos</b> o <b>Los elegidos abajo</b>. Elija Artículo, Rubro o Marca y pulse <b>Incluir</b> o <b>Excluir</b>. Un rubro lleva sus subrubros.</li>
+<li><b>Artículo:</b> escanee el código o escriba la descripción. Con <b>Elegir varios</b> marca muchos a la vez en una lista.</li>
+<li><b>Excluir:</b> deja algo fuera aunque otra regla lo elija. Sirve para una marca entera menos un artículo.</li>
+<li><b>Invertir:</b> toma todos menos los elegidos, por ejemplo todo menos Cigarrillos. Lo excluido sigue fuera.</li>
+<li><b>Rubro y marca a la vez:</b> toma solo los artículos de ese rubro que además sean de esa marca. Sin esta opción se suman.</li>
+</ul>
+<p>Mientras elige, el formulario dice a cuántos artículos alcanza, y <b>Ver artículos</b> los lista con su precio de promoción. Revíselo antes de guardar: una regla mal puesta descuenta de más.</p>
+<h3>En la venta</h3>
+<ul>
+<li>Si un artículo está en varias promociones, se aplica la que más descuenta. No se suman.</li>
+<li>Una promoción no usa el límite de descuento del cajero. El descuento manual se calcula sobre el precio de promoción, y puede sumarse a ella.</li>
+<li>Cambiar la cantidad vuelve a calcular la promoción. Una venta en espera la recalcula al recuperarla, con las promociones de ese día.</li>
+<li>Las ventas hechas no cambian si después modifica la promoción.</li>
+</ul>
+<h3>La lista</h3>
+<p>El <b>Estado</b> dice qué hace cada una hoy: Vigente, Programada, Hoy no aplica, Terminada o De baja. <b>Duplicar</b> copia una para repetirla con otras fechas. <b>Dar de baja</b> la detiene al momento. El reporte <b>Ventas por promoción</b> muestra lo vendido y lo descontado con cada una.</p>
+
+<h2>7. Control de la caja</h2>
 <h3>Cierre con diferencia</h3>
 <p>Si el conteo no coincide, el cajero vuelve a contar o llama a un supervisor. Solo el supervisor ve lo esperado, y debe escribir un motivo. La diferencia queda en la planilla y en los reportes.</p>
 <img src="img/42-difference.png" width="200"/>
@@ -86,7 +133,7 @@
 <p>En <b>Caja &gt; Medios de pago</b> se agregan otros medios y se elige si piden código. Dejar de usar uno pide confirmar, y las ventas anteriores no cambian. Solo el efectivo entra en el arqueo.</p>
 <img src="img/52-methods.png" width="230"/>
 
-<h2 class="page">7. Reportes</h2>
+<h2 class="page">8. Reportes</h2>
 <p>Elija un reporte en la lista, ajuste los filtros y pulse <b>Ver</b>. Todos se imprimen y se exportan a PDF o a CSV para Excel.</p>
 <img src="img/54-reports.png" width="420"/>
 <ul>
@@ -98,7 +145,7 @@
 <li>Un PDF o una impresión de miles de filas tarda unos segundos, y el programa espera hasta terminar. Para mirar muchos datos en Excel, CSV es lo más rápido.</li>
 </ul>
 
-<h2 class="page">8. Las dos cajas y el servidor</h2>
+<h2 class="page">9. Las dos cajas y el servidor</h2>
 <p>Los datos están en el servidor PostgreSQL de una de las cajas.</p>
 <ul>
 <li><b>La caja del servidor se enciende primero y se apaga al final.</b> Sin ella, la otra caja no puede entrar.</li>
@@ -110,11 +157,11 @@
 <p>La conexión se cambia en <b>Preferencias &gt; Conexión a los datos</b>, y se aplica al reiniciar. Los datos no se copian de una base a otra.</p>
 <img src="img/49-connection.png" width="220"/>
 
-<h2>9. Copias de seguridad</h2>
+<h2>10. Copias de seguridad</h2>
 <p>La caja del servidor hace una copia diaria con la tarea programada. Esa copia queda en el mismo disco, y si el disco falla se pierde junto con los datos.</p>
 <p class="note"><b>Copie los respaldos cada semana a un pendrive o disco externo</b>, y guárdelo fuera de la caja. Es lo único que protege los datos de un disco roto, un robo o un incendio.</p>
 
-<h2>10. Aplicar un parche</h2>
+<h2>11. Aplicar un parche</h2>
 <ol>
 <li>Fuera del horario de venta, cierre la caja y salga de AguaraPOS en todos los equipos.</li>
 <li>Haga una copia de seguridad.</li>
@@ -123,7 +170,7 @@
 </ol>
 <p>Un parche no toca los datos ni las ventas en cola. Un equipo sin actualizar no entra hasta recibirlo, y sus ventas esperan a salvo.</p>
 
-<h2 class="page">11. Registros de este equipo</h2>
+<h2 class="page">12. Registros de este equipo</h2>
 <p>Cada equipo guarda sus propios registros, siempre, y <b>no salen de ahí</b>. Sirven para averiguar qué pasó. <b>Ayuda &gt; Carpeta de registros</b> los abre.</p>
 <table>
 <tr><th>Archivo</th><th>Qué tiene</th></tr>
@@ -133,7 +180,7 @@
 </table>
 <p>Tras un corte de luz o un cierre forzado, <b>actividad</b> marca <b>programa.cierre_inesperado</b>. Las líneas anteriores muestran qué se estaba haciendo. Quién hizo qué, con sus detalles, está en la pestaña <b>Auditoría</b> de Usuarios.</p>
 
-<h2>12. Telemetría</h2>
+<h2>13. Telemetría</h2>
 <p>Durante la prueba, cada equipo puede enviar a un servidor propio estadísticas de uso, cierres inesperados y reportes de problemas. <b>Está apagada</b> hasta que un administrador la active, equipo por equipo, en <b>Preferencias &gt; Telemetría</b>.</p>
 <img src="img/57-telemetry.png" width="280"/>
 <ul>

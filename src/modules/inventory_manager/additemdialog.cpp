@@ -1,6 +1,7 @@
 #include "additemdialog.h"
 #include "ui_additemdialog.h"
 #include "modifytabledialog.h"
+#include "stockdialogs.h"
 
 #include <aguarastyle.h>
 #include <formcheck.h>
@@ -28,7 +29,7 @@ addItemDialog::addItemDialog(ProductService *products, QWidget *parent) :
     ui->buttonBox->button(QDialogButtonBox::Save)->setText(tr("Guardar"));
     ui->buttonBox->button(QDialogButtonBox::Save)->setDefault(true);
     ui->buttonBox->button(QDialogButtonBox::Cancel)->setText(tr("Cancelar"));
-    for (QToolButton *b : { ui->button_modifyBrandTable, ui->button_modifyTypeTable }) {
+    for (QToolButton *b : { ui->button_modifyBrandTable, ui->button_modifyTypeTable, ui->button_modifyUnitTable }) {
         b->setIcon(AguaraStyle::icon(QStringLiteral("edit")));
         b->setIconSize(QSize(16, 16));
         b->setFixedSize(32, 32);
@@ -81,6 +82,8 @@ addItemDialog::addItemDialog(ProductService *products, QWidget *parent) :
     // Connect buttons to modify comboBox data
     QObject::connect(ui->button_modifyBrandTable, &QToolButton::clicked, this, &addItemDialog::onModifyBrandClicked);
     QObject::connect(ui->button_modifyTypeTable, &QToolButton::clicked, this, &addItemDialog::onModifyTypeClicked);
+    QObject::connect(ui->button_modifyUnitTable, &QToolButton::clicked, this, &addItemDialog::onModifyUnitClicked);
+    QObject::connect(ui->checkBox_expires, &QCheckBox::toggled, ui->dateEdit_expires, &QWidget::setEnabled);
 
     // live margin: what the price leaves over the cost
     connect(ui->lineEdit_price, &QLineEdit::textChanged, this, &addItemDialog::updateMargin);
@@ -134,12 +137,17 @@ void addItemDialog::reloadLists()
     const int idx = ui->comboBox_vat->findData(currentVat);
     ui->comboBox_vat->setCurrentIndex(idx >= 0 ? idx : 0);   // 0 = highest rate (10%)
 
-    if (ui->comboBox_unit->count() == 0) {
-        for (const StockUnit &unit : products->units()) {
-            ui->comboBox_unit->addItem(unit.name, unit.id);
-            ui->comboBox_unit->setItemData(ui->comboBox_unit->count() - 1, unit.decimals, Qt::UserRole + 1);
-        }
-    }
+    const QVariant currentUnit = ui->comboBox_unit->currentData();
+    ui->comboBox_unit->clear();
+    for (const StockUnit &unit : products->units())
+        addUnitChoice(unit);
+    ui->comboBox_unit->setCurrentIndex(qMax(ui->comboBox_unit->findData(currentUnit), 0));
+}
+
+void addItemDialog::addUnitChoice(const StockUnit &unit)
+{
+    ui->comboBox_unit->addItem(unit.name, unit.id);
+    ui->comboBox_unit->setItemData(ui->comboBox_unit->count() - 1, unit.decimals, Qt::UserRole + 1);
 }
 
 void addItemDialog::showModal()
@@ -176,6 +184,10 @@ void addItemDialog::setStockEditable(bool editable)
 {
     ui->lineEdit_stock->setReadOnly(!editable);
     ui->lineEdit_stock->setToolTip(editable ? QString() : tr("El stock se cambia con Más > Ajustar stock"));
+    // the date belongs to the stock that enters here; otherwise, to its lots
+    ui->checkBox_expires->setChecked(false);
+    ui->checkBox_expires->setVisible(editable);
+    ui->dateEdit_expires->setVisible(editable);
 }
 
 /// Empty form for a new article
@@ -192,6 +204,9 @@ void addItemDialog::clearForm()
     ui->lineEdit_stockmin->clear();
     ui->comboBox_unit->setCurrentIndex(0);
     ui->dateEdit->setDate(QDate::currentDate());
+    ui->checkBox_expires->setChecked(false);
+    ui->dateEdit_expires->setEnabled(false);
+    ui->dateEdit_expires->setDate(QDate::currentDate());
     setStockEditable(true);
 }
 
@@ -241,6 +256,8 @@ void addItemDialog::editItem(const QString &code)
     ui->lineEdit_cost->setText(AguaraMoney::format(p.cost));
     ui->lineEdit_stock->setText(AguaraQuantity::format(p.stock, p.unit.decimals));
     ui->lineEdit_stockmin->setText(AguaraQuantity::format(p.stockMin, p.unit.decimals));
+    if (ui->comboBox_unit->findData(p.unit.id) < 0)
+        addUnitChoice(p.unit);      // a unit taken off the list: saving must not change it to another
     ui->comboBox_unit->setCurrentIndex(qMax(ui->comboBox_unit->findData(p.unit.id), 0));
     setStockEditable(false);
     const int vatIdx = ui->comboBox_vat->findData(p.vatRate);
@@ -268,6 +285,7 @@ bool addItemDialog::readInput(Product *product)
     p.categoryName = ui->comboBox_type->currentText();
     p.vatRate     = ui->comboBox_vat->currentData().toInt();
     p.purchased   = ui->dateEdit->date();
+    p.stockExpires = ui->checkBox_expires->isChecked() ? ui->dateEdit_expires->date() : QDate();
     p.unit.id     = ui->comboBox_unit->currentData().toLongLong();
     const int decimals = ui->comboBox_unit->currentData(Qt::UserRole + 1).toInt();
 
@@ -293,6 +311,10 @@ bool addItemDialog::readInput(Product *product)
     // the stock of an article that exists doesn't change here
     if (!ui->lineEdit_stock->isReadOnly() && !AguaraForm::fitsUnit(p.stock, decimals)) {
         refuse(tr("Esta unidad de venta no admite tantos decimales."), ui->lineEdit_stock);
+        return false;
+    }
+    if (p.stockExpires.isValid() && p.stock <= 0) {
+        refuse(tr("La fecha de vencimiento es del stock: escriba cuánto hay."), ui->lineEdit_stock);
         return false;
     }
     if (!AguaraForm::fitsUnit(p.stockMin, decimals)) {
@@ -335,6 +357,13 @@ void addItemDialog::onModifyTypeClicked()
 {
     auto dialog = new modifyTableDialog(products, modifyTableDialog::Categories, this);
     connect(dialog, &modifyTableDialog::listChanged, this, &addItemDialog::reloadLists);
+    dialog->show();
+}
+
+void addItemDialog::onModifyUnitClicked()
+{
+    auto dialog = new UnitsDialog(products, this);
+    connect(dialog, &UnitsDialog::listChanged, this, &addItemDialog::reloadLists);
     dialog->show();
 }
 

@@ -181,8 +181,10 @@ Receipt SqlPrintService::saleReceipt(const SaleRecord &sale)
                   .arg(quantity, item.unit, money(item.unitPrice),
                        item.vatRate == 0 ? tr("exento") : QStringLiteral("%1%").arg(item.vatRate)),
               money(item.gross));
-        if (item.discount != 0)
-            r.add(tr("  Descuento"), money(-item.discount));
+        if (item.promotionDiscount != 0)
+            r.add(tr("  Promo: %1").arg(item.promotionName), money(-item.promotionDiscount));
+        if (item.discount != item.promotionDiscount)
+            r.add(tr("  Descuento"), money(item.promotionDiscount - item.discount));
     }
     r.rule();
 

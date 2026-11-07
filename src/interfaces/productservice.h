@@ -64,6 +64,9 @@ struct Product {
     StockUnit unit;
     QDate   purchased;      ///< date of last purchase
     QDate   modified;       ///< set by the service on every save
+    QDate   expires;        ///< read only: the soonest use-by date of its lots
+    /// When saving: gives this date to the stock that has none, as a new lot.
+    QDate   stockExpires;
     bool    active = true;
 };
 
@@ -84,6 +87,7 @@ enum class ProductColumn : int {
     StockMin,
     Purchased,
     Modified,
+    Expires,
     Count
 };
 
@@ -139,7 +143,14 @@ public:
     virtual bool removeCategory(qint64 id) = 0;
 
     virtual QList<VatCategory> vatCategories() const = 0;   ///< highest rate first
-    virtual QList<StockUnit> units() const = 0;             ///< "Unidad" first
+    virtual QList<StockUnit> units() const = 0;             ///< the active ones, "Unidad" first
+    /// Needs a name and an abbreviation, and at most 3 decimals: quantities are
+    /// kept in thousandths. Bringing back a removed name takes these values.
+    /// Returns the id, 0 on error.
+    virtual qint64 addUnit(const StockUnit &unit) = 0;
+    /// Hides it. Refuses "Unidad", which an article falls back on, and a unit an
+    /// active article uses. Past sales keep theirs: they store it as text.
+    virtual bool removeUnit(qint64 id) = 0;
 
     virtual QString lastError() const = 0;
 };

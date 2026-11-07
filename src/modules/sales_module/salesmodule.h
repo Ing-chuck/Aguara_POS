@@ -3,6 +3,8 @@
 
 #include <interfaces.h>
 
+#include <QHash>
+
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -19,7 +21,7 @@ class SalesModule : public AguaraWidget
 public:
     SalesModule(ProductService *products, InventoryService *inventory, UserService *users,
                 CashService *cash, SalesService *sales, PrintService *print, CustomerService *customers,
-                ReturnService *returns, QWidget *parent = nullptr);
+                ReturnService *returns, PromotionService *promotions, QWidget *parent = nullptr);
 
 protected:
     void showEvent(QShowEvent *event) override;
@@ -42,6 +44,12 @@ private:
     // ringing up
     void submitEntry();
     void addScan(const ScanResult &scan, bool explicitQuantity, Quantity quantity);
+    /// An article with an expired lot: the cashier looks at the unit, and may write
+    /// off part of `quantity`, into *discarded. false: a write-off failed.
+    bool expiryCheck(const Product &article, Quantity quantity, Quantity *discarded);
+    /// The line's best promotion for its quantity today. A cashier's discount
+    /// gives way if the two together would pass the line.
+    void applyPromotion(SaleLine &line);
     void searchArticle();
     void changeQuantity();
     void removeLine();
@@ -74,8 +82,10 @@ private:
     PrintService *print;
     CustomerService *customers;
     ReturnService *returns;
+    PromotionService *promotions;
 
     SaleDraft draft;
+    QHash<QString, QList<Promotion>> offers;    // by article: what an outage still knows
     bool sessionOpen = false;
 
     QLabel *subtitle = nullptr;

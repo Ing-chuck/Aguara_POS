@@ -19,6 +19,8 @@ SUBDIRS += \
     tst_users \
     tst_inventory \
     tst_lowstock \
+    tst_expiry \
+    tst_promotions \
     tst_sales \
     tst_print \
     tst_customers \

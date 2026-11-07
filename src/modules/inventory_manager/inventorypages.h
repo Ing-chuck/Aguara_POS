@@ -27,6 +27,8 @@ public:
     SuppliersPage(InventoryService *inventory, UserService *users, QWidget *parent = nullptr);
     /// The form of a supplier, from here or from an alta. Its id once saved, 0 if cancelled.
     static qint64 showForm(InventoryService *inventory, const Supplier &supplier, QWidget *parent);
+
+public slots:
     void reload();
 
 private:

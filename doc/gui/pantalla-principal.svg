@@ -19,6 +19,7 @@
 <text x="64" y="309" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#FFFFFF" text-anchor="start">Ventas</text>
 <text x="64" y="343" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#FFFFFF" text-anchor="start">Reportes</text>
 <text x="64" y="377" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#FFFFFF" text-anchor="start">Usuarios</text>
+<text x="64" y="411" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#FFFFFF" text-anchor="start">Promociones</text>
 <text x="84" y="628" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#FFFFFF" text-anchor="start">Avisos</text>
 <circle cx="70" cy="623" r="8" fill="none" stroke="#FFFFFF" stroke-width="1.5"/>
 <circle cx="76" cy="616" r="4" fill="#FFC400"/>

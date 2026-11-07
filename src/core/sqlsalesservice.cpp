@@ -118,11 +118,11 @@ bool SqlSalesService::validate(const SaleDraft &draft, const SaleTotals &totals)
             m_lastError = tr("Revise la cantidad y el precio de %1.").arg(line.description);
             return false;
         }
-        if (line.discount < 0 || line.discount > gross) {
+        if (line.discount < 0 || line.promotionDiscount < 0 || line.discount + line.promotionDiscount > gross) {
             m_lastError = tr("El descuento de %1 no es válido.").arg(line.description);
             return false;
         }
-        afterLineDiscounts += gross - line.discount;
+        afterLineDiscounts += gross - line.discount - line.promotionDiscount;
     }
     if (draft.totalDiscount < 0 || draft.totalDiscount > afterLineDiscounts) {
         m_lastError = tr("El descuento de la venta no es válido.");
@@ -499,8 +499,9 @@ SqlSalesService::Push SqlSalesService::push(const OutboxEntry &entry, qint64 *sa
         QSqlQuery line(db());
         line.prepare(QStringLiteral(
             "INSERT INTO ventas_items (venta_id, linea, producto_codigo, descripcion, unidad, decimales, cantidad,"
-            " precio_unitario, bruto, descuento, importe, iva_tasa, iva, costo_unitario)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+            " precio_unitario, bruto, descuento, importe, iva_tasa, iva, costo_unitario,"
+            " promocion_id, promocion, descuento_promocion)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
         line.addBindValue(id);
         line.addBindValue(++position);
         line.addBindValue(item.code);
@@ -515,6 +516,9 @@ SqlSalesService::Push SqlSalesService::push(const OutboxEntry &entry, qint64 *sa
         line.addBindValue(item.vatRate);
         line.addBindValue(item.vat);
         line.addBindValue(cost);
+        line.addBindValue(item.promotionId != 0 ? QVariant(item.promotionId) : QVariant(QVariant::LongLong));
+        line.addBindValue(item.promotionId != 0 ? QVariant(item.promotionName) : QVariant(QVariant::String));
+        line.addBindValue(item.promotionDiscount);
         if (!exec(line) || !ledger.move(item.code, StockMovementType::Sale, -item.quantity, cost, QString(),
                                         tr("Venta %1").arg(printed))) {
             rollback();
@@ -724,7 +728,7 @@ std::optional<SaleRecord> SqlSalesService::sale(qint64 id) const
     QSqlQuery items(db());
     items.prepare(QStringLiteral(
         "SELECT producto_codigo, descripcion, unidad, decimales, cantidad, precio_unitario, bruto, descuento, importe,"
-        " iva_tasa, iva FROM ventas_items WHERE venta_id = ? ORDER BY linea"));
+        " iva_tasa, iva, promocion_id, promocion, descuento_promocion FROM ventas_items WHERE venta_id = ? ORDER BY linea"));
     items.addBindValue(id);
     if (!exec(items))
         return std::nullopt;
@@ -741,6 +745,9 @@ std::optional<SaleRecord> SqlSalesService::sale(qint64 id) const
         item.net = items.value(8).toLongLong();
         item.vatRate = items.value(9).toInt();
         item.vat = items.value(10).toLongLong();
+        item.promotionId = items.value(11).toLongLong();
+        item.promotionName = items.value(12).toString();
+        item.promotionDiscount = items.value(13).toLongLong();
         record.totals.items << item;
     }
 

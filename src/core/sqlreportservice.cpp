@@ -102,6 +102,7 @@ const QList<SqlReportService::Entry> &SqlReportService::entries()
         { report(QStringLiteral("ventas.marca"), tr("Ventas por marca"), sales, Dates | Register | User | Category), &SqlReportService::salesByBrand },
         { report(QStringLiteral("ventas.cajero"), tr("Ventas por cajero"), sales, Dates | Register), &SqlReportService::salesByCashier },
         { report(QStringLiteral("ventas.medio"), tr("Ventas por medio de pago"), sales, Dates | Register | User), &SqlReportService::salesByMethod },
+        { report(QStringLiteral("ventas.promocion"), tr("Ventas por promoción"), sales, Dates | Register | User), &SqlReportService::salesByPromotion },
         { report(QStringLiteral("margen.articulo"), tr("Margen por artículo"), sales, Dates | Register | User | Category, costs), &SqlReportService::marginByArticle },
         { report(QStringLiteral("margen.rubro"), tr("Margen por rubro"), sales, Dates | Register | User | Category, costs), &SqlReportService::marginByCategory },
         { report(QStringLiteral("caja.sesiones"), tr("Sesiones de caja"), till, Dates | Register | User), &SqlReportService::cashSessions },
@@ -399,6 +400,62 @@ bool SqlReportService::salesByHour(const ReportFilter &f, ReportResult *r)
         r->rows << Row{ QStringLiteral("%1:00").arg(it.key(), 2, 10, QLatin1Char('0')), it.value().first, it.value().second,
                         percent(it.value().second, total) };
     r->totals = Row{ tr("Total"), tickets, total, QVariant() };
+    return true;
+}
+
+/// What each promotion sold and what it gave, by the name each one had: net of
+/// returns, which give back their share of the discount.
+bool SqlReportService::salesByPromotion(const ReportFilter &f, ReportResult *r)
+{
+    struct Promo { QSet<qint64> tickets; Quantity lines = 0; Money given = 0, sold = 0; };
+    QMap<QString, Promo> promotions;
+
+    QVariantList values = { QString::fromLatin1(SaleState::Paid) };
+    const QString soldClause = saleClause(QStringLiteral("v"), QStringLiteral("usuario"), f, &values);
+    QSqlQuery q(db());
+    if (!run(q, QStringLiteral(
+            "SELECT i.promocion, v.id, i.descuento_promocion, i.importe"
+            " FROM ventas_items i JOIN ventas v ON v.id = i.venta_id"
+            " WHERE i.promocion_id IS NOT NULL AND v.estado = ?") + soldClause, values))
+        return false;
+    while (q.next()) {
+        Promo &promo = promotions[q.value(0).toString()];
+        promo.tickets.insert(q.value(1).toLongLong());
+        ++promo.lines;
+        promo.given += q.value(2).toLongLong();
+        promo.sold += q.value(3).toLongLong();
+    }
+
+    values.clear();
+    const QString returned = saleClause(QStringLiteral("d"), QStringLiteral("usuario"), f, &values);
+    QSqlQuery back(db());
+    if (!run(back, QStringLiteral(
+            "SELECT i.promocion, i.descuento_promocion, i.cantidad, x.cantidad, x.importe"
+            " FROM devoluciones_items x JOIN devoluciones d ON d.id = x.devolucion_id"
+            " JOIN ventas_items i ON i.venta_id = d.venta_id AND i.linea = x.linea"
+            " WHERE i.promocion_id IS NOT NULL") + returned, values))
+        return false;
+    while (back.next()) {
+        Promo &promo = promotions[back.value(0).toString()];
+        const Quantity whole = back.value(2).toLongLong();
+        if (whole > 0)
+            promo.given -= back.value(1).toLongLong() * back.value(3).toLongLong() / whole;
+        promo.sold -= back.value(4).toLongLong();
+    }
+
+    r->columns = { { tr("Promoción"), ReportCell::Text }, { tr("Tickets"), ReportCell::Integer },
+                   { tr("Líneas"), ReportCell::Integer }, { tr("Descuento dado"), ReportCell::Money },
+                   { tr("Vendido"), ReportCell::Money } };
+    Money given = 0, sold = 0;
+    for (auto it = promotions.cbegin(); it != promotions.cend(); ++it) {
+        const Promo &promo = it.value();
+        r->rows << Row{ it.key(), promo.tickets.size(), promo.lines, promo.given, promo.sold };
+        given += promo.given;
+        sold += promo.sold;
+    }
+    sortByAmount(&r->rows, 4);
+    r->totals = Row{ tr("Total"), QVariant(), QVariant(), given, sold };
+    r->note = tr("Neto de devoluciones y descuentos, sin el redondeo del efectivo.");
     return true;
 }
 

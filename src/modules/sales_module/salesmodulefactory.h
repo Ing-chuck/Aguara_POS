@@ -33,6 +33,7 @@ private:
     PrintService *print = nullptr;
     CustomerService *customers = nullptr;
     ReturnService *returns = nullptr;
+    PromotionService *promotions = nullptr;
 };
 
 #endif // SALESMODULEFACTORY_H

@@ -61,6 +61,8 @@ public:
 
     QList<VatCategory> vatCategories() const override;
     QList<StockUnit> units() const override;
+    qint64 addUnit(const StockUnit &unit) override;
+    bool removeUnit(qint64 id) override;
 
     /// Stock or prices changed elsewhere (InventoryService): refresh the
     /// lists here and on the other tills.
